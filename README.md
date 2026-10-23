@@ -38,8 +38,8 @@ Le fichier [`render.yaml`](./render.yaml) décrit un *Web Service* Node (Bluepri
 
 La page `/admin` (non liée dans la navigation) permet de publier une annonce ou une carte d'alerte (SEV1 à SEV3) dans un canal et de
 réinitialiser les conversations (messages effacés, canaux conservés, scénario en cours arrêté).
-Elle permet aussi de lancer un scénario d'incident pré-écrit (`panne-checkout`, ≈ 14 min, ou
-`demo-express`, 6 s) : ses alertes, annonces et messages de PNJ (étapes `npc-message`, publiées même si
+Elle permet aussi de lancer un scénario d'incident pré-écrit (`panne-checkout`, ≈ 14 min,
+`fuite-donnees`, ≈ 14 min, ou `demo-express`, 6 s) : ses alertes, annonces et messages de PNJ (étapes `npc-message`, publiées même si
 les PNJ sont coupés) sont publiés par le serveur au fil du temps, un seul
 scénario à la fois, et l'exécution est perdue si le serveur redémarre. Les routes `/api/admin/*`
 exigent l'en-tête `x-facilitator-code`, comparé au code animateur résolu au démarrage :
@@ -83,9 +83,18 @@ en les mentionnant (`@Julien Moreau quel déploiement récent ?`) : chaque PNJ m
 fil du message après 1 à 2 s, avec le badge « PNJ ». Leurs noms sont réservés (un message signé d'un
 nom de PNJ est refusé en 400), et ils ne répondent jamais à un autre PNJ, à une annonce ni à une alerte.
 
-- **Activation** : lancer `panne-checkout` depuis `/admin` active ses PNJ ; l'interrupteur « PNJ actifs »
+Le scénario `fuite-donnees` (« Fuite de données clients ») a ses 5 PNJ propres : Yanis Belkacem (analyste
+SOC, lanceur d'alerte), Hugo Lemaire (développeur de l'équipe Data, auteur du changement), Élise Marchand
+(DPO et juridique), Bastien Roux (directeur de la communication) et Nadia Fontaine (support client). L'enjeu
+est la décision (notification, information des personnes, préservation des preuves) et la communication ;
+le recoupement voulu est décrit en tête de `server/scenarios/fuite-donnees.ts`. Avant tout lancement, les PNJ
+proposés sont ceux de `panne-checkout` ; lancer un scénario n'active que ses PNJ (mentions, conversations
+directes et liste « Conversations »), les ids de PNJ sont donc distincts d'un scénario à l'autre.
+
+- **Activation** : lancer `panne-checkout` ou `fuite-donnees` depuis `/admin` active ses PNJ ; l'interrupteur « PNJ actifs »
   de `/admin` (`POST /api/admin/npcs {enabled}`, code animateur) les coupe ou les rallume ; « Tout
-  réinitialiser » les coupe. L'état est en mémoire seulement (PNJ coupés au redémarrage).
+  réinitialiser » les coupe et revient aux PNJ de `panne-checkout`. `demo-express`, sans fiches propres,
+  active ceux de `panne-checkout` (champ `npcScenarioId` du scénario). L'état est en mémoire seulement (PNJ coupés au redémarrage).
   `GET /api/npcs` (public) renvoie `{ enabled, npcs: [{ id, name, role }] }`.
 - **Fiches** : un fichier Markdown par PNJ dans `server/npc/personas/<scénario>/<id>.md`, modifiable dans
   n'importe quel éditeur ; front-matter `clé: valeur` (`id`, `name`, `role`, `scenario`, `tone` = phrase

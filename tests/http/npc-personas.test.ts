@@ -66,12 +66,12 @@ describe('NPC_PERSONAS_DIR (025 CA3, CA4)', () => {
     }
   })
 
-  it('CA3 : source dir, 6 fiches avec leur markdown, et le marqueur dans la réponse de Julien', async () => {
+  it('CA3 : source dir, 11 fiches (027 : 6 + 5) avec leur markdown, et le marqueur dans la réponse de Julien', async () => {
     const response = await personas(server)
     expect(response.status).toBe(200)
     const state = await response.json() as NpcPersonasAdminState
     expect(state.source).toBe('dir')
-    expect(state.personas).toHaveLength(6)
+    expect(state.personas).toHaveLength(11)
     expect(Object.keys(state.personas[0]!).sort()).toEqual(['id', 'markdown', 'modified', 'name', 'path', 'role', 'scenarioId'])
     const julien = state.personas.find(entry => entry.id === 'release-manager')
     expect(julien).toMatchObject({ path: 'panne-checkout/release-manager.md', name: 'Julien Moreau', scenarioId: 'panne-checkout' })
@@ -101,24 +101,25 @@ describe('NPC_PERSONAS_DIR (025 CA3, CA4)', () => {
     expect((await askNpc(server, QUESTION, 'release-manager'))?.text).toContain('MARQUEUR-B')
     expect(await askNpc(server, '@Marc Lefort combien coûte une minute d\'indisponibilité ?', 'cfo')).toBeDefined()
 
-    // Dossier vidé : 422, rien n'est remplacé
+    // Dossier vidé (les deux scénarios) : 422, rien n'est remplacé
     await rm(join(dir, 'panne-checkout'), { recursive: true })
+    await rm(join(dir, 'fuite-donnees'), { recursive: true })
     const empty = await reload(server)
     expect(empty.status).toBe(422)
     expect(await empty.json()).toMatchObject({ source: 'dir', loaded: [], kept: [] })
     const npcs = await (await fetch(`${server.url}/api/npcs`)).json() as { npcs: unknown[] }
     expect(npcs.npcs).toHaveLength(6)
-    expect(((await (await personas(server)).json()) as NpcPersonasAdminState).personas).toHaveLength(6)
+    expect(((await (await personas(server)).json()) as NpcPersonasAdminState).personas).toHaveLength(11)
   })
 })
 
 describe('fiches embarquées (025 CA5)', () => {
-  it('sans NPC_PERSONAS_DIR : source embedded, 6 fiches, rechargement 200', async () => {
+  it('sans NPC_PERSONAS_DIR : source embedded, 11 fiches, rechargement 200', async () => {
     const server = await startServer({ FACILITATOR_CODE: 'animateur' })
     try {
       const state = await (await personas(server)).json() as NpcPersonasAdminState
       expect(state.source).toBe('embedded')
-      expect(state.personas).toHaveLength(6)
+      expect(state.personas).toHaveLength(11)
       const response = await reload(server)
       expect(response.status).toBe(200)
       expect(await response.json()).toMatchObject({ source: 'embedded', errors: [], kept: [] })
@@ -134,7 +135,7 @@ describe('fiches embarquées (025 CA5)', () => {
     try {
       const state = await (await personas(server)).json() as NpcPersonasAdminState
       expect(state.source).toBe('embedded')
-      expect(state.personas).toHaveLength(6)
+      expect(state.personas).toHaveLength(11)
       expect(server.stderr()).toContain('NPC_PERSONAS_DIR')
       expect(server.stderr()).not.toContain(missing)
     }

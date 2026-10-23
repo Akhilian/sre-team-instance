@@ -5,6 +5,8 @@ import type { Scenario } from '../../shared/types/scenario'
 export const demoExpress: Scenario = {
   id: 'demo-express',
   title: 'Démo express',
+  // Pas de fiches propres : la démo publie un message de Sarah Benali, PNJ de panne-checkout
+  npcScenarioId: 'panne-checkout',
   description: 'Trois étapes en 6 secondes pour tester la publication automatique avant l\'atelier : '
     + 'message du support (PNJ), puis deux alertes.',
   steps: [

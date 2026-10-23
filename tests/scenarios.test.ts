@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SCENARIOS } from '../server/scenarios'
+import { npcScenarioIdFor, npcScenarioIdOf, SCENARIOS } from '../server/scenarios'
 import { listChannels, resetChatStore } from '../server/utils/chat-store'
 import { NPC_REPLY_MAX_LENGTH, TEXT_MAX_LENGTH } from '../shared/utils/limits'
 import { ALERT_SERVICE_MAX_LENGTH, ALERT_TITLE_MAX_LENGTH, isAlertSeverity } from '../shared/utils/alerts'
@@ -15,9 +15,9 @@ function validText(value: string, maxLength: number): boolean {
 }
 
 describe('scénarios fournis', () => {
-  it('contient panne-checkout et demo-express, avec des id uniques', () => {
+  it('contient panne-checkout, fuite-donnees et demo-express, avec des id uniques', () => {
     const ids = SCENARIOS.map(scenario => scenario.id)
-    expect(ids).toEqual(expect.arrayContaining(['panne-checkout', 'demo-express']))
+    expect(ids).toEqual(['panne-checkout', 'fuite-donnees', 'demo-express'])
     expect(new Set(ids).size).toBe(ids.length)
   })
 
@@ -89,6 +89,50 @@ describe('scénarios fournis', () => {
     expect(hint.text).toMatch(/équipe Release/)
   })
 
+  it('027 CA2 : fuite-donnees, 12 à 14 étapes, ouverte par le SOC, une seule annonce [Animateur] à t=840', () => {
+    const scenario = SCENARIOS.find(candidate => candidate.id === 'fuite-donnees')!
+    expect(scenario.title).toBe('Fuite de données clients')
+    const steps = scenario.steps
+    expect(steps.length).toBeGreaterThanOrEqual(12)
+    expect(steps.length).toBeLessThanOrEqual(14)
+    expect(steps[0]).toMatchObject({ at: 0, kind: 'npc-message', npcId: 'soc', channelId: 'incident-en-cours' })
+    expect(steps.at(-1)!.at).toBe(840)
+    const announcements = steps.filter(step => step.kind === 'announcement')
+    expect(announcements).toHaveLength(1)
+    expect(announcements[0]!.at).toBe(840)
+    expect(announcements[0]!.text.startsWith('[Animateur]')).toBe(true)
+    expect(new Set(steps.map(step => step.channelId))).toEqual(new Set(['incident-en-cours', 'general']))
+  })
+
+  it('027 CA2 : aucune étape de fuite-donnees ne livre un fait-clé', () => {
+    const forbidden = ['18h05', '#482', '48 210', 'Routilo', '23h14', '9h31']
+    for (const step of SCENARIOS.find(scenario => scenario.id === 'fuite-donnees')!.steps) {
+      const content = JSON.stringify(step)
+      for (const word of forbidden) expect(content, `fuite-donnees à ${step.at} s`).not.toContain(word)
+    }
+  })
+
+  it('027 : scénario de PNJ de chaque scénario ; demo-express emprunte ceux de panne-checkout', () => {
+    expect(SCENARIOS.map(scenario => [scenario.id, npcScenarioIdOf(scenario)])).toEqual([
+      ['panne-checkout', 'panne-checkout'],
+      ['fuite-donnees', 'fuite-donnees'],
+      ['demo-express', 'panne-checkout'],
+    ])
+    expect(npcScenarioIdFor('demo-express')).toBe('panne-checkout')
+    expect(npcScenarioIdFor('inconnu')).toBe('inconnu')
+  })
+
+  it('027 : tout npcId d\'une étape npc-message appartient au scénario de PNJ du scénario', () => {
+    const all = [...loadPersonas('panne-checkout'), ...loadPersonas('fuite-donnees')]
+    for (const scenario of SCENARIOS) {
+      for (const step of scenario.steps) {
+        if (step.kind !== 'npc-message') continue
+        const persona = all.find(candidate => candidate.id === step.npcId)
+        expect(persona?.scenarioId, `${scenario.id} à ${step.at} s : ${step.npcId}`).toBe(npcScenarioIdOf(scenario))
+      }
+    }
+  })
+
   describe.each(SCENARIOS.map(scenario => [scenario.id, scenario] as const))('%s', (_id, scenario) => {
     it('a un titre, une description et des étapes triées par at croissant', () => {
       expect(scenario.title.trim()).not.toBe('')
@@ -99,8 +143,8 @@ describe('scénarios fournis', () => {
       expect(ats).toEqual([...ats].sort((a, b) => a - b))
     })
 
-    it('021 CA1 : chaque npcId correspond à une fiche existante, texte publiable sans troncature', () => {
-      const ids = loadPersonas().map(persona => persona.id)
+    it('021 CA1, 027 CA2 : chaque npcId correspond à une fiche de son scénario, texte publiable sans troncature', () => {
+      const ids = loadPersonas(npcScenarioIdOf(scenario)).map(persona => persona.id)
       const npcSteps = scenario.steps.filter((step): step is Extract<ScenarioStep, { kind: 'npc-message' }> => step.kind === 'npc-message')
       expect(npcSteps.length).toBeGreaterThan(0)
       for (const step of npcSteps) {

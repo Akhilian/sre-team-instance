@@ -43,6 +43,8 @@ export interface NpcDispatcherDeps<Handle = unknown> {
   publish: (reply: NpcReply) => void
   /** Fiches de tous les scénarios */
   personas: readonly NpcPersona[]
+  /** Scénario courant avant tout lancement (défaut, ou s'il n'a aucune fiche : celui de la première fiche) */
+  initialScenarioId?: string
   /** Délai simulé avant chaque réponse (défaut 1500 ms) */
   delayMs?: () => number
   /** Messages récents du fil ou du canal, question comprise ou non (elle est retirée) */
@@ -68,6 +70,11 @@ export interface NpcDispatcher {
   setEnabled: (enabled: boolean) => void
   /** Active les PNJ de scenarioId s'il en a ; sinon ne change rien et renvoie false */
   activateScenario: (scenarioId: string) => boolean
+  /**
+   * Coupe les PNJ et revient au scénario du démarrage (initialScenarioId, ou celui de la première fiche) ;
+   * les réponses en attente sont annulées. Appelée par « Tout réinitialiser ».
+   */
+  resetScenario: () => void
   /** PNJ du scénario courant, dans l'ordre des fiches */
   list: () => NpcSummary[]
   /**
@@ -100,7 +107,14 @@ function summary(persona: NpcPersona): NpcSummary {
 export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): NpcDispatcher {
   let personas = deps.personas
   const onError = deps.onError ?? logAbandoned
-  let currentScenarioId = personas[0]?.scenarioId ?? ''
+  /** Scénario du démarrage : initialScenarioId s'il a des fiches, sinon celui de la première fiche */
+  function initialScenarioId(): string {
+    const initial = deps.initialScenarioId
+    return initial !== undefined && personas.some(persona => persona.scenarioId === initial)
+      ? initial
+      : personas[0]?.scenarioId ?? ''
+  }
+  let currentScenarioId = initialScenarioId()
   let enabled = false
   // Horodatages des réponses planifiées (fenêtre glissante d'une minute), par clé : `channelId` (tous PNJ
   // du canal) et `channelId:personaId` ; allReplies (canaux d'équipe) et directReplies (conversations
@@ -226,6 +240,12 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
       currentScenarioId = scenarioId
       enabled = true
       return true
+    },
+
+    resetScenario() {
+      cancelPending()
+      enabled = false
+      currentScenarioId = initialScenarioId()
     },
 
     list: () => personas.filter(persona => persona.scenarioId === currentScenarioId).map(summary),

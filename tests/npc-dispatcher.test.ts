@@ -291,6 +291,79 @@ describe('createNpcDispatcher', () => {
   })
 })
 
+describe('second scénario fuite-donnees (027 CA5)', () => {
+  beforeEach(() => resetChatStore())
+
+  /** Toutes les fiches, triées par chemin comme au chargement : fuite-donnees passe avant panne-checkout */
+  function allPersonas() {
+    return [...loadPersonas('fuite-donnees'), ...loadPersonas('panne-checkout')]
+  }
+
+  function setupAll(initialScenarioId?: string) {
+    const clock = fakeClock()
+    const dispatcher = createNpcDispatcher({
+      ...clock,
+      retriever: createLexicalRetriever(),
+      responder: createKeywordsResponder(),
+      personas: allPersonas(),
+      ...(initialScenarioId === undefined ? {} : { initialScenarioId }),
+      delayMs: () => 1000,
+      publish: reply => addNpcMessage(reply.channelId, { npc: reply.persona, text: reply.text, parentId: reply.parentId }),
+    })
+    return { clock, dispatcher }
+  }
+
+  const PANNE_IDS = ['ceo', 'cfo', 'communication', 'psp', 'release-manager', 'support-n1']
+  const FUITE_IDS = ['dev-data', 'dpo', 'porte-parole', 'soc', 'support-clients']
+
+  it('initialScenarioId : panne-checkout avant tout lancement, malgré le tri par chemin', () => {
+    expect(setupAll().dispatcher.scenarioId()).toBe('fuite-donnees')
+    expect(setupAll('inconnu').dispatcher.scenarioId()).toBe('fuite-donnees')
+    const { dispatcher } = setupAll('panne-checkout')
+    expect(dispatcher.scenarioId()).toBe('panne-checkout')
+    expect(dispatcher.isEnabled()).toBe(false)
+    expect(dispatcher.list().map(npc => npc.id)).toEqual(PANNE_IDS)
+  })
+
+  it('lancer fuite-donnees n\'active que ses 5 PNJ ; @Sarah Benali sans réponse, @Yanis Belkacem répond', async () => {
+    const { clock, dispatcher } = setupAll('panne-checkout')
+    expect(dispatcher.activateScenario('fuite-donnees')).toBe(true)
+    expect(dispatcher.isEnabled()).toBe(true)
+    expect(dispatcher.list().map(npc => npc.id)).toEqual(FUITE_IDS)
+
+    expect(dispatcher.handle(post('@Sarah Benali tu as des tickets ?'))).toEqual([])
+    const question = post('@Yanis Belkacem quels téléchargements dans les journaux d\'accès ?')
+    expect(dispatcher.handle(question)).toEqual(['soc'])
+    await clock.advance(1000)
+    const [reply] = npcReplies()
+    expect(reply).toMatchObject({ author: 'Yanis Belkacem', parentId: question.id, npc: { id: 'soc' } })
+    expect(reply!.text).toContain('23h14')
+
+    // Retour à panne-checkout : ses 6 PNJ, Yanis ne répond plus
+    expect(dispatcher.activateScenario('panne-checkout')).toBe(true)
+    expect(dispatcher.list().map(npc => npc.id)).toEqual(PANNE_IDS)
+    expect(dispatcher.handle(post('@Yanis Belkacem tu es là ?'))).toEqual([])
+    expect(dispatcher.handle(post('@Sarah Benali tu as des tickets ?'))).toEqual(['support-n1'])
+  })
+
+  it('resetScenario : PNJ coupés, réponses annulées, retour au scénario initial', async () => {
+    const { clock, dispatcher } = setupAll('panne-checkout')
+    dispatcher.activateScenario('fuite-donnees')
+    expect(dispatcher.handle(post('@Yanis Belkacem quels téléchargements dans les journaux d\'accès ?'))).toEqual(['soc'])
+    dispatcher.resetScenario()
+    await clock.advance(1000)
+    expect(npcReplies()).toEqual([])
+    expect(dispatcher.isEnabled()).toBe(false)
+    expect(dispatcher.scenarioId()).toBe('panne-checkout')
+    expect(dispatcher.list().map(npc => npc.id)).toEqual(PANNE_IDS)
+    // Sans initialScenarioId : celui de la première fiche
+    const fallback = setupAll().dispatcher
+    fallback.activateScenario('panne-checkout')
+    fallback.resetScenario()
+    expect(fallback.scenarioId()).toBe('fuite-donnees')
+  })
+})
+
 describe('addNpcMessage', () => {
   beforeEach(() => resetChatStore())
 

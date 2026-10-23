@@ -4,23 +4,31 @@ import { resolve } from 'node:path'
 import type { NpcPersona } from '../shared/types/npc'
 import { parsePersona } from '../server/npc/persona-parser'
 
-export const PERSONAS_DIR = resolve(import.meta.dirname, '../server/npc/personas/panne-checkout')
+/** Scénario dont les fiches sont lues par défaut */
+export const DEFAULT_PERSONAS_SCENARIO = 'panne-checkout'
 
-export function personaFiles(): string[] {
-  return readdirSync(PERSONAS_DIR).filter(file => file.endsWith('.md')).sort()
+/** Dossier des fiches d'un scénario : server/npc/personas/<scénario> */
+export function personasDir(scenario = DEFAULT_PERSONAS_SCENARIO): string {
+  return resolve(import.meta.dirname, '../server/npc/personas', scenario)
 }
 
-export function readPersonaSource(file: string): string {
-  return readFileSync(resolve(PERSONAS_DIR, file), 'utf8')
+export const PERSONAS_DIR = personasDir()
+
+export function personaFiles(scenario = DEFAULT_PERSONAS_SCENARIO): string[] {
+  return readdirSync(personasDir(scenario)).filter(file => file.endsWith('.md')).sort()
 }
 
-export function loadPersonas(): NpcPersona[] {
-  return personaFiles().map(file => parsePersona(readPersonaSource(file), file))
+export function readPersonaSource(file: string, scenario = DEFAULT_PERSONAS_SCENARIO): string {
+  return readFileSync(resolve(personasDir(scenario), file), 'utf8')
 }
 
-export function personaById(id: string): NpcPersona {
-  const persona = loadPersonas().find(candidate => candidate.id === id)
-  if (!persona) throw new Error(`fiche ${id} introuvable`)
+export function loadPersonas(scenario = DEFAULT_PERSONAS_SCENARIO): NpcPersona[] {
+  return personaFiles(scenario).map(file => parsePersona(readPersonaSource(file, scenario), file))
+}
+
+export function personaById(id: string, scenario = DEFAULT_PERSONAS_SCENARIO): NpcPersona {
+  const persona = loadPersonas(scenario).find(candidate => candidate.id === id)
+  if (!persona) throw new Error(`fiche ${id} introuvable dans ${scenario}`)
   return persona
 }
 

@@ -19,6 +19,7 @@ import {
   readEmbeddedPersonas,
   readPersonaDir,
 } from '../npc/persona-source'
+import { npcScenarioIdFor, SCENARIOS } from '../scenarios'
 import { addNpcMessage, getChannel, listMessages } from './chat-store'
 import { processEnv } from './env'
 import { setNpcTyping } from './presence-store'
@@ -130,6 +131,8 @@ export function useNpcDispatcher(): Promise<NpcDispatcher> {
       retriever: createLexicalRetriever(),
       responder: npcEngine().responder,
       personas,
+      // Sans lancement, les PNJ proposés sont ceux du premier scénario de /admin, pas ceux de la première fiche par chemin
+      initialScenarioId: SCENARIOS[0]?.id,
       delayMs: replyDelayMs,
       history: recentHistory,
       directNpcId: channelId => getChannel(channelId)?.direct?.npcId,
@@ -175,9 +178,14 @@ export async function isNpcName(name: unknown): Promise<boolean> {
   return typeof name === 'string' && (await useNpcDispatcher()).findByName(name) !== undefined
 }
 
-/** Active les PNJ du scénario lancé, s'il en a. */
+/** Active les PNJ du scénario lancé (ceux de son npcScenarioId), s'il en a. */
 export async function activateScenarioNpcs(scenarioId: string): Promise<void> {
-  (await useNpcDispatcher()).activateScenario(scenarioId)
+  (await useNpcDispatcher()).activateScenario(npcScenarioIdFor(scenarioId))
+}
+
+/** « Tout réinitialiser » : PNJ coupés et ramenés au scénario du démarrage (le premier de /admin) */
+export async function resetNpcs(): Promise<void> {
+  (await useNpcDispatcher()).resetScenario()
 }
 
 export async function setNpcsEnabled(enabled: boolean): Promise<void> {

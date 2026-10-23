@@ -1,4 +1,5 @@
-// Le lancement d'un scénario qui a des PNJ (panne-checkout) les active. Les fiches sont chargées avant
+// Le lancement d'un scénario active les PNJ de son npcScenarioId (le sien par défaut ; panne-checkout pour
+// demo-express). Les fiches sont chargées avant
 // le lancement : l'étape npc-message à at: 0 (lanceur d'alerte) est publiée pendant startScenario.
 export default defineEventHandler(async (event) => {
   // Code vérifié avant toute recherche du scénario

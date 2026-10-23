@@ -36,6 +36,11 @@ export interface Scenario {
   id: string
   title: string
   description: string
+  /**
+   * Scénario des fiches de PNJ activées au lancement (server/npc/personas/<npcScenarioId>/) ; défaut : id.
+   * Un scénario sans fiches propres (demo-express) emprunte les PNJ d'un autre.
+   */
+  npcScenarioId?: string
   /** Triées par at croissant */
   steps: ScenarioStep[]
 }
