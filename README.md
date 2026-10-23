@@ -5,7 +5,10 @@ Application full-stack [Nuxt 4](https://nuxt.com/docs) : front Vue et API dans l
 ## Structure
 
 - `app/` : front (pages Vue, routage par fichiers dans `app/pages/`)
-- `server/api/` : back-end (routes API Nitro, ex. `GET /api/health`)
+- `server/api/` : back-end (routes API Nitro, ex. `GET /api/health`, `GET /api/channels`, `GET|POST /api/channels/:id/messages`)
+- `server/utils/` : logique serveur (store en mémoire des canaux et messages)
+- `shared/types/` : types partagés front / API
+- `tests/` : tests unitaires Vitest
 - `public/` : fichiers statiques
 
 ## Commandes
@@ -14,6 +17,7 @@ Application full-stack [Nuxt 4](https://nuxt.com/docs) : front Vue et API dans l
 npm install         # installer les dépendances
 npm run dev         # serveur de dev sur http://localhost:3000
 npm run typecheck   # vérification TypeScript
+npm run test        # tests unitaires (Vitest, exécution unique)
 npm run build       # build de production dans .output/
 node .output/server/index.mjs   # démarrer le build (port via PORT)
 ```
