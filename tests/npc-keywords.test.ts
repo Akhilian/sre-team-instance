@@ -90,9 +90,9 @@ describe('moteur keywords', () => {
 })
 
 describe('registre des moteurs', () => {
-  it('keywords par défaut ; keywords et openai-compatible disponibles', () => {
+  it('keywords par défaut ; keywords, openai-compatible et anthropic disponibles', () => {
     expect(DEFAULT_NPC_ENGINE).toBe('keywords')
-    expect(Object.keys(NPC_ENGINES)).toEqual(['keywords', 'openai-compatible'])
+    expect(Object.keys(NPC_ENGINES)).toEqual(['keywords', 'openai-compatible', 'anthropic'])
     const logger = { warn: vi.fn() }
     expect(resolveNpcEngine({}, logger).name).toBe('keywords')
     expect(resolveNpcEngine({ NPC_ENGINE: 'keywords' }, logger).name).toBe('keywords')

@@ -14,7 +14,7 @@ services:
       # Persistance des conversations (optionnelle) : URL d'un Redis externe (Render Key Value, Upstash…)
       - key: REDIS_URL
         sync: false
-      # Moteur de réponse des PNJ : keywords (défaut, sans modèle) ou openai-compatible (voir README)
+      # Moteur de réponse des PNJ : keywords (défaut, sans modèle), openai-compatible ou anthropic (voir README)
       - key: NPC_ENGINE
         value: keywords
       # openai-compatible : URL publique ou auto-hébergée de l'API (/v1 compris), modèle et clé éventuelle
@@ -23,4 +23,9 @@ services:
       - key: NPC_LLM_MODEL
         sync: false
       - key: NPC_LLM_API_KEY
+        sync: false
+      # anthropic : clé d'API Claude (secret) et modèle (défaut claude-haiku-5-5 si vide)
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: NPC_ANTHROPIC_MODEL
         sync: false

@@ -97,7 +97,8 @@ nom de PNJ est refusé en 400), et ils ne répondent jamais à un autre PNJ, à 
   après une modification. Une fiche invalide est écartée avec une erreur dans les logs.
 - **Moteur** (`NPC_ENGINE`, défaut `keywords`) : `keywords` répond sans modèle, de façon déterministe, par
   la phrase de ton suivie des 2 extraits de la fiche les plus proches de la question (recouvrement de
-  mots). `openai-compatible` interroge un modèle (voir « Brancher un modèle »). Une valeur inconnue
+  mots). `openai-compatible` interroge un modèle (voir « Brancher un modèle »), `anthropic` l'API Claude
+  (voir « Moteur Anthropic »). Une valeur inconnue
   retombe sur `keywords` avec un avertissement. Un autre fournisseur s'ajoute par un fichier d'adaptateur
   dans `server/npc/engines/` et une ligne dans `NPC_ENGINES`. `GET /api/health` indique le moteur
   effectivement en service (`npcEngine`), sans URL, modèle ni clé.
@@ -150,6 +151,28 @@ keywords`, sans URL ni clé : l'atelier continue.
 Sur Render, un modèle lancé sur votre poste (`localhost`) n'est pas joignable : il faut une URL publique
 ou auto-hébergée (serveur Ollama/vLLM exposé, fournisseur compatible), saisie avec `NPC_LLM_MODEL` et
 `NPC_LLM_API_KEY` dans **Environment** (déclarées en `sync: false` dans `render.yaml`).
+
+### Moteur Anthropic
+
+Le moteur `anthropic` appelle l'API Messages de Claude (`POST {NPC_ANTHROPIC_BASE_URL}/v1/messages`)
+depuis le serveur, avec le `fetch` natif (sans SDK) et le même prompt que `openai-compatible` (fiche,
+extraits retenus, historique du fil), converti au format Anthropic : consigne dans `system`, messages
+alternés `user` / `assistant`. Réponses courtes (`max_tokens` 300, tronquées à 600 caractères).
+
+| Variable | Rôle |
+| --- | --- |
+| `NPC_ENGINE` | `anthropic` |
+| `ANTHROPIC_API_KEY` | clé d'API (secret, envoyée en `x-api-key`) ; absente ou vide : moteur `keywords` avec un avertissement |
+| `NPC_ANTHROPIC_MODEL` | facultatif : modèle, `claude-haiku-5-5` par défaut |
+| `NPC_ANTHROPIC_BASE_URL` | facultatif : `https://api.anthropic.com` par défaut, à surcharger seulement pour les tests (slash final toléré) |
+| `NPC_LLM_TIMEOUT_MS` | délai maximal d'un appel, partagé avec `openai-compatible` (défaut 8000, plafonné à 14000) |
+
+Si l'API fait défaut (réseau, statut d'erreur dont 401 ou 529, délai, JSON invalide, texte vide), le PNJ
+répond avec `keywords` et les journaux contiennent une ligne `[npc] anthropic indisponible (…) : repli
+keywords`, sans la clé ni le corps de l'erreur. Sur Render, saisir `ANTHROPIC_API_KEY` (et éventuellement
+`NPC_ANTHROPIC_MODEL`) dans **Environment** (déclarées en `sync: false` dans `render.yaml`), puis
+`NPC_ENGINE=anthropic`. Sans clé sous la main : `node scripts/fake-anthropic.mjs` lance un faux serveur
+sur `http://127.0.0.1:11998` (port en argument ou `PORT`), à indiquer dans `NPC_ANTHROPIC_BASE_URL`.
 
 ## Persistance des conversations
 

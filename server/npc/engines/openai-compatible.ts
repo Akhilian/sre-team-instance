@@ -102,8 +102,8 @@ export function createOpenAiCompatibleResponder(options: OpenAiCompatibleOptions
   }
 }
 
-/** NPC_LLM_TIMEOUT_MS : entier > 0 (plafonné à 14 s), sinon 8000 */
-function timeoutFromEnv(env: Env): number {
+/** NPC_LLM_TIMEOUT_MS : entier > 0 (plafonné à 14 s), sinon 8000 ; partagé par les moteurs à modèle */
+export function timeoutFromEnv(env: Env): number {
   const raw = env.NPC_LLM_TIMEOUT_MS?.trim() ?? ''
   const value = Number(raw)
   if (raw === '' || !Number.isSafeInteger(value) || value <= 0) return NPC_LLM_TIMEOUT_DEFAULT_MS

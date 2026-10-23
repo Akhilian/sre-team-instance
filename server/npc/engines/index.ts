@@ -1,10 +1,11 @@
 // Registre des moteurs de réponse des PNJ, choisis par NPC_ENGINE. Ajouter un fournisseur
-// (openai-compatible, anthropic…) = un fichier d'adaptateur dans ce dossier, qui implémente
+// (openai-compatible, anthropic avec ANTHROPIC_API_KEY…) = un fichier d'adaptateur dans ce dossier, qui implémente
 // NpcResponder, et une ligne dans NPC_ENGINES. Module pur (environnement et logger injectés).
 import type { NpcResponder } from '../../../shared/types/npc'
 import { type Env, processEnv } from '../../utils/env'
 import { createKeywordsResponder } from './keywords'
 import { openAiCompatibleFromEnv } from './openai-compatible'
+import { anthropicFromEnv } from './anthropic'
 
 /**
  * Construit un moteur à partir de l'environnement (URL, modèle, clé d'API…). Configuration incomplète :
@@ -15,6 +16,7 @@ export type NpcResponderFactory = (env: Env, logger: Pick<Console, 'warn'>) => N
 export const NPC_ENGINES: Readonly<Record<string, NpcResponderFactory>> = {
   'keywords': () => createKeywordsResponder(),
   'openai-compatible': (env, logger) => openAiCompatibleFromEnv(env, logger),
+  'anthropic': (env, logger) => anthropicFromEnv(env, logger),
 }
 
 export const DEFAULT_NPC_ENGINE = 'keywords'
