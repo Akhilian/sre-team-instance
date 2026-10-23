@@ -150,6 +150,11 @@ watch(
 </template>
 
 <style scoped>
+/* Bouton d'ajout de réaction (MessageReactions) révélé au survol du message */
+.message:hover :deep(.reactions__add) {
+  opacity: 1;
+}
+
 .message-scroller {
   flex: 1;
   overflow-y: auto;
@@ -237,6 +242,8 @@ watch(
 
 .message__bubble {
   max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 8px 14px 10px;
   border-radius: 6px;
   background: #fff;
@@ -312,5 +319,16 @@ watch(
 /* Message qui mentionne le participant courant : bordure gauche colorée, façon Teams */
 .message--mentions-me .message__bubble {
   border-left: 3px solid #c4314b;
+}
+
+/* Écran étroit : marges réduites, bulles sur toute la largeur disponible */
+@media (max-width: 767px) {
+  .message-scroller {
+    padding: 16px 12px;
+  }
+
+  .message__body {
+    max-width: 100%;
+  }
 }
 </style>

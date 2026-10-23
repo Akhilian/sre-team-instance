@@ -126,6 +126,16 @@ async function react(messageId: string, emoji: string) {
   messages.value = (messages.value ?? []).map(message => message.id === updated.id ? updated : message)
 }
 
+// Panneau des canaux en tiroir sur écran étroit : fermé au SSR, refermé à chaque navigation
+const channelPanelOpen = ref(false)
+watch(channelId, () => {
+  channelPanelOpen.value = false
+})
+
+function onDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && channelPanelOpen.value) channelPanelOpen.value = false
+}
+
 async function onChannelCreated(created: Channel) {
   await refreshChannels()
   await navigateTo(`/channels/${created.id}`)
@@ -136,6 +146,7 @@ let pollTimer: ReturnType<typeof setInterval> | undefined
 
 onMounted(() => {
   mounted.value = true
+  document.addEventListener('keydown', onDocumentKeydown)
   updateUnread()
   heartbeat()
   pollTimer = setInterval(() => {
@@ -149,12 +160,26 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearInterval(pollTimer)
+  document.removeEventListener('keydown', onDocumentKeydown)
 })
 </script>
 
 <template>
   <div class="teams">
     <header class="top-bar">
+      <button
+        type="button"
+        class="top-bar__menu"
+        data-testid="channel-panel-toggle"
+        aria-label="Canaux"
+        aria-controls="channel-panel"
+        :aria-expanded="channelPanelOpen ? 'true' : 'false'"
+        @click="channelPanelOpen = !channelPanelOpen"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </svg>
+      </button>
       <div class="top-bar__brand">
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
           <rect x="3" y="5" width="12" height="14" rx="2" fill="#fff" />
@@ -162,7 +187,7 @@ onBeforeUnmount(() => {
           <circle cx="18.5" cy="8" r="2.3" fill="#c5c6f0" />
           <path d="M16 12h5v4a2.5 2.5 0 0 1-5 0v-4Z" fill="#c5c6f0" />
         </svg>
-        <span>SRE Team Instance</span>
+        <span class="top-bar__title">SRE Team Instance</span>
       </div>
       <div class="top-bar__search" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
@@ -182,12 +207,21 @@ onBeforeUnmount(() => {
 
     <div class="teams__body">
       <AppBar />
-      <ChannelList :channels="channels ?? []" :current-id="channelId" :unread="unread" @created="onChannelCreated" />
+      <ChannelList
+        id="channel-panel"
+        :channels="channels ?? []"
+        :current-id="channelId"
+        :unread="unread"
+        :open="channelPanelOpen"
+        @created="onChannelCreated"
+        @close="channelPanelOpen = false"
+      />
+      <div v-if="channelPanelOpen" class="channel-panel-veil" data-testid="channel-panel-veil" @click="channelPanelOpen = false" />
 
       <main class="channel">
         <header class="channel__header">
           <span class="channel__logo" aria-hidden="true">SRE</span>
-          <div>
+          <div class="channel__title">
             <h1 class="channel__name">{{ channel?.name }}</h1>
             <span class="channel__team">Équipe SRE</span>
           </div>
@@ -234,7 +268,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  min-width: 900px;
 }
 
 .top-bar {
@@ -246,6 +279,25 @@ onBeforeUnmount(() => {
   background: var(--teams-purple-dark);
   color: #fff;
   flex: none;
+}
+
+.top-bar__menu {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.top-bar__menu:hover {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .top-bar__brand {
@@ -315,6 +367,8 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--teams-border);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   flex: none;
+  /* Le nom du canal se tronque plutôt que de faire déborder la page */
+  overflow: hidden;
 }
 
 .channel__logo {
@@ -330,8 +384,15 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
+.channel__title {
+  min-width: 0;
+}
+
 .channel__name {
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 16px;
   font-weight: 700;
   line-height: 1.2;
@@ -404,5 +465,57 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Voile du tiroir des canaux : écran étroit uniquement */
+.channel-panel-veil {
+  display: none;
+}
+
+/* Écran étroit (portable) : menu à la place du panneau des canaux, en-têtes allégés */
+@media (max-width: 767px) {
+  .top-bar {
+    gap: 8px;
+    padding: 0 8px;
+  }
+
+  .top-bar__menu {
+    display: inline-flex;
+  }
+
+  .top-bar__brand {
+    width: auto;
+  }
+
+  .top-bar__title,
+  .top-bar__search,
+  .top-bar__name {
+    display: none;
+  }
+
+  .top-bar__user {
+    padding: 4px;
+  }
+
+  .channel-panel-veil {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .channel__header {
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .channel__tabs {
+    display: none;
+  }
+
+  .typing-indicator {
+    padding: 0 26px;
+  }
 }
 </style>

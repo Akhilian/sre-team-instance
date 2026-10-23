@@ -141,4 +141,15 @@ function onKeydown(event: KeyboardEvent) {
   color: #c4314b;
   font-size: 12px;
 }
+
+/* Écran étroit : marges réduites, le champ peut rétrécir sous sa largeur intrinsèque */
+@media (max-width: 767px) {
+  .composer {
+    padding: 0 12px 12px;
+  }
+
+  .composer__input {
+    min-width: 0;
+  }
+}
 </style>

@@ -16,17 +16,19 @@
 
 - 006 — Réactions emoji (63616c6) : `POST …/messages/:messageId/reactions` en bascule, jeu de 6 emojis dans `shared/utils/reactions.ts`, `MessageReactions.vue`.
 
-## 007 — Outils d'animateur : annonce et réinitialisation (2026-10-23, commit 8024b26)
-- Livré : `POST /api/admin/announcements` (message `kind: "announcement"` signé « Animateur », bandeau violet « Annonce », on peut y répondre et réagir) ; `POST /api/admin/reset` (vide les messages, garde les canaux) ; page `/admin` non liée ; protection par en-tête `x-facilitator-code` comparé à `FACILITATOR_CODE` (défaut `animateur`), 401 sinon ; palette de réactions déplacée à droite du bouton (ne recouvre plus de texte). Vérifié dans Chrome (publication depuis `/admin`, rendu de l'annonce, palette).
-- Décisions : `process.env` lu via `globalThis` (pas de `@types/node`) ; `FACILITATOR_CODE` déclaré `sync: false` dans `render.yaml` — **à saisir dans le dashboard Render avant l'atelier**, sinon le défaut `animateur` s'applique.
-- Dette / suite : POST annonce sans corps → 404 au lieu de 400 (commentaire trompeur) ; palette latérale potentiellement débordante sur écran étroit. Périmètre GOAL 1 à 6 livré. Suites possibles : vérification sur l'URL Render déployée, responsive, indicateur « nouveaux messages » par canal.
+- 007 — Outils d'animateur (8024b26) : `/admin` non liée, `POST /api/admin/{announcements,reset}` protégés par `x-facilitator-code` = `FACILITATOR_CODE` (défaut `animateur`, **à saisir sur Render**, `sync: false`), annonces `kind: "announcement"` avec bandeau.
 
 ## 008 — Messages non lus par canal et compteur dans l'onglet (2026-10-23, commit 67d2e66)
 - Livré : `GET /api/channels` renvoie aussi `messageCount` et `lastMessageAt` (`listChannelSummaries`) ; `app/utils/unread.ts` (`computeUnread`, `totalUnread`, `parseSeen`, `unreadBadgeLabel`) ; « dernier vu » en localStorage (`sre-team-instance:last-seen`) ; canal non lu en gras + pastille violette (« 99+ ») ; titre d'onglet « (N) … » ; POST annonce sans corps / non-objet → 400. Vérifié dans Chrome (3 messages d'un autre auteur → pastille 3 et « (3) », remise à zéro après visite).
 - Décisions : calcul des non-lus uniquement côté client après montage (rien au SSR) ; un canal vu pour la première fois ne compte pas son historique.
 - Dette / suite : annonce avec `{}` → 404 au lieu de 400 ; palette latérale sur écran étroit ; l'URL Render n'est pas autorisée dans Claude in Chrome (vérif déployée faite en HTTP). Suites possibles : responsive mobile, indicateur « X est en train d'écrire », persistance légère (fichier) pour survivre aux redémarrages Render.
 
-## 009 — Présence dans le canal et indicateur « en train d'écrire » (2026-10-23, commit à renseigner)
+## 009 — Présence dans le canal et indicateur « en train d'écrire » (2026-10-23, commit 0ca8480)
 - Livré : `server/utils/presence-store.ts` (horloge `now` injectée, présence 15 s, frappe 5 s, calcul à la lecture) ; `POST /api/presence {name, channelId, typing?}` → `{present, typing}` (400 / 404) ; battement au montage, à chaque poll, au changement de canal/nom, frappe throttlée à 2 s depuis les deux composers, `typing:false` après envoi ; avatars empilés (4 max + `+N`) dans l'en-tête, `typingLabel` sous le fil. Vérifié dans Chrome (3 présents, « Alice Martin et Bob Durand écrivent… », expiration ≈ 8 s).
 - Décisions : un battement sans `typing` ne modifie pas la frappe en cours (seul `typing:false` l'efface) ; validation du corps avant la recherche du canal.
 - Dette / suite : course mineure (un `typing:true` en vol peut rallumer l'indicateur ≤ 5 s) ; annonce avec `{}` → 404 ; palette latérale sur écran étroit. Suites possibles : responsive mobile, indicateur de statut (disponible / occupé / ne pas déranger).
+
+## 010 — Interface utilisable sur petit écran (2026-10-23, commit à renseigner)
+- Livré : sous 768 px, liste des canaux en tiroir (bouton menu `channel-panel-toggle`, voile, Échap, fermeture au clic sur un canal), barre d'applications 48 px, bulles pleine largeur, palette de réactions au-dessus du bouton, bouton de réaction toujours visible en tactile (`hover: none`) ; `min-width: 900px` supprimé ; annonce avec `channelId` absent → 400. Correctif : le bouton d'ajout de réaction n'apparaissait jamais au survol sur bureau (sélecteur `:global` mal compilé) → `.message:hover :deep(.reactions__add)` dans `MessageList.vue`. Vérifié dans Chrome (survol bureau ; iframe 375 px : pas de défilement horizontal, tiroir ouvert/fermé, navigation).
+- Décisions : `vite.build.cssTarget` fixé dans `nuxt.config.ts` (garde la syntaxe `max-width:767px` dans le CSS construit) ; `overflow-wrap: anywhere` sur les bulles.
+- Dette / suite : la palette du premier message peut être coupée en haut sur mobile ; pas de test HTTP automatisé des routes (vérifiées par curl). Suites possibles : statut de présence (disponible / occupé), scénario d'incident pré-écrit déclenchable par l'animateur.

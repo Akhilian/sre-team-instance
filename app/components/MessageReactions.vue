@@ -193,10 +193,17 @@ onBeforeUnmount(removeListeners)
   transition: opacity 0.1s;
 }
 
-:global(.message:hover) .reactions__add,
+/* Le survol du message parent est géré dans MessageList.vue (:deep) */
 .reactions__add:focus-visible,
 .reactions--open .reactions__add {
   opacity: 1;
+}
+
+/* Écran tactile : pas de survol, le bouton d'ajout reste visible */
+@media (hover: none) {
+  .reactions__add {
+    opacity: 1;
+  }
 }
 
 .reactions__add:hover:not(:disabled) {
@@ -227,6 +234,17 @@ onBeforeUnmount(removeListeners)
   border-radius: 6px;
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+/* Écran étroit : plus de marge à droite des bulles, la palette passe au-dessus du bouton,
+   alignée sur son bord droit, pour rester dans la fenêtre */
+@media (max-width: 767px) {
+  .reaction-picker {
+    top: auto;
+    bottom: calc(100% + 4px);
+    right: 0;
+    left: auto;
+  }
 }
 
 .reaction-picker__emoji {

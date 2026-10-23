@@ -81,4 +81,15 @@ const apps = [
   font-size: 10px;
   line-height: 1.2;
 }
+
+/* Écran étroit : barre réduite, icônes seules */
+@media (max-width: 767px) {
+  .app-bar {
+    width: 48px;
+  }
+
+  .app-bar__label {
+    display: none;
+  }
+}
 </style>

@@ -6,6 +6,8 @@ const props = defineProps<{
   currentId: string
   /** Non-lus par id de canal ; vide au SSR et avant montage */
   unread?: Record<string, number>
+  /** Tiroir ouvert (écran étroit uniquement ; sans effet en mode large) */
+  open?: boolean
 }>()
 
 function unreadCount(channelId: string): number {
@@ -15,6 +17,8 @@ function unreadCount(channelId: string): number {
 
 const emit = defineEmits<{
   created: [channel: Channel]
+  /** Demande de fermeture du tiroir (clic sur un canal) */
+  close: []
 }>()
 
 // Même limite que le store (server/utils/chat-store.ts)
@@ -64,7 +68,7 @@ async function submit() {
 </script>
 
 <template>
-  <aside class="channel-panel">
+  <aside class="channel-panel" :class="{ 'channel-panel--open': open }" aria-label="Canaux">
     <header class="channel-panel__header">
       <h2>Équipes</h2>
     </header>
@@ -88,7 +92,7 @@ async function submit() {
         class="channel-form"
         data-testid="create-channel-form"
         @submit.prevent="submit"
-        @keydown.esc="closeForm"
+        @keydown.esc.stop="closeForm"
       >
         <label for="channel-name-input">Nom du canal</label>
         <input
@@ -121,6 +125,7 @@ async function submit() {
               'channel-list__link--active': channel.id === currentId,
               'channel-list__link--unread': unreadCount(channel.id) > 0,
             }"
+            @click="emit('close')"
           >
             <span class="channel-list__name">{{ channel.name }}</span>
             <span
@@ -313,5 +318,27 @@ async function submit() {
   font-weight: 700;
   line-height: 20px;
   text-align: center;
+}
+
+/* Écran étroit : tiroir fixe à gauche, au-dessus du fil et du voile, fermé par défaut */
+@media (max-width: 767px) {
+  .channel-panel {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    width: min(280px, 85vw);
+    overflow-y: auto;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.25);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.2s, visibility 0.2s;
+  }
+
+  .channel-panel--open {
+    transform: none;
+    visibility: visible;
+  }
 }
 </style>
