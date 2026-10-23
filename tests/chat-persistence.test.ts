@@ -70,7 +70,7 @@ describe('chat-persistence', () => {
 
   it.each([
     ['JSON non conforme', '{pas du json'],
-    ['version inconnue', { version: 2, channels: [], messages: {} }],
+    ['version inconnue', { version: 3, channels: [], messages: {}, rev: 0, totalCounts: {} }],
     ['canaux absents', { version: 1, messages: {} }],
     ['message mal formé', { version: 1, channels: [{ id: 'a', name: 'A' }], messages: { a: [{ id: 1 }] } }],
     ['messages d\'un canal inconnu', { version: 1, channels: [{ id: 'a', name: 'A' }], messages: { b: [] } }],

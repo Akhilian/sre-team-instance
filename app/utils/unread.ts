@@ -1,5 +1,6 @@
 // Calcul pur des messages non lus par canal (sans auto-import Nuxt : testé directement par Vitest), à partir des résumés de GET /api/channels
-// et du nombre de messages déjà vus par canal (mémorisé dans le localStorage).
+// et du nombre de messages déjà vus par canal (mémorisé dans le localStorage). Le calcul porte sur totalCount,
+// monotone côté serveur : ni l'éviction FIFO ni les resets ne le font baisser.
 import type { ChannelSummary } from '../../shared/types/chat'
 
 export const LAST_SEEN_STORAGE_KEY = 'sre-team-instance:last-seen'
@@ -18,17 +19,17 @@ export function computeUnread(
 ): UnreadState {
   const counts: Record<string, number> = {}
   const nextSeen: Record<string, number> = {}
-  for (const { id, messageCount } of summaries) {
+  for (const { id, totalCount } of summaries) {
     const previous = seen[id]
     // Canal courant : tout est vu. Première observation : l'historique n'est pas compté.
-    // Compteur en baisse (réinitialisation par l'animateur) : on repart du compteur actuel.
-    if (id === currentId || previous === undefined || messageCount < previous) {
-      nextSeen[id] = messageCount
+    // Compteur en baisse (redémarrage du serveur sans persistance) : on repart du compteur actuel.
+    if (id === currentId || previous === undefined || totalCount < previous) {
+      nextSeen[id] = totalCount
       counts[id] = 0
     }
     else {
       nextSeen[id] = previous
-      counts[id] = messageCount - previous
+      counts[id] = totalCount - previous
     }
   }
   return { counts, nextSeen }

@@ -27,8 +27,13 @@ const threads = computed(() => groupThreads(props.messages))
 // Noms reconnus comme mentions : auteurs du canal affiché, plus le participant courant
 const knownNames = computed(() => [...new Set([...props.messages.map(message => message.author), props.me])])
 
+// Calculé une fois par liste (et non à chaque appel du template) : id → mentionne le participant courant
+const mentionsMeById = computed(() => new Map(
+  props.messages.map(message => [message.id, mentionsName(message.text, knownNames.value, props.me)]),
+))
+
 function mentionsMe(message: Message): boolean {
-  return mentionsName(message.text, knownNames.value, props.me)
+  return mentionsMeById.value.get(message.id) ?? false
 }
 
 function isAnnouncement(message: Message): boolean {

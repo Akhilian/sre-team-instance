@@ -8,8 +8,10 @@ export interface Channel {
 
 /** Canal avec de quoi calculer les non-lus côté client (GET /api/channels) */
 export interface ChannelSummary extends Channel {
-  /** Tous les messages du canal : racines, réponses et annonces */
+  /** Messages présents dans le canal : racines, réponses et annonces (plafonné par l'éviction FIFO) */
   messageCount: number
+  /** Messages jamais publiés dans le canal, monotone : ni l'éviction ni les resets ne le font baisser */
+  totalCount: number
   /** createdAt du message le plus récent ; null si le canal est vide */
   lastMessageAt: string | null
 }
@@ -21,6 +23,8 @@ export interface Message {
   text: string
   /** Date ISO 8601 */
   createdAt: string
+  /** Révision de la dernière création ou modification (curseur global du store, monotone) */
+  rev: number
   /** Id du message racine du fil ; absent pour un message racine */
   parentId?: string
   /** Réactions dans l'ordre de première réaction ; absent sans aucune réaction */
@@ -29,6 +33,16 @@ export interface Message {
   kind?: 'announcement' | 'alert'
   /** Détails de l'alerte, présent seulement quand kind === 'alert' ; text en est la description */
   alert?: Alert
+}
+
+/** Réponse de GET /api/channels/:id/messages?since=<rev> */
+export interface MessagesDelta {
+  /** Révision courante du store : prochain since */
+  rev: number
+  /** true : messages est la liste complète du canal (curseur plus valable), à substituer */
+  full: boolean
+  /** full: false, messages dont rev > since, triés par rev croissant */
+  messages: Message[]
 }
 
 export interface Alert {

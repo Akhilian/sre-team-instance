@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import type { Channel, Message } from '~~/shared/types/chat'
+import type { Channel, ChannelSummary, Message, MessagesDelta } from '~~/shared/types/chat'
+import { CHANNEL_MESSAGES_MAX } from '~~/shared/utils/limits'
+import { mergeMessages } from '~/utils/messages'
 
 const POLL_INTERVAL_MS = 3000
+/** Plafond de l'intervalle après des échecs successifs (doublé à chaque échec) */
+const POLL_MAX_INTERVAL_MS = 30_000
+/** Canal de repli quand le canal courant a été supprimé (reset complet) */
+const FALLBACK_CHANNEL_ID = 'incident-en-cours'
 /** `typing: true` envoyé au plus une fois par intervalle pendant la frappe */
 const TYPING_THROTTLE_MS = 2000
 /** Avatars de présence affichés avant la pastille « +N » */
@@ -16,7 +22,7 @@ if (!channel.value) {
   throw createError({ statusCode: 404, statusMessage: 'Canal introuvable', fatal: true })
 }
 
-const { data: messages, refresh } = await useFetch<Message[]>(
+const { data: messages } = await useFetch<Message[]>(
   () => `/api/channels/${channelId.value}/messages`,
   { default: () => [] },
 )
@@ -99,45 +105,55 @@ const presenceAvatars = computed(() => presence.value.present.slice(0, PRESENCE_
 const presenceOverflow = computed(() => Math.max(0, presence.value.present.length - PRESENCE_MAX_AVATARS))
 const typingText = computed(() => typingLabel(presence.value.typing, displayName.value))
 
+// Mutations locales : le message renvoyé est fusionné aussitôt, sans rechargement. Le curseur n'avance
+// pas : le poll suivant le renverra (remplacement à l'identique) avec les changements des autres.
+function applyLocal(targetChannel: string, message: Message) {
+  if (targetChannel === channelId.value) messages.value = mergeMessages(messages.value ?? [], [message], CHANNEL_MESSAGES_MAX)
+}
+
 async function send(text: string) {
-  await $fetch(`/api/channels/${channelId.value}/messages`, {
+  const targetChannel = channelId.value
+  const created = await $fetch<Message>(`/api/channels/${targetChannel}/messages`, {
     method: 'POST',
     body: { author: displayName.value, text },
   })
   stopTyping()
-  await refresh()
+  applyLocal(targetChannel, created)
 }
 
 async function reply(parentId: string, text: string) {
-  await $fetch(`/api/channels/${channelId.value}/messages`, {
+  const targetChannel = channelId.value
+  const created = await $fetch<Message>(`/api/channels/${targetChannel}/messages`, {
     method: 'POST',
     body: { author: displayName.value, text, parentId },
   })
   stopTyping()
-  await refresh()
+  applyLocal(targetChannel, created)
 }
 
 // Bascule une réaction ; le message renvoyé remplace aussitôt l'ancien, sans attendre le polling
 async function react(messageId: string, emoji: string) {
-  const updated = await $fetch<Message>(`/api/channels/${channelId.value}/messages/${messageId}/reactions`, {
+  const targetChannel = channelId.value
+  const updated = await $fetch<Message>(`/api/channels/${targetChannel}/messages/${messageId}/reactions`, {
     method: 'POST',
     body: { emoji, author: displayName.value },
   })
-  messages.value = (messages.value ?? []).map(message => message.id === updated.id ? updated : message)
+  applyLocal(targetChannel, updated)
 }
 
 // Acquitte ou résout une alerte ; le message renvoyé remplace l'ancien sans attendre le polling.
-// En cas de refus (déjà acquittée ailleurs…), on recharge pour afficher l'état réel, puis on remonte l'erreur.
+// En cas de refus (déjà acquittée ailleurs…), un poll immédiat affiche l'état réel, puis on remonte l'erreur.
 async function setAlertStatus(messageId: string, status: 'acknowledged' | 'resolved') {
+  const targetChannel = channelId.value
   try {
-    const updated = await $fetch<Message>(`/api/channels/${channelId.value}/messages/${messageId}/alert-status`, {
+    const updated = await $fetch<Message>(`/api/channels/${targetChannel}/messages/${messageId}/alert-status`, {
       method: 'POST',
       body: { status, name: displayName.value },
     })
-    messages.value = (messages.value ?? []).map(message => message.id === updated.id ? updated : message)
+    applyLocal(targetChannel, updated)
   }
   catch (error) {
-    await refresh()
+    await pollOnce()
     throw error
   }
 }
@@ -157,26 +173,109 @@ async function onChannelCreated(created: Channel) {
   await navigateTo(`/channels/${created.id}`)
 }
 
-// Polling court : les messages des autres navigateurs apparaissent en quelques secondes
-let pollTimer: ReturnType<typeof setInterval> | undefined
+// Polling incrémental : messages modifiés depuis le curseur (?since=), liste des canaux (canaux créés
+// ailleurs, non-lus) et présence. Un setTimeout réarmé à chaque tour (intervalle variable) ; suspendu
+// quand l'onglet est caché, rattrapage immédiat au retour ; intervalle doublé après chaque échec
+// (réseau ou 5xx) jusqu'à POLL_MAX_INTERVAL_MS, ramené à POLL_INTERVAL_MS au premier succès.
+let cursor = 0
+let pollTimer: ReturnType<typeof setTimeout> | undefined
+let inFlight: Promise<void> | null = null
+let failures = 0
+let unmounted = false
+
+// Le curseur repart de zéro à chaque changement de canal
+watch(channelId, () => {
+  cursor = 0
+})
+
+function isServerOrNetworkError(error: unknown): boolean {
+  const statusCode = (error as { statusCode?: number }).statusCode
+  return statusCode === undefined || statusCode >= 500
+}
+
+async function pollRound(): Promise<void> {
+  const targetChannel = channelId.value
+  const since = cursor
+  heartbeat()
+  const [deltaResult, channelsResult] = await Promise.allSettled([
+    $fetch<MessagesDelta>(`/api/channels/${targetChannel}/messages`, { query: { since } }),
+    $fetch<ChannelSummary[]>('/api/channels'),
+  ])
+  if (unmounted) return
+
+  let failed = false
+  if (channelsResult.status === 'fulfilled') channels.value = channelsResult.value
+  else failed ||= isServerOrNetworkError(channelsResult.reason)
+
+  if (deltaResult.status === 'fulfilled') {
+    // Réponse d'un canal quitté entre-temps : ignorée (le curseur a été remis à zéro)
+    if (targetChannel === channelId.value) {
+      const delta = deltaResult.value
+      // since=0 renvoie tous les messages du canal : la liste est remplacée, jamais mêlée à celle du canal précédent
+      if (delta.full) messages.value = delta.messages
+      else messages.value = mergeMessages(since === 0 ? [] : messages.value ?? [], delta.messages, CHANNEL_MESSAGES_MAX)
+      cursor = delta.rev
+    }
+  }
+  else if ((deltaResult.reason as { statusCode?: number }).statusCode === 404) {
+    // Canal supprimé (reset complet par l'animateur) : retour au canal d'incident
+    if (targetChannel === channelId.value && targetChannel !== FALLBACK_CHANNEL_ID) {
+      await navigateTo(`/channels/${FALLBACK_CHANNEL_ID}`)
+    }
+  }
+  else {
+    failed ||= isServerOrNetworkError(deltaResult.reason)
+  }
+  failures = failed ? failures + 1 : 0
+}
+
+/** Un seul poll à la fois : un appel pendant un poll en cours renvoie celui-ci. */
+function pollOnce(): Promise<void> {
+  if (!inFlight) {
+    inFlight = pollRound().finally(() => {
+      inFlight = null
+    })
+  }
+  return inFlight
+}
+
+function schedulePoll() {
+  clearTimeout(pollTimer)
+  pollTimer = undefined
+  if (unmounted || document.hidden) return
+  const delay = Math.min(POLL_INTERVAL_MS * 2 ** failures, POLL_MAX_INTERVAL_MS)
+  pollTimer = setTimeout(pollAndSchedule, delay)
+}
+
+async function pollAndSchedule() {
+  await pollOnce()
+  schedulePoll()
+}
+
+function onVisibilityChange() {
+  if (document.hidden) {
+    clearTimeout(pollTimer)
+    pollTimer = undefined
+  }
+  else {
+    pollAndSchedule()
+  }
+}
 
 onMounted(() => {
   mounted.value = true
   document.addEventListener('keydown', onDocumentKeydown)
+  document.addEventListener('visibilitychange', onVisibilityChange)
   updateUnread()
   heartbeat()
-  pollTimer = setInterval(() => {
-    heartbeat()
-    // Pas de requête en double si la précédente n'est pas encore revenue.
-    // La liste des canaux suit aussi, pour voir les canaux créés ailleurs.
-    refresh({ dedupe: 'defer' })
-    refreshChannels({ dedupe: 'defer' })
-  }, POLL_INTERVAL_MS)
+  schedulePoll()
 })
 
 onBeforeUnmount(() => {
-  clearInterval(pollTimer)
+  unmounted = true
+  clearTimeout(pollTimer)
   document.removeEventListener('keydown', onDocumentKeydown)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
 

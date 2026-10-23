@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { ChannelSummary } from '../shared/types/chat'
 import { computeUnread, parseSeen, totalUnread, unreadBadgeLabel } from '../app/utils/unread'
 
-function summary(id: string, messageCount: number): ChannelSummary {
-  return { id, name: id, messageCount, lastMessageAt: messageCount > 0 ? '2026-10-23T08:00:00.000Z' : null }
+function summary(id: string, totalCount: number, messageCount = Math.min(totalCount, 2000)): ChannelSummary {
+  return { id, name: id, messageCount, totalCount, lastMessageAt: totalCount > 0 ? '2026-10-23T08:00:00.000Z' : null }
 }
 
 describe('computeUnread', () => {
@@ -31,6 +31,25 @@ describe('computeUnread', () => {
     expect(nextSeen.incident).toBe(1)
     // 1 nouveau message après la réinitialisation : 1 non lu
     expect(computeUnread([summary('general', 0), summary('incident', 2)], nextSeen, 'general').counts.incident).toBe(1)
+  })
+
+  it('compte sur totalCount même quand messageCount plafonne à 2000', () => {
+    const { nextSeen } = computeUnread([summary('general', 0), summary('incident', 2000)], {}, 'general')
+    const { counts } = computeUnread([summary('general', 0), summary('incident', 2003, 2000)], nextSeen, 'general')
+    expect(counts.incident).toBe(3)
+  })
+
+  it('compte les messages publiés après un reset, le compteur ne baissant pas (B8)', () => {
+    // incident : 4 messages vus, reset (messageCount 0, totalCount 4), puis 2 nouveaux messages
+    const seen = computeUnread([summary('general', 0), summary('incident', 4)], {}, 'general').nextSeen
+    const { counts } = computeUnread([summary('general', 0), summary('incident', 6, 2)], seen, 'general')
+    expect(counts.incident).toBe(2)
+  })
+
+  it('réaligne sans compter quand totalCount baisse (redémarrage sans persistance)', () => {
+    const { counts, nextSeen } = computeUnread([summary('general', 0), summary('incident', 3)], { general: 0, incident: 10 }, 'general')
+    expect(counts.incident).toBe(0)
+    expect(nextSeen.incident).toBe(3)
   })
 
   it('ignore les canaux disparus', () => {

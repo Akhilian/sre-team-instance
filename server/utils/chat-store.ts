@@ -1,7 +1,7 @@
 // Store en mémoire des canaux et messages : une seule instance Render. La persistance éventuelle
 // (instantané exportSnapshot / importSnapshot) est branchée par server/utils/chat-persistence.ts.
 // Module pur (sans auto-import Nuxt) pour être testable directement avec Vitest.
-import type { Channel, ChannelSummary, Message } from '../../shared/types/chat'
+import type { Channel, ChannelSummary, Message, MessagesDelta } from '../../shared/types/chat'
 import { isReactionEmoji } from '../../shared/utils/reactions'
 import {
   ALERT_SERVICE_MAX_LENGTH,
@@ -26,6 +26,15 @@ const DEFAULT_CHANNELS: readonly Channel[] = [
 
 let channels: Channel[] = []
 let messagesByChannel = new Map<string, Message[]>()
+
+// Curseur de révision global, entier et monotone : chaque création ou modification de message l'incrémente
+// et l'inscrit dans Message.rev. Seul resetChatStore (tests) le remet à zéro.
+let rev = 0
+// Messages jamais publiés par slug de canal : ni l'éviction ni les resets ne les décrémentent, et un canal
+// supprimé puis recréé reprend son compteur
+let totalCounts = new Map<string, number>()
+// Par canal, rev du dernier reset ou de la dernière éviction : un curseur antérieur n'est plus valable
+let resetRevs = new Map<string, number>()
 
 type ChatChangeListener = () => void
 const changeListeners = new Set<ChatChangeListener>()
@@ -109,10 +118,30 @@ export class ReactionLimitError extends Error {
   }
 }
 
-/** Remet le store dans son état initial (canaux pré-créés, aucun message). */
+/** Remet le store dans son état initial (canaux pré-créés, aucun message, compteurs à zéro) : tests. */
 export function resetChatStore(): void {
   channels = DEFAULT_CHANNELS.map(channel => ({ ...channel }))
   messagesByChannel = new Map(channels.map(channel => [channel.id, []]))
+  rev = 0
+  totalCounts = new Map()
+  resetRevs = new Map()
+}
+
+/** Révision courante du store */
+export function currentRev(): number {
+  return rev
+}
+
+/** Inscrit une nouvelle révision sur message (création ou modification). */
+function bumpRev(message: Message): void {
+  rev += 1
+  message.rev = rev
+}
+
+/** Après un reset : tout curseur antérieur à cette révision donne full, dans tous les canaux connus. */
+function markReset(channelIds: Iterable<string>): void {
+  rev += 1
+  for (const channelId of channelIds) resetRevs.set(channelId, rev)
 }
 
 resetChatStore()
@@ -126,11 +155,12 @@ export function listChannelSummaries(): ChannelSummary[] {
   return channels.map((channel) => {
     const messages = messagesByChannel.get(channel.id) ?? []
     const last = messages[messages.length - 1]
-    // Ordre des clés fixe (id, name, messageCount, lastMessageAt) : il se retrouve dans le JSON
+    // Ordre des clés fixe (id, name, messageCount, totalCount, lastMessageAt) : il se retrouve dans le JSON
     return {
       id: channel.id,
       name: channel.name,
       messageCount: messages.length,
+      totalCount: totalCounts.get(channel.id) ?? 0,
       lastMessageAt: last ? last.createdAt : null,
     }
   })
@@ -155,6 +185,21 @@ export function listMessages(channelId: string): Message[] {
   const messages = messagesByChannel.get(channelId)
   if (!messages) throw new ChannelNotFoundError(channelId)
   return messages.map(copyMessage)
+}
+
+/**
+ * Messages créés ou modifiés après la révision since, triés par rev croissant. Liste complète
+ * (full: true, ordre du canal) si le curseur n'est plus valable : antérieur au dernier reset ou à la
+ * dernière éviction du canal, ou postérieur à la révision courante (redémarrage sans persistance).
+ */
+export function listMessagesSince(channelId: string, since: number): MessagesDelta {
+  const messages = messagesByChannel.get(channelId)
+  if (!messages) throw new ChannelNotFoundError(channelId)
+  if (since > rev || since < (resetRevs.get(channelId) ?? 0)) {
+    return { rev, full: true, messages: messages.map(copyMessage) }
+  }
+  const changed = messages.filter(message => message.rev > since).sort((a, b) => a.rev - b.rev)
+  return { rev, full: false, messages: changed.map(copyMessage) }
 }
 
 function requireText(value: unknown, field: string, maxLength: number): string {
@@ -183,10 +228,20 @@ function requireParentId(value: unknown, messages: readonly Message[]): string {
   return value
 }
 
-/** Ajoute message en fin de canal ; au-delà de CHANNEL_MESSAGES_MAX, les plus anciens sont retirés (FIFO). */
+/**
+ * Ajoute message en fin de canal avec une nouvelle révision et compte la publication ; au-delà de
+ * CHANNEL_MESSAGES_MAX, les plus anciens sont retirés (FIFO). La révision d'éviction retenue est la plus
+ * haute des messages retirés : un curseur qui ne l'a pas vue repart d'une liste complète.
+ */
 function pushMessage(messages: Message[], message: Message): void {
+  bumpRev(message)
   messages.push(message)
-  if (messages.length > CHANNEL_MESSAGES_MAX) messages.splice(0, messages.length - CHANNEL_MESSAGES_MAX)
+  totalCounts.set(message.channelId, (totalCounts.get(message.channelId) ?? 0) + 1)
+  if (messages.length > CHANNEL_MESSAGES_MAX) {
+    const evicted = messages.splice(0, messages.length - CHANNEL_MESSAGES_MAX)
+    const evictedRev = Math.max(...evicted.map(old => old.rev))
+    resetRevs.set(message.channelId, Math.max(resetRevs.get(message.channelId) ?? 0, evictedRev))
+  }
 }
 
 /** Valide puis ajoute un message ; lève une erreur sans rien ajouter si l'entrée est invalide. */
@@ -207,6 +262,7 @@ export function addMessage(
     author,
     text,
     createdAt: new Date().toISOString(),
+    rev: 0,
   }
   // Les racines restent sans champ parentId
   if (parentId !== undefined) message.parentId = parentId
@@ -229,6 +285,7 @@ export function addAnnouncement(channelId: string, input: { text?: unknown }): M
     author: ANNOUNCEMENT_AUTHOR,
     text,
     createdAt: new Date().toISOString(),
+    rev: 0,
     kind: 'announcement',
   }
   pushMessage(messages, message)
@@ -260,6 +317,7 @@ export function addAlert(
     author: ALERT_AUTHOR,
     text,
     createdAt: new Date().toISOString(),
+    rev: 0,
     kind: 'alert',
     alert: { severity, title, service, status: 'triggered' },
   }
@@ -305,13 +363,30 @@ export function setAlertStatus(
     alert.resolvedBy = name
     alert.resolvedAt = at
   }
+  bumpRev(message)
   notifyChange()
   return copyMessage(message)
 }
 
-/** Vide les messages de tous les canaux ; les canaux, y compris ceux créés par les participants, restent. */
+/**
+ * Vide les messages de tous les canaux ; les canaux, y compris ceux créés par les participants, restent.
+ * Les compteurs totalCount ne baissent pas et rev avance (les curseurs antérieurs donnent full).
+ */
 export function clearMessages(): void {
   for (const channelId of messagesByChannel.keys()) messagesByChannel.set(channelId, [])
+  markReset(messagesByChannel.keys())
+  notifyChange()
+}
+
+/**
+ * Reset complet : canaux ramenés à DEFAULT_CHANNELS (ceux des participants sont supprimés), messages
+ * effacés. Contrairement à resetChatStore, rev et totalCount ne reculent jamais.
+ */
+export function resetAll(): void {
+  const previousIds = [...messagesByChannel.keys()]
+  channels = DEFAULT_CHANNELS.map(channel => ({ ...channel }))
+  messagesByChannel = new Map(channels.map(channel => [channel.id, []]))
+  markReset([...previousIds, ...messagesByChannel.keys()])
   notifyChange()
 }
 
@@ -351,6 +426,7 @@ export function toggleReaction(
   const remaining = reactions.filter(candidate => candidate.authors.length > 0)
   if (remaining.length > 0) message.reactions = remaining
   else delete message.reactions
+  bumpRev(message)
   notifyChange()
   return copyMessage(message)
 }
@@ -389,20 +465,37 @@ export function addChannel(input: { name?: unknown }): Channel {
   return { ...channel }
 }
 
-export const SNAPSHOT_VERSION = 1
+export const SNAPSHOT_VERSION = 2
 
-/** Instantané persistable : canaux (dans l'ordre) et messages par canal, réactions et alertes comprises. */
+/**
+ * Instantané persistable : canaux (dans l'ordre), messages par canal (réactions, alertes et rev compris),
+ * révision courante et compteurs totalCount (y compris ceux des canaux supprimés). La version 1, sans
+ * rev ni totalCounts, reste importable.
+ */
 export interface ChatSnapshot {
   version: typeof SNAPSHOT_VERSION
   savedAt: string
   channels: Channel[]
   messages: Record<string, Message[]>
+  rev: number
+  totalCounts: Record<string, number>
 }
 
 export function exportSnapshot(): ChatSnapshot {
   const messages: Record<string, Message[]> = {}
   for (const [channelId, list] of messagesByChannel) messages[channelId] = list.map(copyMessage)
-  return { version: SNAPSHOT_VERSION, savedAt: new Date().toISOString(), channels: listChannels(), messages }
+  return {
+    version: SNAPSHOT_VERSION,
+    savedAt: new Date().toISOString(),
+    channels: listChannels(),
+    messages,
+    rev,
+    totalCounts: Object.fromEntries(totalCounts),
+  }
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -426,8 +519,10 @@ function isValidAlert(value: unknown): boolean {
   return isRecord(value) && isAlertSeverity(value.severity) && isAlertStatus(value.status)
 }
 
-function isValidMessage(value: unknown, channelId: string): value is Message {
+/** En v2, Message.rev est obligatoire ; en v1 il est absent et attribué à l'import. */
+function isValidMessage(value: unknown, channelId: string, withRev: boolean): value is Message {
   return isRecord(value)
+    && (!withRev || (isNonNegativeInteger(value.rev) && value.rev > 0))
     && typeof value.id === 'string'
     && value.channelId === channelId
     && typeof value.author === 'string'
@@ -438,7 +533,8 @@ function isValidMessage(value: unknown, channelId: string): value is Message {
 }
 
 /**
- * Remplace l'état par celui de l'instantané s'il est valide (version 1) et renvoie true.
+ * Remplace l'état par celui de l'instantané s'il est valide (version 1 ou 2) et renvoie true.
+ * Migration v1 : rev attribué dans l'ordre des messages (canal par canal), totalCounts = messages présents.
  * Sinon renvoie false sans rien modifier ni lever d'exception. Ne notifie pas onChatChange.
  */
 export function importSnapshot(data: unknown): boolean {
@@ -452,10 +548,14 @@ export function importSnapshot(data: unknown): boolean {
 }
 
 function importValidSnapshot(data: unknown): boolean {
-  if (!isRecord(data) || data.version !== SNAPSHOT_VERSION) return false
+  if (!isRecord(data) || (data.version !== 1 && data.version !== SNAPSHOT_VERSION)) return false
+  const v2 = data.version === SNAPSHOT_VERSION
   const rawChannels = data.channels
   const rawMessages = data.messages
   if (!Array.isArray(rawChannels) || !rawChannels.every(isValidChannel) || !isRecord(rawMessages)) return false
+  const rawTotals = data.totalCounts
+  if (v2 && (!isNonNegativeInteger(data.rev) || !isRecord(rawTotals)
+    || !Object.values(rawTotals).every(isNonNegativeInteger))) return false
 
   const ids = new Set(rawChannels.map(channel => channel.id))
   if (ids.size !== rawChannels.length) return false
@@ -465,12 +565,38 @@ function importValidSnapshot(data: unknown): boolean {
   const nextMessages = new Map<string, Message[]>()
   for (const channel of rawChannels) {
     const list = rawMessages[channel.id] ?? []
-    if (!Array.isArray(list) || !list.every(message => isValidMessage(message, channel.id))) return false
+    if (!Array.isArray(list) || !list.every(message => isValidMessage(message, channel.id, v2))) return false
     // Plafond FIFO appliqué aussi à un instantané plus ancien que la limite
     nextMessages.set(channel.id, list.slice(-CHANNEL_MESSAGES_MAX).map(copyMessage))
   }
 
+  let nextRev: number
+  const nextTotals = new Map<string, number>()
+  if (v2) {
+    nextRev = data.rev as number
+    // Un message plus récent que la révision de l'instantané : incohérent
+    for (const list of nextMessages.values()) {
+      if (list.some(message => message.rev > nextRev)) return false
+    }
+    for (const [channelId, count] of Object.entries(rawTotals as Record<string, number>)) nextTotals.set(channelId, count)
+  }
+  else {
+    nextRev = 0
+    for (const list of nextMessages.values()) {
+      for (const message of list) message.rev = ++nextRev
+    }
+  }
+  // Le compteur ne peut pas être inférieur aux messages présents
+  for (const [channelId, list] of nextMessages) {
+    nextTotals.set(channelId, Math.max(nextTotals.get(channelId) ?? 0, list.length))
+  }
+
   channels = rawChannels.map(channel => ({ id: channel.id, name: channel.name }))
   messagesByChannel = nextMessages
+  // rev ne recule jamais dans un même processus (import après un reset, par exemple)
+  rev = Math.max(rev, nextRev)
+  totalCounts = nextTotals
+  // Curseurs antérieurs à l'import (autre processus, redémarrage) : liste complète une fois
+  resetRevs = new Map([...nextMessages.keys()].map(channelId => [channelId, rev]))
   return true
 }

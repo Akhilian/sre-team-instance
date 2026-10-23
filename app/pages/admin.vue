@@ -22,7 +22,7 @@ const TEXT_MAX_LENGTH = 2000
 
 useHead({ title: 'Animateur | SRE Team Instance' })
 
-const { data: channels } = await useFetch('/api/channels', { default: () => [] })
+const { data: channels, refresh: refreshChannels } = await useFetch('/api/channels', { default: () => [] })
 
 const code = ref('')
 const channelId = ref(channels.value.find(channel => channel.id.startsWith('incident-'))?.id ?? channels.value[0]?.id ?? '')
@@ -235,14 +235,34 @@ function downloadTimeline() {
   })
 }
 
-function reset() {
+type ResetScope = 'messages' | 'all'
+
+const RESET_CONFIRMATIONS: Record<ResetScope, string> = {
+  messages: 'Effacer les messages de tous les canaux ? Les canaux sont conservés.',
+  all: 'Tout réinitialiser ? Les canaux créés par les participants, tous les messages et la présence seront supprimés, et le scénario en cours sera arrêté.',
+}
+
+const RESET_RESULTS: Record<ResetScope, string> = {
+  messages: 'Conversations réinitialisées.',
+  all: 'Instance entièrement réinitialisée.',
+}
+
+function reset(scope: ResetScope) {
   if (!canReset.value) return
-  if (!confirm('Effacer les messages de tous les canaux ? Les canaux sont conservés.')) return
+  if (!confirm(RESET_CONFIRMATIONS[scope])) return
   return run(async () => {
-    await $fetch('/api/admin/reset', { method: 'POST', headers: { 'x-facilitator-code': code.value } })
+    await $fetch('/api/admin/reset', { method: 'POST', headers: { 'x-facilitator-code': code.value }, body: { scope } })
     // La réinitialisation arrête aussi le scénario en cours
     await loadScenarios()
-    return 'Conversations réinitialisées.'
+    if (scope === 'all') {
+      // Canaux des participants supprimés : les sélections qui les visaient reviennent au canal d'incident
+      await refreshChannels()
+      const ids = new Set(channels.value.map(channel => channel.id))
+      if (!ids.has(channelId.value)) channelId.value = 'incident-en-cours'
+      if (!ids.has(alertChannelId.value)) alertChannelId.value = 'incident-en-cours'
+      if (timelineChannelId.value !== '' && !ids.has(timelineChannelId.value)) timelineChannelId.value = ''
+    }
+    return RESET_RESULTS[scope]
   })
 }
 </script>
@@ -421,10 +441,14 @@ function reset() {
 
       <section class="card">
         <h2>Entre deux groupes</h2>
-        <p>Efface les messages de tous les canaux. Les canaux, y compris ceux créés par les participants, sont conservés.</p>
+        <p>« Effacer les messages » vide tous les canaux ; les canaux, y compris ceux créés par les participants, sont conservés.</p>
+        <p>« Tout réinitialiser » supprime aussi les canaux créés par les participants et la présence ; seuls les canaux par défaut restent. Le scénario en cours est arrêté dans les deux cas.</p>
         <div class="card__actions">
-          <button type="button" class="button button--danger" data-testid="reset" :disabled="!canReset" @click="reset">
-            Réinitialiser les conversations
+          <button type="button" class="button button--danger" data-testid="reset" :disabled="!canReset" @click="reset('messages')">
+            Effacer les messages
+          </button>
+          <button type="button" class="button button--danger" data-testid="reset-all" :disabled="!canReset" @click="reset('all')">
+            Tout réinitialiser
           </button>
         </div>
       </section>

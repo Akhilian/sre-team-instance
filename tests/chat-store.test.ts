@@ -234,18 +234,18 @@ describe('addChannel', () => {
 describe('listChannelSummaries', () => {
   beforeEach(() => resetChatStore())
 
-  it('suit l\'ordre de listChannels avec les clés id, name, messageCount, lastMessageAt', () => {
+  it('suit l\'ordre de listChannels avec les clés id, name, messageCount, totalCount, lastMessageAt', () => {
     addChannel({ name: 'Base de données' })
     const summaries = listChannelSummaries()
     expect(summaries.map(summary => summary.id)).toEqual(listChannels().map(channel => channel.id))
     for (const summary of summaries) {
-      expect(Object.keys(summary)).toEqual(['id', 'name', 'messageCount', 'lastMessageAt'])
+      expect(Object.keys(summary)).toEqual(['id', 'name', 'messageCount', 'totalCount', 'lastMessageAt'])
     }
   })
 
   it('renvoie 0 et null pour un canal vide', () => {
     const general = listChannelSummaries().find(summary => summary.id === 'general')
-    expect(general).toEqual({ id: 'general', name: 'Général', messageCount: 0, lastMessageAt: null })
+    expect(general).toEqual({ id: 'general', name: 'Général', messageCount: 0, totalCount: 0, lastMessageAt: null })
   })
 
   it('compte racines et réponses, et date le plus récent', () => {
