@@ -6,6 +6,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
+  /** Frappe dans le champ (le throttle est géré par la page) */
+  typing: []
 }>()
 
 const TEXT_MAX_LENGTH = 2000
@@ -63,6 +65,7 @@ function onKeydown(event: KeyboardEvent) {
         placeholder="Répondre"
         aria-label="Réponse"
         @keydown="onKeydown"
+        @input="emit('typing')"
       />
       <button type="submit" class="reply-composer__send" :disabled="!canSend" title="Envoyer la réponse">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">

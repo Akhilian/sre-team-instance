@@ -6,6 +6,11 @@ const props = defineProps<{
   send: (text: string) => Promise<void>
 }>()
 
+const emit = defineEmits<{
+  /** Frappe dans le champ (le throttle est géré par la page) */
+  typing: []
+}>()
+
 const TEXT_MAX_LENGTH = 2000
 
 const text = ref('')
@@ -51,6 +56,7 @@ function onKeydown(event: KeyboardEvent) {
         :placeholder="disabled ? 'Choisissez un nom d\'affichage pour écrire' : `Écrire dans ${channelName}`"
         aria-label="Message"
         @keydown="onKeydown"
+        @input="emit('typing')"
       />
       <button type="submit" class="composer__send" :disabled="!canSend" title="Envoyer">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">

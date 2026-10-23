@@ -2,6 +2,10 @@
 import type { Channel, Message } from '~~/shared/types/chat'
 
 const POLL_INTERVAL_MS = 3000
+/** `typing: true` envoyé au plus une fois par intervalle pendant la frappe */
+const TYPING_THROTTLE_MS = 2000
+/** Avatars de présence affichés avant la pastille « +N » */
+const PRESENCE_MAX_AVATARS = 4
 
 const route = useRoute()
 const channelId = computed(() => String(route.params.id))
@@ -50,11 +54,57 @@ function saveName(name: string) {
   editingName.value = false
 }
 
+// Présence et frappe : client uniquement, vides au SSR et avant montage (pas d'écart d'hydratation)
+interface ChannelPresence { present: string[], typing: string[] }
+const presence = ref<ChannelPresence>({ present: [], typing: [] })
+let lastTypingSentAt = 0
+
+async function heartbeat(typing?: boolean) {
+  if (!mounted.value || !displayName.value) return
+  const targetChannel = channelId.value
+  try {
+    const result = await $fetch<ChannelPresence>('/api/presence', {
+      method: 'POST',
+      body: { name: displayName.value, channelId: targetChannel, typing },
+    })
+    // Réponse d'un canal quitté entre-temps : ignorée
+    if (targetChannel === channelId.value) presence.value = result
+  }
+  catch {
+    // Battement perdu : le suivant (≤ 3 s) rattrape, rien à signaler
+  }
+}
+
+function onTyping() {
+  const now = Date.now()
+  if (now - lastTypingSentAt < TYPING_THROTTLE_MS) return
+  lastTypingSentAt = now
+  heartbeat(true)
+}
+
+function stopTyping() {
+  lastTypingSentAt = 0
+  heartbeat(false)
+}
+
+watch(channelId, () => {
+  presence.value = { present: [], typing: [] }
+  lastTypingSentAt = 0
+  heartbeat()
+})
+// Nom choisi ou modifié après le montage
+watch(displayName, () => heartbeat())
+
+const presenceAvatars = computed(() => presence.value.present.slice(0, PRESENCE_MAX_AVATARS))
+const presenceOverflow = computed(() => Math.max(0, presence.value.present.length - PRESENCE_MAX_AVATARS))
+const typingText = computed(() => typingLabel(presence.value.typing, displayName.value))
+
 async function send(text: string) {
   await $fetch(`/api/channels/${channelId.value}/messages`, {
     method: 'POST',
     body: { author: displayName.value, text },
   })
+  stopTyping()
   await refresh()
 }
 
@@ -63,6 +113,7 @@ async function reply(parentId: string, text: string) {
     method: 'POST',
     body: { author: displayName.value, text, parentId },
   })
+  stopTyping()
   await refresh()
 }
 
@@ -86,7 +137,9 @@ let pollTimer: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
   mounted.value = true
   updateUnread()
+  heartbeat()
   pollTimer = setInterval(() => {
+    heartbeat()
     // Pas de requête en double si la précédente n'est pas encore revenue.
     // La liste des canaux suit aussi, pour voir les canaux créés ailleurs.
     refresh({ dedupe: 'defer' })
@@ -143,10 +196,26 @@ onBeforeUnmount(() => {
             <span class="channel__tab">Fichiers</span>
             <span class="channel__tab">Wiki</span>
           </nav>
+          <div v-if="presence.present.length > 0" class="presence" :aria-label="`${presence.present.length} personne(s) dans le canal`">
+            <span
+              v-for="name in presenceAvatars"
+              :key="name"
+              class="avatar presence__avatar"
+              data-testid="presence-avatar"
+              :title="name"
+              :style="{ background: avatarColor(name) }"
+            >{{ initials(name) }}</span>
+            <span
+              v-if="presenceOverflow > 0"
+              class="avatar presence__avatar presence__more"
+              :title="presence.present.slice(PRESENCE_MAX_AVATARS).join(', ')"
+            >+{{ presenceOverflow }}</span>
+          </div>
         </header>
 
-        <MessageList :messages="messages ?? []" :me="displayName" :reply="reply" :react="react" />
-        <Composer :disabled="!displayName" :channel-name="channel?.name ?? ''" :send="send" />
+        <MessageList :messages="messages ?? []" :me="displayName" :reply="reply" :react="react" @typing="onTyping" />
+        <p class="typing-indicator" data-testid="typing-indicator" aria-live="polite">{{ typingText }}</p>
+        <Composer :disabled="!displayName" :channel-name="channel?.name ?? ''" :send="send" @typing="onTyping" />
       </main>
     </div>
 
@@ -291,5 +360,49 @@ onBeforeUnmount(() => {
   border-bottom-color: var(--teams-purple);
   color: var(--teams-text);
   font-weight: 600;
+}
+
+/* Avatars empilés et chevauchés, comme la liste des participants de Teams */
+.presence {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  padding-left: 8px;
+}
+
+.presence__avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+  border: 2px solid #fff;
+  box-sizing: content-box;
+}
+
+.presence__avatar + .presence__avatar {
+  margin-left: -8px;
+}
+
+.presence__more {
+  background: var(--teams-border);
+  color: var(--teams-text);
+}
+
+/* Hauteur réservée : l'apparition du libellé ne décale ni le fil ni le champ de saisie */
+.typing-indicator {
+  flex: none;
+  /* Aligné sur le texte du champ de saisie (marge 32 px + retrait interne 14 px) */
+  width: 100%;
+  max-width: calc(960px + 64px);
+  height: 20px;
+  margin: 0 auto;
+  padding: 0 46px;
+  box-sizing: border-box;
+  color: var(--teams-text-muted);
+  font-size: 12px;
+  font-style: italic;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

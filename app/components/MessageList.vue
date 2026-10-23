@@ -13,6 +13,11 @@ const props = defineProps<{
   react: (messageId: string, emoji: string) => Promise<void>
 }>()
 
+const emit = defineEmits<{
+  /** Frappe dans un champ de réponse, remontée à la page */
+  typing: []
+}>()
+
 const threads = computed(() => groupThreads(props.messages))
 
 // Noms reconnus comme mentions : auteurs du canal affiché, plus le participant courant
@@ -123,6 +128,7 @@ watch(
             v-if="replyingTo === thread.id"
             :send="text => reply(thread.id, text)"
             @close="replyingTo = null"
+            @typing="emit('typing')"
           />
           <button
             v-else
