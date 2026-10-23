@@ -15,10 +15,10 @@ import {
   ALERT_SEVERITY_LABELS,
   ALERT_TITLE_MAX_LENGTH,
 } from '~~/shared/utils/alerts'
+import { TEXT_MAX_LENGTH } from '~~/shared/utils/limits'
 
 const FACILITATOR_CODE_STORAGE_KEY = 'sre-team-instance:facilitator-code'
 const SCENARIO_POLL_INTERVAL_MS = 2000
-const TEXT_MAX_LENGTH = 2000
 
 useHead({ title: 'Animateur | SRE Team Instance' })
 
@@ -45,15 +45,28 @@ let unmounted = false
 const timelineChannelId = ref('')
 const timelinePreview = ref<string | null>(null)
 
+// Canaux créés depuis un autre onglet : liste rechargée au retour sur la page. Les sélections
+// (refs indépendantes de la liste) ne sont pas touchées.
+function onWindowFocus() {
+  void refreshChannels()
+}
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') void refreshChannels()
+}
+
 onMounted(() => {
   code.value = sessionStorage.getItem(FACILITATOR_CODE_STORAGE_KEY) ?? ''
   // Scénarios chargés seulement si un code était mémorisé, pas à chaque frappe
   if (code.value !== '') loadScenarios()
+  window.addEventListener('focus', onWindowFocus)
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onBeforeUnmount(() => {
   unmounted = true
   clearTimeout(scenarioPollTimer)
+  window.removeEventListener('focus', onWindowFocus)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 
 watch(code, (value) => {

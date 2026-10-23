@@ -2,7 +2,8 @@
 // unstorage choisi par l'environnement (REDIS_URL > CHAT_DATA_DIR > mémoire). Module pur (sans
 // auto-import Nuxt), testable avec Vitest ; branché par server/plugins/chat-persistence.ts.
 import { createStorage, type Storage } from 'unstorage'
-import { exportSnapshot, importSnapshot } from './chat-store'
+import { DEFAULT_CHANNEL_IDS, exportSnapshot, importSnapshot } from './chat-store'
+import { type Env, processEnv } from './env'
 
 export const SNAPSHOT_KEY = 'chat-snapshot'
 /** Délai maximal entre une mutation et l'écriture de l'instantané */
@@ -12,19 +13,12 @@ export const STORAGE_TIMEOUT_MS = 5000
 /** Intervalle entre deux tentatives de lecture quand le stockage est injoignable */
 export const STORAGE_RETRY_MS = 5000
 
-type Env = Record<string, string | undefined>
-
 export type StorageConfig =
   | { driver: 'memory' }
   | { driver: 'fs', base: string }
   | { driver: 'redis', url: string }
 
 export type StorageDriverName = StorageConfig['driver']
-
-// process.env sans dépendre de @types/node (absent du projet)
-export function processEnv(): Env {
-  return (globalThis as { process?: { env: Env } }).process?.env ?? {}
-}
 
 /** REDIS_URL prime sur CHAT_DATA_DIR ; une valeur vide (ou blanche) compte comme absente. */
 export function resolveStorageConfig(env: Env): StorageConfig {
@@ -104,8 +98,14 @@ export interface ChatPersistence {
   canWrite: () => boolean
 }
 
-function storeHasMessages(): boolean {
-  return Object.values(exportSnapshot().messages).some(list => list.length > 0)
+/**
+ * Store vierge : aucun message et aucun canal hors canaux par défaut. Un canal créé pendant une
+ * panne de lecture, même sans message, rend le store non vierge (il ne doit pas être écrasé).
+ */
+function storeIsPristine(): boolean {
+  const snapshot = exportSnapshot()
+  if (snapshot.channels.some(channel => !DEFAULT_CHANNEL_IDS.includes(channel.id))) return false
+  return Object.values(snapshot.messages).every(list => list.length === 0)
 }
 
 /**
@@ -156,8 +156,8 @@ export function createChatPersistence(storage: Storage, options: ChatPersistence
     if (!result.ok) return scheduleRetry()
     readSucceeded = true
     if (result.data !== null) {
-      // Le store local n'a encore aucun message : l'instantané distant fait foi
-      if (!storeHasMessages() && importSnapshot(result.data)) {
+      // Store local vierge (ni message ni canal créé pendant la panne) : l'instantané distant fait foi
+      if (storeIsPristine() && importSnapshot(result.data)) {
         logger.warn('[chat-persistence] lecture rétablie, instantané importé')
       }
       else {

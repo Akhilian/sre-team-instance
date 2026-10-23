@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Channel } from '~~/shared/types/chat'
+import { CHANNEL_NAME_MAX_LENGTH } from '~~/shared/utils/limits'
 
 const props = defineProps<{
   channels: Channel[]
@@ -20,9 +21,6 @@ const emit = defineEmits<{
   /** Demande de fermeture du tiroir (clic sur un canal) */
   close: []
 }>()
-
-// Même limite que le store (server/utils/chat-store.ts)
-const NAME_MAX_LENGTH = 50
 
 const creating = ref(false)
 const name = ref('')
@@ -101,7 +99,7 @@ async function submit() {
           v-model="name"
           data-testid="create-channel-input"
           type="text"
-          :maxlength="NAME_MAX_LENGTH"
+          :maxlength="CHANNEL_NAME_MAX_LENGTH"
           placeholder="Ex. Incident base de données"
         >
         <p v-if="error" class="channel-form__error" role="alert" data-testid="create-channel-error">{{ error }}</p>

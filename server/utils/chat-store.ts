@@ -23,6 +23,8 @@ const DEFAULT_CHANNELS: readonly Channel[] = [
   { id: 'general', name: 'Général' },
   { id: 'incident-en-cours', name: 'Incident en cours' },
 ]
+/** Identifiants des canaux pré-créés (présents après un reset complet) */
+export const DEFAULT_CHANNEL_IDS: readonly string[] = DEFAULT_CHANNELS.map(channel => channel.id)
 
 let channels: Channel[] = []
 let messagesByChannel = new Map<string, Message[]>()

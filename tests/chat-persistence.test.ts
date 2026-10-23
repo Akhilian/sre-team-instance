@@ -184,7 +184,7 @@ describe('lecture en échec au démarrage', () => {
     return snapshot
   }
 
-  it('suspend les écritures, retente, puis importe l\'instantané si le store local est sans message', async () => {
+  it('suspend les écritures, retente, puis importe l\'instantané si le store local est vierge', async () => {
     const snapshot = remoteSnapshot()
     const { storage, setItem, calls } = await flakyStorage(2, snapshot)
     setItem.mockClear()
@@ -192,7 +192,7 @@ describe('lecture en échec au démarrage', () => {
 
     await expect(persistence.hydrate()).resolves.toBe(false)
     expect(persistence.canWrite()).toBe(false)
-    addChannel({ name: 'Locale' })
+    // Store vierge (canaux par défaut, aucun message) : une sauvegarde demandée reste en attente
     persistence.scheduleSave()
     await persistence.flush()
     await vi.advanceTimersByTimeAsync(1000)
@@ -205,10 +205,35 @@ describe('lecture en échec au démarrage', () => {
     expect(calls()).toBe(3)
     expect(persistence.canWrite()).toBe(true)
     expect(listMessages('persist-test')).toHaveLength(2)
-    expect(listChannels().map(channel => channel.id)).not.toContain('locale')
+    expect(silent.warn).toHaveBeenCalledWith(expect.stringContaining('instantané importé'))
     // La mutation en attente est écrite une fois la lecture rétablie (état importé)
     await vi.advanceTimersByTimeAsync(0)
     expect(setItem).toHaveBeenCalledTimes(1)
+    persistence.stop()
+  })
+
+  it('garde un canal créé pendant la panne (sans message) : instantané non importé, puis sauvegardé', async () => {
+    const snapshot = remoteSnapshot()
+    expect(snapshot.messages['persist-test']).toHaveLength(2)
+    const { storage, setItem } = await flakyStorage(1, snapshot)
+    setItem.mockClear()
+    const persistence = createChatPersistence(storage, { retryMs: 5000, saveDelayMs: 300, logger: silent })
+    await persistence.hydrate()
+    addChannel({ name: 'Créé pendant la panne' })
+    persistence.scheduleSave()
+    silent.warn.mockClear()
+
+    await vi.advanceTimersByTimeAsync(5000) // 2e lecture : réussie
+    expect(persistence.canWrite()).toBe(true)
+    expect(silent.warn).toHaveBeenCalledWith(expect.stringContaining('état local conservé'))
+    const ids = listChannels().map(channel => channel.id)
+    expect(ids).toContain('cree-pendant-la-panne')
+    expect(ids).not.toContain('persist-test')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(setItem).toHaveBeenCalledTimes(1)
+    const saved = await storage.getItem<{ channels: { id: string }[] }>(SNAPSHOT_KEY)
+    expect(saved?.channels.map(channel => channel.id)).toContain('cree-pendant-la-panne')
+    expect(saved?.channels.map(channel => channel.id)).not.toContain('persist-test')
     persistence.stop()
   })
 

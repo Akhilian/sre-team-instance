@@ -2,24 +2,19 @@
 // processus (plugin server/plugins/facilitator-code.ts au démarrage) : FACILITATOR_CODE si définie,
 // sinon un code aléatoire en production (journalisé une fois), sinon « animateur » en dev.
 // Module pur, testable directement avec Vitest (env, indicateur dev et aléa injectés).
+import { type Env, processEnv } from './env'
+
 export const DEFAULT_FACILITATOR_CODE = 'animateur'
 /** Longueur du code généré en production */
 export const GENERATED_CODE_LENGTH = 12
 // Sans caractères ambigus à la lecture (0/o, 1/l/i)
 const GENERATED_CODE_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789'
 
-type Env = Record<string, string | undefined>
-
 export type FacilitatorCodeSource = 'env' | 'generated' | 'default'
 
 export interface FacilitatorCode {
   source: FacilitatorCodeSource
   code: string
-}
-
-// process.env sans dépendre de @types/node (absent du projet)
-function processEnv(): Env {
-  return (globalThis as { process?: { env: Env } }).process?.env ?? {}
 }
 
 /** Production = NODE_ENV=production ou serveur buildé (dev faux) : Render ne définit pas forcément NODE_ENV. */

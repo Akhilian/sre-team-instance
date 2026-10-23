@@ -1,7 +1,10 @@
 // Nom d'affichage du participant, mémorisé dans le localStorage du navigateur.
 // Lu uniquement côté client (après montage) pour ne pas créer d'écart d'hydratation.
+import { AUTHOR_MAX_LENGTH } from '~~/shared/utils/limits'
+
 export const DISPLAY_NAME_STORAGE_KEY = 'sre-team-instance:display-name'
-export const DISPLAY_NAME_MAX_LENGTH = 50
+// Même limite que l'auteur d'un message côté API
+export const DISPLAY_NAME_MAX_LENGTH = AUTHOR_MAX_LENGTH
 
 export function useDisplayName() {
   const displayName = useState('display-name', () => '')

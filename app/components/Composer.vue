@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TEXT_MAX_LENGTH } from '~~/shared/utils/limits'
 // Champ de saisie en bas du fil : Entrée envoie, Maj+Entrée passe à la ligne.
 const props = defineProps<{
   disabled: boolean
@@ -10,8 +11,6 @@ const emit = defineEmits<{
   /** Frappe dans le champ (le throttle est géré par la page) */
   typing: []
 }>()
-
-const TEXT_MAX_LENGTH = 2000
 
 const text = ref('')
 const sending = ref(false)

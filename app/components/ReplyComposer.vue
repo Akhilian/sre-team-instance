@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TEXT_MAX_LENGTH } from '~~/shared/utils/limits'
 // Champ de réponse inline sous un fil : Entrée envoie, Maj+Entrée passe à la ligne, Échap ferme.
 const props = defineProps<{
   send: (text: string) => Promise<void>
@@ -9,8 +10,6 @@ const emit = defineEmits<{
   /** Frappe dans le champ (le throttle est géré par la page) */
   typing: []
 }>()
-
-const TEXT_MAX_LENGTH = 2000
 
 const text = ref('')
 const sending = ref(false)
