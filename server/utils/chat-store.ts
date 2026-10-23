@@ -8,11 +8,16 @@ import {
   ALERT_TITLE_MAX_LENGTH,
   canTransition,
   isAlertSeverity,
+  isAlertStatus,
 } from '../../shared/utils/alerts'
-
-export const AUTHOR_MAX_LENGTH = 50
-export const TEXT_MAX_LENGTH = 2000
-export const CHANNEL_NAME_MAX_LENGTH = 50
+import {
+  AUTHOR_MAX_LENGTH,
+  CHANNELS_MAX,
+  CHANNEL_MESSAGES_MAX,
+  CHANNEL_NAME_MAX_LENGTH,
+  REACTION_AUTHORS_MAX,
+  TEXT_MAX_LENGTH,
+} from '../../shared/utils/limits'
 
 const DEFAULT_CHANNELS: readonly Channel[] = [
   { id: 'general', name: 'Général' },
@@ -85,6 +90,22 @@ export class ChannelConflictError extends Error {
   constructor(channelId: string) {
     super(`Un canal existe déjà avec l'identifiant ${channelId}`)
     this.name = 'ChannelConflictError'
+  }
+}
+
+/** Plafond CHANNELS_MAX atteint : 409 */
+export class ChannelLimitError extends Error {
+  constructor() {
+    super(`Nombre maximal de canaux atteint (${CHANNELS_MAX})`)
+    this.name = 'ChannelLimitError'
+  }
+}
+
+/** Plafond REACTION_AUTHORS_MAX atteint pour un nouvel auteur : 409 */
+export class ReactionLimitError extends Error {
+  constructor() {
+    super(`Nombre maximal d'auteurs atteint pour cette réaction (${REACTION_AUTHORS_MAX})`)
+    this.name = 'ReactionLimitError'
   }
 }
 
@@ -162,6 +183,12 @@ function requireParentId(value: unknown, messages: readonly Message[]): string {
   return value
 }
 
+/** Ajoute message en fin de canal ; au-delà de CHANNEL_MESSAGES_MAX, les plus anciens sont retirés (FIFO). */
+function pushMessage(messages: Message[], message: Message): void {
+  messages.push(message)
+  if (messages.length > CHANNEL_MESSAGES_MAX) messages.splice(0, messages.length - CHANNEL_MESSAGES_MAX)
+}
+
 /** Valide puis ajoute un message ; lève une erreur sans rien ajouter si l'entrée est invalide. */
 export function addMessage(
   channelId: string,
@@ -183,7 +210,7 @@ export function addMessage(
   }
   // Les racines restent sans champ parentId
   if (parentId !== undefined) message.parentId = parentId
-  messages.push(message)
+  pushMessage(messages, message)
   notifyChange()
   return copyMessage(message)
 }
@@ -204,7 +231,7 @@ export function addAnnouncement(channelId: string, input: { text?: unknown }): M
     createdAt: new Date().toISOString(),
     kind: 'announcement',
   }
-  messages.push(message)
+  pushMessage(messages, message)
   notifyChange()
   return copyMessage(message)
 }
@@ -236,7 +263,7 @@ export function addAlert(
     kind: 'alert',
     alert: { severity, title, service, status: 'triggered' },
   }
-  messages.push(message)
+  pushMessage(messages, message)
   notifyChange()
   return copyMessage(message)
 }
@@ -317,6 +344,7 @@ export function toggleReaction(
     reaction.authors = reaction.authors.filter(name => name !== author)
   }
   else {
+    if (reaction.authors.length >= REACTION_AUTHORS_MAX) throw new ReactionLimitError()
     reaction.authors.push(author)
   }
 
@@ -352,6 +380,7 @@ export function addChannel(input: { name?: unknown }): Channel {
     throw new ChannelValidationError('name doit contenir au moins une lettre ou un chiffre')
   }
   if (messagesByChannel.has(id)) throw new ChannelConflictError(id)
+  if (channels.length >= CHANNELS_MAX) throw new ChannelLimitError()
 
   const channel: Channel = { id, name }
   channels.push(channel)
@@ -384,6 +413,19 @@ function isValidChannel(value: unknown): value is Channel {
   return isRecord(value) && typeof value.id === 'string' && value.id !== '' && typeof value.name === 'string'
 }
 
+/** Réaction : emoji du jeu fixe, auteurs en tableau de chaînes */
+function isValidReaction(value: unknown): boolean {
+  return isRecord(value)
+    && isReactionEmoji(value.emoji)
+    && Array.isArray(value.authors)
+    && value.authors.every(author => typeof author === 'string')
+}
+
+/** Alerte : sévérité et statut connus */
+function isValidAlert(value: unknown): boolean {
+  return isRecord(value) && isAlertSeverity(value.severity) && isAlertStatus(value.status)
+}
+
 function isValidMessage(value: unknown, channelId: string): value is Message {
   return isRecord(value)
     && typeof value.id === 'string'
@@ -391,15 +433,25 @@ function isValidMessage(value: unknown, channelId: string): value is Message {
     && typeof value.author === 'string'
     && typeof value.text === 'string'
     && typeof value.createdAt === 'string'
-    && (value.reactions === undefined || Array.isArray(value.reactions))
-    && (value.alert === undefined || isRecord(value.alert))
+    && (value.reactions === undefined || (Array.isArray(value.reactions) && value.reactions.every(isValidReaction)))
+    && (value.alert === undefined || isValidAlert(value.alert))
 }
 
 /**
- * Remplace l'état par celui de l'instantané s'il est valide (validation minimale, version 1) et renvoie true.
+ * Remplace l'état par celui de l'instantané s'il est valide (version 1) et renvoie true.
  * Sinon renvoie false sans rien modifier ni lever d'exception. Ne notifie pas onChatChange.
  */
 export function importSnapshot(data: unknown): boolean {
+  // Filet de sécurité : un instantané corrompu ne doit jamais faire échouer la réhydratation
+  try {
+    return importValidSnapshot(data)
+  }
+  catch {
+    return false
+  }
+}
+
+function importValidSnapshot(data: unknown): boolean {
   if (!isRecord(data) || data.version !== SNAPSHOT_VERSION) return false
   const rawChannels = data.channels
   const rawMessages = data.messages
@@ -414,7 +466,8 @@ export function importSnapshot(data: unknown): boolean {
   for (const channel of rawChannels) {
     const list = rawMessages[channel.id] ?? []
     if (!Array.isArray(list) || !list.every(message => isValidMessage(message, channel.id))) return false
-    nextMessages.set(channel.id, list.map(copyMessage))
+    // Plafond FIFO appliqué aussi à un instantané plus ancien que la limite
+    nextMessages.set(channel.id, list.slice(-CHANNEL_MESSAGES_MAX).map(copyMessage))
   }
 
   channels = rawChannels.map(channel => ({ id: channel.id, name: channel.name }))

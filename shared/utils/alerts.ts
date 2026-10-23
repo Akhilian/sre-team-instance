@@ -32,6 +32,10 @@ export function isAlertSeverity(value: unknown): value is AlertSeverity {
   return typeof value === 'string' && (ALERT_SEVERITIES as readonly string[]).includes(value)
 }
 
+export function isAlertStatus(value: unknown): value is AlertStatus {
+  return typeof value === 'string' && (ALERT_STATUSES as readonly string[]).includes(value)
+}
+
 /** Transitions autorisées : triggered → acknowledged, triggered|acknowledged → resolved */
 export function canTransition(from: AlertStatus, to: AlertStatus): boolean {
   if (to === 'acknowledged') return from === 'triggered'

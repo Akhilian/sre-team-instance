@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
     if (error instanceof ChannelValidationError) {
       throw createError({ statusCode: 400, message: error.message })
     }
-    if (error instanceof ChannelConflictError) {
+    if (error instanceof ChannelConflictError || error instanceof ChannelLimitError) {
       throw createError({ statusCode: 409, message: error.message })
     }
     throw error

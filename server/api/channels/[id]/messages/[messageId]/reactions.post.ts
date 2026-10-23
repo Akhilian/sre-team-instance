@@ -19,6 +19,9 @@ export default defineEventHandler(async (event) => {
     if (error instanceof MessageValidationError) {
       throw createError({ statusCode: 400, message: error.message })
     }
+    if (error instanceof ReactionLimitError) {
+      throw createError({ statusCode: 409, message: error.message })
+    }
     throw error
   }
 })

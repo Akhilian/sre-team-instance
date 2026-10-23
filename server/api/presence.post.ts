@@ -19,6 +19,14 @@ export default defineEventHandler(async (event) => {
   }
 
   const now = Date.now()
-  recordPresence({ name: input.name, channelId, typing: input.typing }, now)
+  try {
+    recordPresence({ name: input.name, channelId, typing: input.typing }, now)
+  }
+  catch (error) {
+    if (error instanceof PresenceLimitError) {
+      throw createError({ statusCode: 429, message: error.message })
+    }
+    throw error
+  }
   return channelPresence(channelId, now)
 })

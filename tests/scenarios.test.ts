@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SCENARIOS } from '../server/scenarios'
-import { TEXT_MAX_LENGTH, listChannels, resetChatStore } from '../server/utils/chat-store'
+import { listChannels, resetChatStore } from '../server/utils/chat-store'
+import { TEXT_MAX_LENGTH } from '../shared/utils/limits'
 import { ALERT_SERVICE_MAX_LENGTH, ALERT_TITLE_MAX_LENGTH, isAlertSeverity } from '../shared/utils/alerts'
 
 resetChatStore()

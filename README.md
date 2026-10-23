@@ -10,7 +10,7 @@ Application full-stack [Nuxt 4](https://nuxt.com/docs) : front Vue et API dans l
 - `server/plugins/`, `server/middleware/` : branchement de la persistance (réhydratation au démarrage, attente avant les routes `/api/`)
 - `server/scenarios/` : scénarios d'incident pré-écrits (un fichier TypeScript par scénario, déclaré dans `index.ts`)
 - `shared/types/` : types partagés front / API
-- `tests/` : tests unitaires Vitest
+- `tests/` : tests unitaires Vitest ; `tests/http/` : tests HTTP contre le build (`npm run test:http`)
 - `public/` : fichiers statiques
 
 ## Commandes
@@ -20,6 +20,7 @@ npm install         # installer les dépendances
 npm run dev         # serveur de dev sur http://localhost:3000
 npm run typecheck   # vérification TypeScript
 npm run test        # tests unitaires (Vitest, exécution unique)
+npm run test:http   # tests HTTP contre le build (lancer npm run build avant)
 npm run build       # build de production dans .output/
 node .output/server/index.mjs   # démarrer le build (port via PORT)
 ```
@@ -39,9 +40,31 @@ réinitialiser les conversations (messages effacés, canaux conservés, scénari
 Elle permet aussi de lancer un scénario d'incident pré-écrit (`panne-checkout`, ≈ 14 min, ou
 `demo-express`, 6 s) : ses alertes et annonces sont publiées par le serveur au fil du temps, un seul
 scénario à la fois, et l'exécution est perdue si le serveur redémarre. Les routes `/api/admin/*`
-exigent l'en-tête `x-facilitator-code`, comparé à la variable d'environnement `FACILITATOR_CODE`
-(`animateur` si elle est absente ou vide). Sur Render, elle est déclarée dans `render.yaml` avec
-`sync: false` : saisir sa valeur dans le tableau de bord du service (**Environment**).
+exigent l'en-tête `x-facilitator-code`, comparé au code animateur résolu au démarrage :
+
+- `FACILITATOR_CODE` définie et non vide : sa valeur ;
+- sinon, sur le serveur buildé (`node .output/server/index.mjs`, avec ou sans `NODE_ENV=production`) :
+  un code aléatoire de 12 caractères, écrit une seule fois dans les logs
+  (`Code animateur généré : <code> — définissez FACILITATOR_CODE`) et perdu au redémarrage ;
+  `animateur` est alors refusé ;
+- sinon (`npm run dev`) : `animateur`.
+
+`GET /api/health` indique la provenance (`facilitatorCode` : `env`, `generated` ou `default`), jamais
+le code. Sur Render, `FACILITATOR_CODE` est déclarée dans `render.yaml` avec `sync: false` : saisir sa
+valeur dans le tableau de bord du service (**Environment**), sinon lire le code généré dans les logs.
+
+## Limites de l'API
+
+Plafonds fixes, regroupés dans `shared/utils/limits.ts` :
+
+| Limite | Valeur | Au-delà |
+| --- | --- | --- |
+| corps d'un `POST /api/*` | 16 Ko (`content-length`) ; chunked sans `content-length` refusé | 413 |
+| écritures (`POST /api/*` hors `/api/presence` et `/api/admin/*`) | par fenêtre de 10 s : 120 par IP et auteur, 600 par IP (40 participants derrière un même NAT) ; IP = dernière entrée de `x-forwarded-for` | 429 + `Retry-After` |
+| messages par canal | 2000 | les plus anciens sont retirés |
+| canaux | 30 | 409 |
+| participants présents (noms actifs) | 200 | 429 |
+| auteurs par réaction | 100 | 409 |
 
 ## Persistance des conversations
 

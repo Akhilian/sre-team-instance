@@ -1,6 +1,6 @@
 // Store en mémoire de la présence et de la frappe : aucun timer, l'expiration se calcule à la lecture.
 // Module pur (sans auto-import Nuxt) ; l'horloge est injectée par `now` (ms) pour les tests.
-import { AUTHOR_MAX_LENGTH } from './chat-store'
+import { AUTHOR_MAX_LENGTH, PRESENCE_ENTRIES_MAX } from '../../shared/utils/limits'
 
 /** Présent si le dernier battement date de moins de 15 s */
 export const PRESENCE_TTL_MS = 15_000
@@ -11,6 +11,14 @@ export class PresenceValidationError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'PresenceValidationError'
+  }
+}
+
+/** Plafond PRESENCE_ENTRIES_MAX atteint pour un nouveau nom : 429 */
+export class PresenceLimitError extends Error {
+  constructor() {
+    super(`Trop de participants présents (${PRESENCE_ENTRIES_MAX}), réessayez plus tard`)
+    this.name = 'PresenceLimitError'
   }
 }
 
@@ -52,12 +60,19 @@ export function validatePresenceInput(input: { name?: unknown, typing?: unknown 
  * Enregistre un battement de `name` dans `channelId` (le canal n'est pas vérifié ici).
  * `typing: true` marque la frappe pour 5 s, `typing: false` l'efface ; absent, le battement
  * ne marque pas de frappe mais n'efface pas celle en cours (le poll ne doit pas la faire clignoter).
+ * Purge d'abord les noms expirés, puis lève PresenceLimitError pour un nouveau nom au-delà du plafond.
  */
 export function recordPresence(
   input: { name?: unknown, channelId: string, typing?: unknown },
   now: number,
 ): string {
   const { name } = validatePresenceInput(input)
+
+  // Les noms expirés sont purgés à chaque battement : la map reste bornée sans timer
+  for (const [entryName, entry] of entries) {
+    if (now - entry.lastSeen >= PRESENCE_TTL_MS) entries.delete(entryName)
+  }
+  if (!entries.has(name) && entries.size >= PRESENCE_ENTRIES_MAX) throw new PresenceLimitError()
 
   const previous = entries.get(name)
   // Un battement sans frappe garde la frappe en cours dans le même canal ; `typing: false` l'efface
