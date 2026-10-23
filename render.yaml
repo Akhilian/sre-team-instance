@@ -11,3 +11,6 @@ services:
         value: "24"
       - key: FACILITATOR_CODE
         sync: false
+      # Persistance des conversations (optionnelle) : URL d'un Redis externe (Render Key Value, Upstash…)
+      - key: REDIS_URL
+        sync: false

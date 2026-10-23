@@ -1,4 +1,5 @@
-// Store en mémoire des canaux et messages : une seule instance Render, pas de persistance.
+// Store en mémoire des canaux et messages : une seule instance Render. La persistance éventuelle
+// (instantané exportSnapshot / importSnapshot) est branchée par server/utils/chat-persistence.ts.
 // Module pur (sans auto-import Nuxt) pour être testable directement avec Vitest.
 import type { Channel, ChannelSummary, Message } from '../../shared/types/chat'
 import { isReactionEmoji } from '../../shared/utils/reactions'
@@ -20,6 +21,29 @@ const DEFAULT_CHANNELS: readonly Channel[] = [
 
 let channels: Channel[] = []
 let messagesByChannel = new Map<string, Message[]>()
+
+type ChatChangeListener = () => void
+const changeListeners = new Set<ChatChangeListener>()
+
+/** Abonne listener à chaque mutation réussie (hors resetChatStore / importSnapshot) ; renvoie le désabonnement. */
+export function onChatChange(listener: ChatChangeListener): () => void {
+  changeListeners.add(listener)
+  return () => {
+    changeListeners.delete(listener)
+  }
+}
+
+function notifyChange(): void {
+  for (const listener of changeListeners) {
+    // Un abonné en échec (sauvegarde…) ne doit pas faire échouer la mutation
+    try {
+      listener()
+    }
+    catch (error) {
+      console.error('[chat-store] abonné onChatChange en échec', error)
+    }
+  }
+}
 
 export class ChannelNotFoundError extends Error {
   constructor(channelId: string) {
@@ -160,6 +184,7 @@ export function addMessage(
   // Les racines restent sans champ parentId
   if (parentId !== undefined) message.parentId = parentId
   messages.push(message)
+  notifyChange()
   return copyMessage(message)
 }
 
@@ -180,6 +205,7 @@ export function addAnnouncement(channelId: string, input: { text?: unknown }): M
     kind: 'announcement',
   }
   messages.push(message)
+  notifyChange()
   return copyMessage(message)
 }
 
@@ -211,6 +237,7 @@ export function addAlert(
     alert: { severity, title, service, status: 'triggered' },
   }
   messages.push(message)
+  notifyChange()
   return copyMessage(message)
 }
 
@@ -251,12 +278,14 @@ export function setAlertStatus(
     alert.resolvedBy = name
     alert.resolvedAt = at
   }
+  notifyChange()
   return copyMessage(message)
 }
 
 /** Vide les messages de tous les canaux ; les canaux, y compris ceux créés par les participants, restent. */
 export function clearMessages(): void {
   for (const channelId of messagesByChannel.keys()) messagesByChannel.set(channelId, [])
+  notifyChange()
 }
 
 /**
@@ -294,6 +323,7 @@ export function toggleReaction(
   const remaining = reactions.filter(candidate => candidate.authors.length > 0)
   if (remaining.length > 0) message.reactions = remaining
   else delete message.reactions
+  notifyChange()
   return copyMessage(message)
 }
 
@@ -326,5 +356,68 @@ export function addChannel(input: { name?: unknown }): Channel {
   const channel: Channel = { id, name }
   channels.push(channel)
   messagesByChannel.set(id, [])
+  notifyChange()
   return { ...channel }
+}
+
+export const SNAPSHOT_VERSION = 1
+
+/** Instantané persistable : canaux (dans l'ordre) et messages par canal, réactions et alertes comprises. */
+export interface ChatSnapshot {
+  version: typeof SNAPSHOT_VERSION
+  savedAt: string
+  channels: Channel[]
+  messages: Record<string, Message[]>
+}
+
+export function exportSnapshot(): ChatSnapshot {
+  const messages: Record<string, Message[]> = {}
+  for (const [channelId, list] of messagesByChannel) messages[channelId] = list.map(copyMessage)
+  return { version: SNAPSHOT_VERSION, savedAt: new Date().toISOString(), channels: listChannels(), messages }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isValidChannel(value: unknown): value is Channel {
+  return isRecord(value) && typeof value.id === 'string' && value.id !== '' && typeof value.name === 'string'
+}
+
+function isValidMessage(value: unknown, channelId: string): value is Message {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && value.channelId === channelId
+    && typeof value.author === 'string'
+    && typeof value.text === 'string'
+    && typeof value.createdAt === 'string'
+    && (value.reactions === undefined || Array.isArray(value.reactions))
+    && (value.alert === undefined || isRecord(value.alert))
+}
+
+/**
+ * Remplace l'état par celui de l'instantané s'il est valide (validation minimale, version 1) et renvoie true.
+ * Sinon renvoie false sans rien modifier ni lever d'exception. Ne notifie pas onChatChange.
+ */
+export function importSnapshot(data: unknown): boolean {
+  if (!isRecord(data) || data.version !== SNAPSHOT_VERSION) return false
+  const rawChannels = data.channels
+  const rawMessages = data.messages
+  if (!Array.isArray(rawChannels) || !rawChannels.every(isValidChannel) || !isRecord(rawMessages)) return false
+
+  const ids = new Set(rawChannels.map(channel => channel.id))
+  if (ids.size !== rawChannels.length) return false
+  // Messages rattachés à un canal absent de la liste : instantané incohérent
+  if (Object.keys(rawMessages).some(channelId => !ids.has(channelId))) return false
+
+  const nextMessages = new Map<string, Message[]>()
+  for (const channel of rawChannels) {
+    const list = rawMessages[channel.id] ?? []
+    if (!Array.isArray(list) || !list.every(message => isValidMessage(message, channel.id))) return false
+    nextMessages.set(channel.id, list.map(copyMessage))
+  }
+
+  channels = rawChannels.map(channel => ({ id: channel.id, name: channel.name }))
+  messagesByChannel = nextMessages
+  return true
 }
