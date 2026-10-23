@@ -1,7 +1,8 @@
 // Scénario principal de l'atelier (≈ 14 min) : dégradation puis panne du tunnel de paiement après
 // une mise en production. Sarah Benali (support, PNJ) ouvre l'incident, puis les alertes arrivent dans
-// « Incident en cours » ; la pression métier vient des PNJ (support, CEO, communication, CFO) et de
-// quelques annonces. Aucune étape ne livre la cause : il faut interroger et recouper les PNJ.
+// « Incident en cours » ; la pression métier vient des PNJ (support, CEO, communication, CFO). Une seule
+// annonce, celle de l'animateur, clôt les injections (consigne de jeu hors fiction). Aucune étape ne
+// livre la cause : il faut interroger et recouper les PNJ.
 import type { Scenario } from '../../shared/types/scenario'
 
 const INCIDENT = 'incident-en-cours'
@@ -111,9 +112,10 @@ export const panneCheckout: Scenario = {
     {
       at: 550,
       channelId: INCIDENT,
-      kind: 'announcement',
-      text: '[CTO] Je sors du comité de direction. J\'attends ici un point de situation écrit : impact, '
-        + 'hypothèse en cours, prochaine action et heure du prochain point.',
+      kind: 'npc-message',
+      npcId: 'ceo',
+      text: 'Je sors du COMEX. J\'attends ici un point de situation écrit, que je puisse transférer tel quel : '
+        + 'impact, hypothèse en cours, prochaine action et heure du prochain point.',
     },
     {
       at: 620,
@@ -128,9 +130,10 @@ export const panneCheckout: Scenario = {
     {
       at: 690,
       channelId: GENERAL,
-      kind: 'announcement',
-      text: '[Service client grands comptes] Un client B2B menace de basculer chez un concurrent '
-        + 'si les commandes ne passent pas avant 15h. Il nous faut une heure de retour à communiquer.',
+      kind: 'npc-message',
+      npcId: 'support-n1',
+      text: 'Le service grands comptes me relaie ceci : Maison Verdier menace de basculer chez un concurrent '
+        + 'si les commandes ne passent pas avant 15h. Il leur faut une heure de retour à communiquer.',
     },
     {
       at: 760,

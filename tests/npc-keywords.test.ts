@@ -236,3 +236,15 @@ describe('021 ajustements : cohérence de Sarah avec le scénario', () => {
     expect(await answer(sarah, 'Depuis quand ?')).toContain('juste avant votre première alerte')
   })
 })
+
+describe('023 CA4 : Sarah relaie l\'échéance de Maison Verdier', () => {
+  it('« Que veut Maison Verdier, et pour quand ? » : 15h', async () => {
+    expect(await answer(personaById('support-n1'), 'Que veut Maison Verdier, et pour quand ?')).toContain('15h')
+  })
+
+  it('« Des nouvelles du grand compte ? » : 15h, sans montant ni clause', async () => {
+    const text = await answer(personaById('support-n1'), 'Des nouvelles du grand compte ?')
+    expect(text).toContain('15h')
+    expect(text).not.toContain('40 000')
+  })
+})

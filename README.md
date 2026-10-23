@@ -109,11 +109,15 @@ nom de PNJ est refusé en 400), et ils ne répondent jamais à un autre PNJ, à 
   « en train d'écrire » (`typing` de `POST /api/presence`). `GET /api/channels` ne liste que les canaux
   d'équipe ; `?participant=<nom>` y ajoute les conversations de ce participant. **Pas d'authentification
   réelle** : « privé » signifie seulement « non listé pour les autres » ; quiconque connaît l'URL peut lire
-  la conversation. Seule l'écriture est gardée : un message signé d'un autre nom que son propriétaire
-  est refusé en 403. La chronologie de l'animateur les inclut ; « Tout réinitialiser » les supprime,
+  la conversation. Seule l'écriture est gardée : un message, une réaction ou un acquittement d'alerte
+  signé d'un autre nom que son propriétaire est refusé en 403 (nom vide ou invalide : 400). La chronologie de l'animateur les inclut ; « Tout réinitialiser » les supprime,
   « Effacer les messages » les vide. Le budget de réponses des conversations directes est séparé de celui
   des canaux d'équipe : une salle (une quinzaine de participants) qui interroge les PNJ en direct n'empêche
   pas les réponses dans `#incident-en-cours`.
+- **PNJ coupés** : un message qui mentionne un PNJ, ou envoyé dans une conversation directe, affiche
+  sous le fil un avis local « Les PNJ ne sont pas actifs pour le moment : … » (calculé dans le navigateur,
+  ni envoyé ni stocké) ; une conversation directe affiche un bandeau « <nom> n'est pas disponible », et
+  la barre latérale grise les conversations existantes. Tout disparaît dès que les PNJ sont réactivés.
 - **Délai** : `NPC_REPLY_DELAY_MS` fixe le délai avant réponse en millisecondes (défaut : tiré entre 1 et 2 s).
 - **Reset** : « Effacer les messages » (`reset {scope:"messages"}`) annule les réponses de PNJ en attente, sans couper les PNJ.
 

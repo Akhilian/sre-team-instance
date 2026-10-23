@@ -217,8 +217,10 @@ async function submit() {
             :class="{
               'conversation--active': entry.channel.id === currentId,
               'conversation--unread': unreadCount(entry.channel.id) > 0,
+              'conversation--inactive': !npcsEnabled,
             }"
             data-testid="conversation-link"
+            :title="npcsEnabled ? undefined : 'PNJ inactif'"
             @click="emit('close')"
           >
             <span class="avatar conversation__avatar" aria-hidden="true" :style="{ background: avatarColor(entry.name) }">{{ initials(entry.name) }}</span>
@@ -478,6 +480,11 @@ async function submit() {
 .conversation:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* PNJ coupés : conversation existante toujours ouvrable, mais grisée */
+.conversation--inactive {
+  opacity: 0.6;
 }
 
 .conversation--active {

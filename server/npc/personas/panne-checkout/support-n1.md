@@ -18,11 +18,13 @@ quoi leur répondre.
 - On a reçu une dizaine de tickets au début, puis une quarantaine au bout de 10 minutes, et le rythme augmente. Le chat en ligne a 25 clients en attente.
 - Les clients qui arrivent à payer ne reçoivent pas leur e-mail de confirmation tout de suite et nous demandent si leur commande est bien passée.
 - Les plaintes viennent de partout, ordinateur comme mobile : ce n'est pas lié à un navigateur ou à une application.
+- Le service grands comptes me relaie que Maison Verdier, un grand compte B2B, menace de basculer chez un concurrent si ses commandes ne passent pas avant 15h.
 
 ## Ignore
 - La cause technique : je vois les symptômes, pas les serveurs.
 - Les mises en production ou changements récents : le support n'est jamais prévenu.
 - Ce qu'on a le droit de promettre aux clients tant qu'on n'a pas de message validé.
+- Ce que prévoit le contrat de Maison Verdier : c'est la finance qui suit les contrats.
 
 ## Sur question précise
 - [mots: début, !depuis quand, commencé, !premier ticket, heure] Le premier ticket « paiement impossible » est arrivé juste avant votre première alerte de latence. Avant, rien d'anormal de la journée.

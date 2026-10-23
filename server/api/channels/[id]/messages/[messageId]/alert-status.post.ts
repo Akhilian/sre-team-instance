@@ -5,6 +5,12 @@ export default defineEventHandler(async (event) => {
   // Corps absent ou non-objet : traité comme un statut vide, donc refusé en 400
   const body = await readBody(event).catch(() => null)
   const input = body && typeof body === 'object' && !Array.isArray(body) ? body : {}
+  // Conversation directe : seul son propriétaire (même slug) peut acquitter ou résoudre une alerte ; nom vide ou invalide → 400 plus bas
+  const direct = getChannel(channelId)?.direct
+  const name = (input as { name?: unknown }).name
+  if (direct && typeof name === 'string' && name.trim() !== '' && !isDirectOwner(direct, name)) {
+    throw createError({ statusCode: 403, message: 'Seul le participant de cette conversation peut acquitter ou résoudre une alerte' })
+  }
 
   try {
     return setAlertStatus(channelId, messageId, input)

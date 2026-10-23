@@ -60,6 +60,24 @@ const directNpc = computed(() => {
   return npc ?? { id: direct.npcId, name: channel.value!.name.split(' ↔ ').at(-1) ?? direct.npcId, role: '' }
 })
 
+// PNJ coupés par l'animateur (état connu seulement) : bandeau en conversation directe, avis après envoi
+const npcsInactive = computed(() => !!npcState.value && !npcState.value.enabled)
+
+// Avis local « PNJ coupés » du dernier envoi : jamais envoyé ni stocké, effacé à l'envoi suivant sans avis,
+// à la navigation et dès que les PNJ sont réactivés
+const npcNotice = ref<string | null>(null)
+function updateNpcNotice(text: string) {
+  npcNotice.value = npcState.value
+    ? npcNoticeFor(text, { enabled: npcState.value.enabled, npcNames: npcNames.value, directNpcName: directNpc.value?.name })
+    : null
+}
+watch(channelId, () => {
+  npcNotice.value = null
+})
+watch(() => npcState.value?.enabled, (enabled) => {
+  if (enabled) npcNotice.value = null
+})
+
 // Non-lus : calculés côté client seulement (localStorage), vides au SSR et avant montage
 const unread = ref<Record<string, number>>({})
 const mounted = ref(false)
@@ -151,6 +169,7 @@ async function send(text: string) {
   })
   stopTyping()
   applyLocal(targetChannel, created)
+  if (targetChannel === channelId.value) updateNpcNotice(text)
 }
 
 async function reply(parentId: string, text: string) {
@@ -161,6 +180,7 @@ async function reply(parentId: string, text: string) {
   })
   stopTyping()
   applyLocal(targetChannel, created)
+  if (targetChannel === channelId.value) updateNpcNotice(text)
 }
 
 // Bascule une réaction ; le message renvoyé remplace aussitôt l'ancien, sans attendre le polling
@@ -413,9 +433,13 @@ onBeforeUnmount(() => {
             >+{{ presenceOverflow }}</span>
           </div>
         </header>
+        <p v-if="directNpc && npcsInactive" class="direct-inactive" data-testid="direct-inactive" role="status">
+          {{ directNpc.name }} n'est pas disponible pour le moment.
+        </p>
 
         <MessageList :messages="messages ?? []" :me="displayName" :npc-names="npcNames" :reply="reply" :react="react" :set-alert-status="setAlertStatus" @typing="onTyping" />
         <p class="typing-indicator" data-testid="typing-indicator" aria-live="polite">{{ typingText }}</p>
+        <p v-if="npcNotice" class="npc-notice" data-testid="npc-notice" role="status">{{ npcNotice }}</p>
         <Composer
           :disabled="!displayName"
           :channel-name="channel?.name ?? ''"
@@ -655,6 +679,31 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+/* Bandeau de conversation directe avec un PNJ coupé, sous l'en-tête */
+.direct-inactive {
+  flex: none;
+  margin: 0;
+  padding: 8px 20px;
+  background: #fff4ce;
+  border-bottom: 1px solid #f1dd9b;
+  color: #6b5200;
+  font-size: 13px;
+}
+
+/* Avis local « PNJ coupés » : ligne système grise en italique, alignée sur l'indicateur de frappe */
+.npc-notice {
+  flex: none;
+  width: 100%;
+  max-width: calc(960px + 64px);
+  margin: 0 auto;
+  padding: 0 46px 4px;
+  box-sizing: border-box;
+  color: var(--teams-text-muted);
+  font-size: 12px;
+  font-style: italic;
+  line-height: 18px;
+}
+
 /* Voile du tiroir des canaux : écran étroit uniquement */
 .channel-panel-veil {
   display: none;
@@ -702,7 +751,8 @@ onBeforeUnmount(() => {
     display: none;
   }
 
-  .typing-indicator {
+  .typing-indicator,
+  .npc-notice {
     padding: 0 26px;
   }
 }

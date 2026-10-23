@@ -84,4 +84,40 @@ describe('conversations directes (022)', () => {
     expect((await postJson(`${server.url}/api/admin/reset`, { scope: 'all' }, ADMIN)).status).toBe(200)
     expect((await fetch(`${server.url}/api/channels/${DM}/messages`)).status).toBe(404)
   })
+
+  it('023 CA2 : réactions et acquittements réservés au propriétaire dans une conversation directe', async () => {
+    expect((await postJson(`${server.url}/api/admin/scenarios/panne-checkout/start`, {}, ADMIN)).status).toBe(201)
+    expect((await openDirect({ participant: 'Alice', npcId: 'release-manager' })).status).toBe(201)
+    const sent = await postJson(`${server.url}/api/channels/${DM}/messages`, { author: 'Alice', text: 'Quel déploiement récent ?' })
+    expect(sent.status).toBe(201)
+    const question: Message = await sent.json()
+
+    // Réponse du PNJ publiée : la conversation contient le message d'Alice et celui du PNJ
+    const startedAt = Date.now()
+    let reply: Message | undefined
+    while (!reply && Date.now() - startedAt < 5000) {
+      const messages: Message[] = await (await fetch(`${server.url}/api/channels/${DM}/messages`)).json()
+      reply = messages.find(message => message.npc)
+      if (!reply) await sleep(200)
+    }
+    expect(reply).toBeDefined()
+
+    const react = (channelId: string, messageId: string, body: unknown) =>
+      postJson(`${server.url}/api/channels/${channelId}/messages/${messageId}/reactions`, body)
+    for (const messageId of [question.id, reply!.id]) {
+      expect((await react(DM, messageId, { emoji: '👍', author: 'Bob' })).status).toBe(403)
+    }
+    expect((await react(DM, reply!.id, { emoji: '👍', author: 'Alice' })).status).toBe(200)
+    expect((await react(DM, reply!.id, { emoji: '❤️', author: 'alice' })).status).toBe(200)
+    expect((await react(DM, reply!.id, { emoji: '👍' })).status).toBe(400)
+    expect((await react(DM, reply!.id, { emoji: '👍', author: '  ' })).status).toBe(400)
+
+    const status = await postJson(`${server.url}/api/channels/${DM}/messages/${reply!.id}/alert-status`, { status: 'acknowledged', name: 'Bob' })
+    expect(status.status).toBe(403)
+
+    // Canaux d'équipe inchangés : Bob y réagit librement
+    const team = await postJson(`${server.url}/api/channels/incident-en-cours/messages`, { author: 'Alice', text: 'Je regarde le checkout' })
+    expect(team.status).toBe(201)
+    expect((await react('incident-en-cours', (await team.json()).id, { emoji: '👍', author: 'Bob' })).status).toBe(200)
+  })
 })

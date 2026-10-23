@@ -5,6 +5,12 @@ export default defineEventHandler(async (event) => {
   // Corps absent ou non-objet : traité comme une réaction vide, donc refusé en 400
   const body = await readBody(event).catch(() => null)
   const input = body && typeof body === 'object' ? body : {}
+  // Conversation directe : seul son propriétaire (même slug) peut réagir ; nom vide ou invalide → 400 plus bas
+  const direct = getChannel(channelId)?.direct
+  const author = (input as { author?: unknown }).author
+  if (direct && typeof author === 'string' && author.trim() !== '' && !isDirectOwner(direct, author)) {
+    throw createError({ statusCode: 403, message: 'Seul le participant de cette conversation peut réagir' })
+  }
 
   try {
     return toggleReaction(channelId, messageId, input)

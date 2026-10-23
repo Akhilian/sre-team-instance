@@ -46,11 +46,32 @@ describe('scénarios fournis', () => {
       if (step.kind !== 'announcement') continue
       expect(step.text).not.toMatch(/^\[(Support|Direction|Community|Finance)/)
     }
-    // Les autres annonces restent des annonces
-    const announcements = steps.flatMap(step => step.kind === 'announcement' ? [step.text] : [])
-    for (const prefix of ['[CTO]', '[Service client grands comptes]', '[Animateur]']) {
-      expect(announcements.some(text => text.startsWith(prefix))).toBe(true)
+  })
+
+  it('023 CA3 : une seule annonce, celle de l\'animateur à t=840 ; CTO et grands comptes portés par des PNJ', () => {
+    const steps = SCENARIOS.find(scenario => scenario.id === 'panne-checkout')!.steps
+    const announcements = steps.filter(step => step.kind === 'announcement')
+    expect(announcements).toHaveLength(1)
+    expect(announcements[0]!.at).toBe(840)
+    expect(announcements[0]!.text.startsWith('[Animateur]')).toBe(true)
+
+    const at = (time: number) => steps.find(step => step.at === time)!
+    expect(at(550)).toMatchObject({ kind: 'npc-message', npcId: 'ceo' })
+    expect(at(690)).toMatchObject({ kind: 'npc-message', npcId: 'support-n1' })
+    for (const time of [550, 690]) {
+      expect(at(time).text).not.toContain('[CTO]')
+      expect(at(time).text).not.toContain('[Service client')
     }
+    expect(at(690).text).toContain('Maison Verdier')
+    expect(at(690).text).toContain('15h')
+  })
+
+  it('023 CA3 : la fiche support-n1 connaît l\'échéance de 15h, sans montant ni clause du contrat', () => {
+    const sarah = loadPersonas().find(persona => persona.id === 'support-n1')!
+    const content = JSON.stringify(sarah)
+    expect(content).toContain('15h')
+    expect(content).not.toContain('40 000')
+    expect(content).not.toContain('99,9')
   })
 
   it('021 CA1 : aucune étape ne livre la version, le changelog, les paramètres ni le rollback', () => {
