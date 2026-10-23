@@ -1,65 +1,33 @@
-# gen
+# sre-team-instance
 
-This template should help get you started developing with Vue 3 in Vite.
+Application full-stack [Nuxt 4](https://nuxt.com/docs) : front Vue et API dans le même dépôt.
 
-## Recommended IDE Setup
+## Structure
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+- `app/` : front (pages Vue, routage par fichiers dans `app/pages/`)
+- `server/api/` : back-end (routes API Nitro, ex. `GET /api/health`)
+- `public/` : fichiers statiques
 
-## Recommended Browser Setup
+## Commandes
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
-npm install
-```
-
-### Compile and Hot-Reload for Development
-
-```sh
-npm run dev
-```
-
-### Type-Check, Compile and Minify for Production
-
-```sh
-npm run build
-```
-
-### Run Unit Tests with [Vitest](https://vitest.dev/)
-
-```sh
-npm run test:unit
-```
-
-### Lint with [ESLint](https://eslint.org/)
-
-```sh
-npm run lint
+```bash
+npm install         # installer les dépendances
+npm run dev         # serveur de dev sur http://localhost:3000
+npm run typecheck   # vérification TypeScript
+npm run build       # build de production dans .output/
+node .output/server/index.mjs   # démarrer le build (port via PORT)
 ```
 
 ## Déploiement sur Render
 
-Le fichier [`render.yaml`](./render.yaml) décrit un *Static Site* Render (Blueprint) :
+Le fichier [`render.yaml`](./render.yaml) décrit un *Web Service* Node (Blueprint) :
 
 - build : `npm ci && npm run build` (Node 24, via `NODE_VERSION`)
-- dossier publié : `dist/`
-- rewrite `/*` → `/index.html` pour le mode history de Vue Router
+- démarrage : `node .output/server/index.mjs` (écoute sur le `PORT` fourni par Render)
+- health check : `/api/health`
 
 Pour créer le service : Render Dashboard → **New → Blueprint** → sélectionner ce dépôt GitHub.
 Chaque push sur `main` déclenche ensuite un déploiement automatique.
+
+> Le plan `free` met le service en veille après 15 min d'inactivité (réveil ≈ 1 min).
+> Passer sur `starter` si l'API doit répondre rapidement à tout moment (ex. webhooks d'alerting).
