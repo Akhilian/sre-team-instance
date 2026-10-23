@@ -1,8 +1,14 @@
 <script setup lang="ts">
 // Outils d'animateur (page non liée dans la navigation) : annonce et carte d'alerte dans un canal,
-// réinitialisation des conversations. Le code animateur est gardé dans le sessionStorage, envoyé en x-facilitator-code.
+// scénario d'incident pré-écrit, réinitialisation des conversations. Le code animateur est gardé dans le sessionStorage, envoyé en x-facilitator-code.
 import type { Message } from '~~/shared/types/chat'
+import type { ScenarioRun, ScenarioSummary, ScenariosResponse } from '~~/shared/types/scenario'
 import type { AlertSeverity } from '~~/shared/utils/alerts'
+import {
+  SCENARIO_RUN_STATUS_LABELS,
+  SCENARIO_STEP_STATUS_LABELS,
+  formatScenarioOffset,
+} from '~~/shared/utils/scenarios'
 import {
   ALERT_SERVICE_MAX_LENGTH,
   ALERT_SEVERITIES,
@@ -11,6 +17,7 @@ import {
 } from '~~/shared/utils/alerts'
 
 const FACILITATOR_CODE_STORAGE_KEY = 'sre-team-instance:facilitator-code'
+const SCENARIO_POLL_INTERVAL_MS = 2000
 const TEXT_MAX_LENGTH = 2000
 
 useHead({ title: 'Animateur | SRE Team Instance' })
@@ -28,16 +35,33 @@ const alertText = ref('')
 const busy = ref(false)
 const status = ref<{ kind: 'success' | 'error', text: string } | null>(null)
 
+// Scénarios : chargés côté client seulement, car la liste exige le code animateur
+const scenarios = ref<ScenarioSummary[] | null>(null)
+const scenarioRun = ref<ScenarioRun | null>(null)
+let scenarioPollTimer: ReturnType<typeof setTimeout> | undefined
+let unmounted = false
+
 onMounted(() => {
+  // Le watch sur code charge les scénarios si un code était mémorisé
   code.value = sessionStorage.getItem(FACILITATOR_CODE_STORAGE_KEY) ?? ''
 })
 
-watch(code, value => sessionStorage.setItem(FACILITATOR_CODE_STORAGE_KEY, value))
+onBeforeUnmount(() => {
+  unmounted = true
+  clearTimeout(scenarioPollTimer)
+})
+
+watch(code, (value) => {
+  sessionStorage.setItem(FACILITATOR_CODE_STORAGE_KEY, value)
+  loadScenarios()
+})
 
 const canPublish = computed(() => !busy.value && code.value !== '' && channelId.value !== '' && text.value.trim() !== '')
 const canPublishAlert = computed(() => !busy.value && code.value !== '' && alertChannelId.value !== ''
   && alertTitle.value.trim() !== '' && alertService.value.trim() !== '' && alertText.value.trim() !== '')
 const canReset = computed(() => !busy.value && code.value !== '')
+const scenarioRunning = computed(() => scenarioRun.value?.status === 'running')
+const canStartScenario = computed(() => !busy.value && code.value !== '' && !scenarioRunning.value)
 
 function errorText(error: unknown): string {
   const { statusCode, data } = error as { statusCode?: number, data?: { message?: string } }
@@ -94,11 +118,81 @@ function publishAlert() {
   })
 }
 
+/** Relance le polling tant que le run est en cours ; l'arrête sinon. */
+function setScenarioRun(run: ScenarioRun | null) {
+  scenarioRun.value = run
+  clearTimeout(scenarioPollTimer)
+  scenarioPollTimer = undefined
+  if (run?.status === 'running' && !unmounted) {
+    scenarioPollTimer = setTimeout(loadScenarios, SCENARIO_POLL_INTERVAL_MS)
+  }
+}
+
+async function loadScenarios() {
+  const requestCode = code.value
+  if (requestCode === '') {
+    scenarios.value = null
+    setScenarioRun(null)
+    return
+  }
+  try {
+    const response = await $fetch<ScenariosResponse>('/api/admin/scenarios', {
+      headers: { 'x-facilitator-code': requestCode },
+    })
+    // Code modifié pendant la requête : la réponse de la requête suivante fera foi
+    if (requestCode !== code.value || unmounted) return
+    scenarios.value = response.scenarios
+    setScenarioRun(response.run)
+  }
+  catch {
+    if (requestCode !== code.value || unmounted) return
+    scenarios.value = null
+    setScenarioRun(null)
+  }
+}
+
+function startScenario(scenario: ScenarioSummary) {
+  if (!canStartScenario.value) return
+  return run(async () => {
+    const state = await $fetch<ScenarioRun>(`/api/admin/scenarios/${encodeURIComponent(scenario.id)}/start`, {
+      method: 'POST',
+      headers: { 'x-facilitator-code': code.value },
+    })
+    setScenarioRun(state)
+    return `Scénario « ${scenario.title} » lancé.`
+  })
+}
+
+function stopScenario() {
+  if (busy.value || !scenarioRunning.value) return
+  return run(async () => {
+    try {
+      const state = await $fetch<ScenarioRun>('/api/admin/scenarios/stop', {
+        method: 'POST',
+        headers: { 'x-facilitator-code': code.value },
+      })
+      setScenarioRun(state)
+      return `Scénario « ${state.title} » arrêté.`
+    }
+    catch (error) {
+      // 409 : le scénario s'est terminé entre-temps, l'état affiché est rafraîchi
+      await loadScenarios()
+      throw error
+    }
+  })
+}
+
+function channelName(id: string): string {
+  return channels.value.find(channel => channel.id === id)?.name ?? id
+}
+
 function reset() {
   if (!canReset.value) return
   if (!confirm('Effacer les messages de tous les canaux ? Les canaux sont conservés.')) return
   return run(async () => {
     await $fetch('/api/admin/reset', { method: 'POST', headers: { 'x-facilitator-code': code.value } })
+    // La réinitialisation arrête aussi le scénario en cours
+    await loadScenarios()
     return 'Conversations réinitialisées.'
   })
 }
@@ -191,6 +285,66 @@ function reset() {
           </button>
         </div>
       </form>
+
+      <section class="card" data-testid="scenario-panel">
+        <h2>Scénario d'incident</h2>
+        <p v-if="!scenarios">Saisissez le code animateur pour afficher les scénarios.</p>
+        <ul v-else class="scenarios">
+          <li v-for="scenario in scenarios" :key="scenario.id" class="scenario" :data-testid="`scenario-${scenario.id}`">
+            <div class="scenario__info">
+              <strong>{{ scenario.title }}</strong>
+              <p>{{ scenario.description }}</p>
+              <p class="scenario__meta">
+                {{ scenario.stepCount }} étapes · durée {{ formatScenarioOffset(scenario.durationSeconds).slice(1) }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="button button--primary"
+              :data-testid="`scenario-start-${scenario.id}`"
+              :disabled="!canStartScenario"
+              @click="startScenario(scenario)"
+            >
+              Lancer
+            </button>
+          </li>
+        </ul>
+
+        <div v-if="scenarioRun" class="scenario-run" data-testid="scenario-run">
+          <div class="scenario-run__header">
+            <strong>{{ scenarioRun.title }}</strong>
+            <span
+              class="scenario-run__status"
+              :class="`scenario-run__status--${scenarioRun.status}`"
+              data-testid="scenario-run-status"
+            >{{ SCENARIO_RUN_STATUS_LABELS[scenarioRun.status] }}</span>
+          </div>
+          <ol class="scenario-steps">
+            <li
+              v-for="step in scenarioRun.steps"
+              :key="step.index"
+              class="scenario-step"
+              :data-testid="`scenario-step-${step.index}`"
+            >
+              <span class="scenario-step__at">{{ formatScenarioOffset(step.at) }}</span>
+              <span class="scenario-step__label">
+                {{ step.label }}
+                <small>{{ step.kind === 'alert' ? 'Alerte' : 'Annonce' }} · {{ channelName(step.channelId) }}</small>
+              </span>
+              <span
+                class="scenario-step__status"
+                :class="`scenario-step__status--${step.status}`"
+                data-testid="scenario-step-status"
+              >{{ SCENARIO_STEP_STATUS_LABELS[step.status] }}</span>
+            </li>
+          </ol>
+          <div v-if="scenarioRunning" class="card__actions">
+            <button type="button" class="button button--danger" data-testid="scenario-stop" :disabled="busy" @click="stopScenario">
+              Arrêter
+            </button>
+          </div>
+        </div>
+      </section>
 
       <section class="card">
         <h2>Entre deux groupes</h2>
@@ -339,6 +493,104 @@ function reset() {
   background: #f0f0f0;
   color: #bdbdbd;
   cursor: default;
+}
+
+.scenarios,
+.scenario-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scenario {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.scenario__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.card .scenario__meta {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.scenario-run {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.scenario-run__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.scenario-run__status,
+.scenario-step__status {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #f0f0f0;
+  color: var(--teams-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.scenario-run__status--running {
+  background: var(--teams-purple-tint);
+  color: var(--teams-purple);
+}
+
+.scenario-step {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.scenario-step__at {
+  flex-shrink: 0;
+  color: var(--teams-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.scenario-step__label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.scenario-step__label small {
+  display: block;
+  color: var(--teams-text-muted);
+}
+
+.scenario-step__status--published {
+  background: #e7f2da;
+  color: #237b4b;
+}
+
+.scenario-step__status--failed {
+  background: #fdf3f4;
+  color: #c4314b;
+}
+
+.scenario-step__status--cancelled {
+  text-decoration: line-through;
 }
 
 .admin__status {

@@ -1,0 +1,135 @@
+// Scénario principal de l'atelier (≈ 14 min) : dégradation puis panne du tunnel de paiement après
+// une mise en production. Les alertes arrivent dans « Incident en cours », la pression métier
+// (support, direction, finance) dans les deux canaux.
+import type { Scenario } from '../../shared/types/scenario'
+
+const INCIDENT = 'incident-en-cours'
+const GENERAL = 'general'
+
+export const panneCheckout: Scenario = {
+  id: 'panne-checkout',
+  title: 'Panne du checkout',
+  description: 'Latence puis erreurs 5xx sur le paiement après une mise en production, '
+    + 'sous la pression du support et de la direction. Environ 14 minutes.',
+  steps: [
+    {
+      at: 0,
+      channelId: INCIDENT,
+      kind: 'alert',
+      severity: 'SEV2',
+      title: 'Latence p95 > 2 s sur POST /api/checkout',
+      service: 'checkout-api',
+      text: 'p95 à 2,4 s depuis 5 min (SLO : 800 ms). 12 % des requêtes dépassent le timeout client de 3 s. '
+        + 'Runbook : wiki/runbooks/checkout-latence.',
+    },
+    {
+      at: 50,
+      channelId: INCIDENT,
+      kind: 'alert',
+      severity: 'SEV3',
+      title: 'Pool de connexions PostgreSQL proche de la saturation',
+      service: 'orders-db',
+      text: 'orders-db-primary : 188/200 connexions actives, attente moyenne sur le pool 900 ms. '
+        + 'Principal consommateur : checkout-api (142 connexions).',
+    },
+    {
+      at: 100,
+      channelId: INCIDENT,
+      kind: 'alert',
+      severity: 'SEV1',
+      title: 'Taux d\'erreur 5xx > 15 % sur le checkout',
+      service: 'checkout-api',
+      text: '17,8 % de réponses 5xx sur POST /api/checkout (seuil : 5 %). Erreurs majoritaires : '
+        + '503 « upstream timeout » vers payment-gateway. Commandes validées : -64 % sur 10 min.',
+    },
+    {
+      at: 160,
+      channelId: GENERAL,
+      kind: 'announcement',
+      text: '[Support N1] On reçoit des plaintes clients en rafale : paniers bloqués à l\'étape paiement, '
+        + '« erreur technique, réessayez plus tard ». 40 tickets en 10 min. Qu\'est-ce qu\'on leur répond ?',
+    },
+    {
+      at: 230,
+      channelId: INCIDENT,
+      kind: 'alert',
+      severity: 'SEV2',
+      title: 'Timeouts vers le prestataire de paiement',
+      service: 'payment-gateway',
+      text: '22 % des appels au PSP dépassent 10 s. Circuit breaker ouvert 3 fois en 5 min. '
+        + 'Page de statut du PSP : « tous les systèmes opérationnels ».',
+    },
+    {
+      at: 300,
+      channelId: INCIDENT,
+      kind: 'announcement',
+      text: '[Direction e-commerce] La newsletter « Black Friday » doit partir à 14h30 vers 1,2 M d\'abonnés. '
+        + 'On la décale ou pas ? Il me faut une réponse dans 10 minutes.',
+    },
+    {
+      at: 370,
+      channelId: INCIDENT,
+      kind: 'alert',
+      severity: 'SEV3',
+      title: 'Retard de consommation sur orders.created',
+      service: 'order-events-consumer',
+      text: 'Lag de 48 000 messages sur le topic Kafka orders.created, en hausse continue. '
+        + 'Les confirmations de commande par e-mail partent avec 12 min de retard.',
+    },
+    {
+      at: 430,
+      channelId: GENERAL,
+      kind: 'announcement',
+      text: '[Community management] Ça commence à chauffer sur les réseaux : 120 mentions « impossible de payer » '
+        + 'en 15 min, dont un compte à 80 k abonnés. On publie un message officiel ?',
+    },
+    {
+      at: 490,
+      channelId: INCIDENT,
+      kind: 'alert',
+      severity: 'SEV1',
+      title: 'Disponibilité du parcours d\'achat < 90 %',
+      service: 'checkout-frontend',
+      text: 'Sondes synthétiques : 4 parcours d\'achat sur 10 échouent depuis Paris, Francfort et Londres. '
+        + 'Budget d\'erreur mensuel du checkout consommé à 64 %.',
+    },
+    {
+      at: 550,
+      channelId: INCIDENT,
+      kind: 'announcement',
+      text: '[CTO] Je sors du comité de direction. J\'attends ici un point de situation écrit : impact, '
+        + 'hypothèse en cours, prochaine action et heure du prochain point.',
+    },
+    {
+      at: 620,
+      channelId: INCIDENT,
+      kind: 'alert',
+      severity: 'SEV3',
+      title: 'Changement récent corrélé à l\'incident',
+      service: 'checkout-api',
+      text: 'Déploiement checkout-api v2.41.0 terminé 6 min avant la première alerte. Changelog : nouveau client HTTP '
+        + 'vers payment-gateway (timeout 30 s, retries x3, pool 10 connexions). Rollback disponible : v2.40.3.',
+    },
+    {
+      at: 690,
+      channelId: GENERAL,
+      kind: 'announcement',
+      text: '[Service client grands comptes] Un client B2B menace de basculer chez un concurrent '
+        + 'si les commandes ne passent pas avant 15h. Il nous faut une heure de retour à communiquer.',
+    },
+    {
+      at: 760,
+      channelId: INCIDENT,
+      kind: 'announcement',
+      text: '[Finance] Estimation du manque à gagner : environ 18 000 € par tranche de 15 minutes. '
+        + 'Le COMEX est informé et demande qui pilote l\'incident.',
+    },
+    {
+      at: 840,
+      channelId: INCIDENT,
+      kind: 'announcement',
+      text: '[Animateur] Fin des injections. Stabilisez la situation, publiez une communication de suivi '
+        + 'et notez les éléments de chronologie pour le post-mortem.',
+    },
+  ],
+}
