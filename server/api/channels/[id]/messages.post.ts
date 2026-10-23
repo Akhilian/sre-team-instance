@@ -1,7 +1,7 @@
 export default defineEventHandler(async (event) => {
   const channelId = getRouterParam(event, 'id') ?? ''
   if (!hasChannel(channelId)) {
-    throw createError({ statusCode: 404, statusMessage: 'Canal inconnu' })
+    throw createError({ statusCode: 404, message: 'Canal inconnu' })
   }
 
   // Corps absent ou non-objet : traité comme un message vide, donc refusé en 400
@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
   }
   catch (error) {
     if (error instanceof MessageValidationError) {
-      throw createError({ statusCode: 400, statusMessage: error.message })
+      throw createError({ statusCode: 400, message: error.message })
     }
     throw error
   }

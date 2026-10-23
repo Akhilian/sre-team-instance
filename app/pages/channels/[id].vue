@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { Message } from '~~/shared/types/chat'
+import type { Channel, Message } from '~~/shared/types/chat'
 
 const POLL_INTERVAL_MS = 3000
 
 const route = useRoute()
 const channelId = computed(() => String(route.params.id))
 
-const { data: channels } = await useFetch('/api/channels')
+const { data: channels, refresh: refreshChannels } = await useFetch('/api/channels')
 const channel = computed(() => channels.value?.find(c => c.id === channelId.value))
 if (!channel.value) {
   throw createError({ statusCode: 404, statusMessage: 'Canal introuvable', fatal: true })
@@ -36,13 +36,20 @@ async function send(text: string) {
   await refresh()
 }
 
+async function onChannelCreated(created: Channel) {
+  await refreshChannels()
+  await navigateTo(`/channels/${created.id}`)
+}
+
 // Polling court : les messages des autres navigateurs apparaissent en quelques secondes
 let pollTimer: ReturnType<typeof setInterval> | undefined
 
 onMounted(() => {
   pollTimer = setInterval(() => {
-    // Pas de requête en double si la précédente n'est pas encore revenue
+    // Pas de requête en double si la précédente n'est pas encore revenue.
+    // La liste des canaux suit aussi, pour voir les canaux créés ailleurs.
     refresh({ dedupe: 'defer' })
+    refreshChannels({ dedupe: 'defer' })
   }, POLL_INTERVAL_MS)
 })
 
@@ -81,7 +88,7 @@ onBeforeUnmount(() => {
 
     <div class="teams__body">
       <AppBar />
-      <ChannelList :channels="channels ?? []" :current-id="channelId" />
+      <ChannelList :channels="channels ?? []" :current-id="channelId" @created="onChannelCreated" />
 
       <main class="channel">
         <header class="channel__header">

@@ -4,6 +4,7 @@ import type { Channel, Message } from '../../shared/types/chat'
 
 export const AUTHOR_MAX_LENGTH = 50
 export const TEXT_MAX_LENGTH = 2000
+export const CHANNEL_NAME_MAX_LENGTH = 50
 
 const DEFAULT_CHANNELS: readonly Channel[] = [
   { id: 'general', name: 'Général' },
@@ -24,6 +25,20 @@ export class MessageValidationError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'MessageValidationError'
+  }
+}
+
+export class ChannelValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ChannelValidationError'
+  }
+}
+
+export class ChannelConflictError extends Error {
+  constructor(channelId: string) {
+    super(`Un canal existe déjà avec l'identifiant ${channelId}`)
+    this.name = 'ChannelConflictError'
   }
 }
 
@@ -78,4 +93,36 @@ export function addMessage(channelId: string, input: { author?: unknown, text?: 
   }
   messages.push(message)
   return { ...message }
+}
+
+/** Id d'URL dérivé du nom : minuscules, sans accents, tout caractère hors [a-z0-9] devient un tiret. */
+export function slugifyChannelName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+/** Valide puis crée un canal vide en fin de liste ; lève une erreur sans rien créer sinon. */
+export function addChannel(input: { name?: unknown }): Channel {
+  const name = typeof input?.name === 'string' ? input.name.trim() : ''
+  if (name.length === 0) {
+    throw new ChannelValidationError('name est obligatoire')
+  }
+  if (name.length > CHANNEL_NAME_MAX_LENGTH) {
+    throw new ChannelValidationError(`name dépasse ${CHANNEL_NAME_MAX_LENGTH} caractères`)
+  }
+
+  const id = slugifyChannelName(name)
+  if (id === '') {
+    throw new ChannelValidationError('name doit contenir au moins une lettre ou un chiffre')
+  }
+  if (messagesByChannel.has(id)) throw new ChannelConflictError(id)
+
+  const channel: Channel = { id, name }
+  channels.push(channel)
+  messagesByChannel.set(id, [])
+  return { ...channel }
 }

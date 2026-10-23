@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  ChannelConflictError,
   ChannelNotFoundError,
+  ChannelValidationError,
   MessageValidationError,
+  addChannel,
   addMessage,
   listChannels,
   listMessages,
   resetChatStore,
+  slugifyChannelName,
 } from '../server/utils/chat-store'
 
 describe('chat-store', () => {
@@ -77,5 +81,60 @@ describe('chat-store', () => {
     listChannels()[0]!.name = 'modifié'
     expect(listMessages('general')[0]!.text).toBe('Bonjour')
     expect(listChannels()[0]!.name).not.toBe('modifié')
+  })
+})
+
+describe('slugifyChannelName', () => {
+  it.each([
+    ['Incident Base de Données', 'incident-base-de-donnees'],
+    ['  Général  ', 'general'],
+    ['Panne : API / paiement !!', 'panne-api-paiement'],
+    ['Été -- 2026', 'ete-2026'],
+    ['ÇA_MARCHE', 'ca-marche'],
+    ['!!!', ''],
+  ])('%j donne %j', (name, id) => {
+    expect(slugifyChannelName(name)).toBe(id)
+  })
+})
+
+describe('addChannel', () => {
+  beforeEach(() => resetChatStore())
+
+  it('crée un canal en fin de liste, sans message', () => {
+    const channel = addChannel({ name: '  Incident Base de Données ' })
+    expect(channel).toEqual({ id: 'incident-base-de-donnees', name: 'Incident Base de Données' })
+    expect(listChannels().at(-1)).toEqual(channel)
+    expect(listMessages(channel.id)).toEqual([])
+  })
+
+  it('le canal créé peut recevoir un message', () => {
+    const channel = addChannel({ name: 'Incident DNS' })
+    const message = addMessage(channel.id, { author: 'Alice', text: 'On regarde' })
+    expect(listMessages(channel.id)).toEqual([message])
+  })
+
+  it('accepte un nom de 50 caractères', () => {
+    expect(addChannel({ name: 'a'.repeat(50) }).name).toHaveLength(50)
+  })
+
+  it.each([
+    [{}],
+    [{ name: '' }],
+    [{ name: '   ' }],
+    [{ name: 42 }],
+    [{ name: '!!!' }],
+    [{ name: 'a'.repeat(51) }],
+  ])('refuse un nom invalide sans rien créer (%j)', (input) => {
+    const before = listChannels()
+    expect(() => addChannel(input)).toThrow(ChannelValidationError)
+    expect(listChannels()).toEqual(before)
+  })
+
+  it('refuse un doublon d\'id sans rien créer', () => {
+    expect(() => addChannel({ name: 'general' })).toThrow(ChannelConflictError)
+    addChannel({ name: 'Incident Base de Données' })
+    const before = listChannels()
+    expect(() => addChannel({ name: 'Incident base de donnees' })).toThrow(ChannelConflictError)
+    expect(listChannels()).toEqual(before)
   })
 })

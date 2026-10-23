@@ -9,14 +9,33 @@ const props = defineProps<{
 
 const scroller = ref<HTMLElement | null>(null)
 
-// Suit le bas du fil quand de nouveaux messages arrivent (polling ou envoi)
+// Distance au bas (px) sous laquelle on considère que l'utilisateur suit le fil
+const STICK_THRESHOLD_PX = 100
+
+function isNearBottom(el: HTMLElement): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_THRESHOLD_PX
+}
+
 function scrollToBottom() {
   const el = scroller.value
   if (el) el.scrollTop = el.scrollHeight
 }
 
 onMounted(scrollToBottom)
-watch(() => props.messages.length, () => nextTick(scrollToBottom))
+
+// Fil ancré en bas façon Teams : à l'arrivée de messages (polling ou envoi), on suit le bas,
+// sauf si l'utilisateur a remonté le fil. La proximité est mesurée avant la mise à jour du DOM
+// (watch en flush 'pre'), le défilement après (nextTick). Son propre message ramène toujours en bas.
+watch(
+  () => [props.messages.length, props.messages.at(-1)?.id],
+  (_, [, previousLastId]) => {
+    const el = scroller.value
+    if (!el) return
+    const last = props.messages.at(-1)
+    const sentByMe = props.me !== '' && last?.author === props.me && last.id !== previousLastId
+    if (sentByMe || isNearBottom(el)) nextTick(scrollToBottom)
+  },
+)
 </script>
 
 <template>

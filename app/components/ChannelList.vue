@@ -5,6 +5,55 @@ defineProps<{
   channels: Channel[]
   currentId: string
 }>()
+
+const emit = defineEmits<{
+  created: [channel: Channel]
+}>()
+
+// Même limite que le store (server/utils/chat-store.ts)
+const NAME_MAX_LENGTH = 50
+
+const creating = ref(false)
+const name = ref('')
+const error = ref('')
+const submitting = ref(false)
+const input = ref<HTMLInputElement | null>(null)
+const trimmed = computed(() => name.value.trim())
+
+async function openForm() {
+  creating.value = true
+  error.value = ''
+  await nextTick()
+  input.value?.focus()
+}
+
+function closeForm() {
+  creating.value = false
+  name.value = ''
+  error.value = ''
+}
+
+async function submit() {
+  if (trimmed.value === '' || submitting.value) return
+  submitting.value = true
+  error.value = ''
+  try {
+    const channel = await $fetch<Channel>('/api/channels', {
+      method: 'POST',
+      body: { name: trimmed.value },
+    })
+    closeForm()
+    emit('created', channel)
+  }
+  catch (err) {
+    // 400 / 409 : le message de l'API est affiché tel quel dans le formulaire
+    const data = (err as { data?: { message?: string } }).data
+    error.value = data?.message ?? 'Impossible de créer le canal'
+  }
+  finally {
+    submitting.value = false
+  }
+}
 </script>
 
 <template>
@@ -16,7 +65,46 @@ defineProps<{
       <div class="team__name">
         <span class="team__logo" aria-hidden="true">SRE</span>
         <span>Équipe SRE</span>
+        <button
+          type="button"
+          class="team__add"
+          data-testid="create-channel"
+          title="Créer un canal"
+          aria-label="Créer un canal"
+          @click="creating ? closeForm() : openForm()"
+        >
+          +
+        </button>
       </div>
+      <form
+        v-if="creating"
+        class="channel-form"
+        data-testid="create-channel-form"
+        @submit.prevent="submit"
+        @keydown.esc="closeForm"
+      >
+        <label for="channel-name-input">Nom du canal</label>
+        <input
+          id="channel-name-input"
+          ref="input"
+          v-model="name"
+          data-testid="create-channel-input"
+          type="text"
+          :maxlength="NAME_MAX_LENGTH"
+          placeholder="Ex. Incident base de données"
+        >
+        <p v-if="error" class="channel-form__error" role="alert" data-testid="create-channel-error">{{ error }}</p>
+        <div class="channel-form__actions">
+          <button type="button" class="channel-form__button" @click="closeForm">Annuler</button>
+          <button
+            type="submit"
+            class="channel-form__button channel-form__button--primary"
+            :disabled="trimmed === '' || submitting"
+          >
+            Créer
+          </button>
+        </div>
+      </form>
       <ul class="channel-list" data-testid="channel-list">
         <li v-for="channel in channels" :key="channel.id">
           <NuxtLink
@@ -78,6 +166,84 @@ defineProps<{
   color: #fff;
   font-size: 10px;
   font-weight: 700;
+}
+
+.team__add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--teams-text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.team__add:hover {
+  background: #fff;
+  color: var(--teams-purple);
+}
+
+.channel-form {
+  margin: 4px 4px 8px;
+  padding: 12px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.channel-form label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.channel-form input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--teams-border);
+  border-bottom: 2px solid var(--teams-purple);
+  border-radius: 4px;
+  outline: none;
+}
+
+.channel-form__error {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #c4314b;
+}
+
+.channel-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.channel-form__button {
+  padding: 4px 12px;
+  border: 1px solid var(--teams-border);
+  border-radius: 4px;
+  background: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.channel-form__button--primary {
+  border-color: var(--teams-purple);
+  background: var(--teams-purple);
+  color: #fff;
+}
+
+.channel-form__button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .channel-list {
