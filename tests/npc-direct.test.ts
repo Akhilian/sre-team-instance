@@ -1,8 +1,9 @@
-// 022 CA1, CA2, CA3, CA5 : conversations directes avec les PNJ (store, orchestrateur, frappe)
+// 022 CA1, CA2, CA3, CA5 : conversations directes avec les PNJ (store, orchestrateur, frappe) ;
+// 029 CA4 : réponse fixe quand le plafond est atteint
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Message } from '../shared/types/chat'
 import type { NpcResponder } from '../shared/types/npc'
-import { createNpcDispatcher } from '../server/npc/dispatcher'
+import { createNpcDispatcher, NPC_BUSY_REPLY } from '../server/npc/dispatcher'
 import { createKeywordsResponder } from '../server/npc/engines/keywords'
 import { createLexicalRetriever } from '../server/npc/lexical-retriever'
 import {
@@ -197,6 +198,36 @@ describe('orchestrateur en conversation directe (CA2)', () => {
     // Canal d'équipe : toujours servi
     const team = addMessage('incident-en-cours', { author: 'Alice', text: `@${RELEASE.name} quel déploiement ?` })
     expect(dispatcher.handle(team)).toEqual(['release-manager'])
+  })
+})
+
+describe('029 CA4 : plafond atteint en conversation directe', () => {
+  beforeEach(() => {
+    resetChatStore()
+    resetPresenceStore()
+    openDm()
+  })
+
+  it('7e message : réponse fixe à la racine sans moteur ; 8e : rien ; après 60 s : réponse normale', async () => {
+    const respond = vi.fn(async () => 'réponse du moteur')
+    const { clock, dispatcher } = setup({ responder: { respond } })
+    for (let index = 1; index <= 6; index++) {
+      expect(dispatcher.handle(ask(`Question ${index}`))).toEqual(['release-manager'])
+      await clock.advance(2000)
+    }
+    expect(dispatcher.handle(ask('Question 7'))).toEqual([])
+    const busy = npcReplies().filter(message => message.text === NPC_BUSY_REPLY)
+    expect(busy).toHaveLength(1)
+    expect(busy[0]).not.toHaveProperty('parentId')
+    expect(dispatcher.handle(ask('Question 8'))).toEqual([])
+    await clock.advance(5000)
+    expect(npcReplies()).toHaveLength(7)
+    expect(respond).toHaveBeenCalledTimes(6)
+    await clock.advance(60_000)
+    expect(dispatcher.handle(ask('Question 9'))).toEqual(['release-manager'])
+    await clock.advance(2000)
+    expect(respond).toHaveBeenCalledTimes(7)
+    expect(npcReplies().at(-1)!.text).toBe('réponse du moteur')
   })
 })
 

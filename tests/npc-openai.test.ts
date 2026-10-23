@@ -187,3 +187,25 @@ describe('repli keywords (CA3)', () => {
     expect(logger.warn).not.toHaveBeenCalled()
   })
 })
+
+describe('029 : issue du dernier appel (lastModelCall)', () => {
+  it('onOutcome : ok, puis échec avec sa raison ; temperature gardée', async () => {
+    const outcomes: unknown[] = []
+    let status = 200
+    const fetchMock = vi.fn(async () => status === 200 ? okResponse('Bien reçu.') : new Response('{}', { status }))
+    const engine = createOpenAiCompatibleResponder({
+      baseUrl: BASE,
+      model: 'test-model',
+      timeoutMs: 8000,
+      fetch: fetchMock as typeof fetch,
+      fallback: keywords,
+      logger: { warn: vi.fn() },
+      onOutcome: outcome => outcomes.push(outcome),
+    })
+    await engine.respond(await request('Quel déploiement ?'))
+    status = 503
+    await engine.respond(await request('Quel déploiement ?'))
+    expect(outcomes).toEqual([{ ok: true }, { ok: false, reason: 'HTTP 503' }])
+    expect(JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body)).temperature).toBe(0.3)
+  })
+})

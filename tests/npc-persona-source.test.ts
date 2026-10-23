@@ -1,12 +1,15 @@
 // 025 CA1 et CA2 : lecture des fiches dans un dossier (temporaire, vrai fs/promises), fusion d'un
-// rechargement et remplacement à chaud dans le dispatcher
+// rechargement et remplacement à chaud dans le dispatcher ; 029 CA5 : id unique tous scénarios, nom
+// d'au plus 50 caractères (chargement, rechargement, édition), NPC_ENGINE en sync: false
 import * as fs from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createNpcDispatcher } from '../server/npc/dispatcher'
 import { createKeywordsResponder } from '../server/npc/engines/keywords'
 import { createLexicalRetriever } from '../server/npc/lexical-retriever'
+import { createPersonaLayer } from '../server/npc/persona-overrides'
 import {
   mergePersonaReload,
   PERSONA_FILE_MAX_BYTES,
@@ -16,6 +19,7 @@ import {
   readPersonaDir,
 } from '../server/npc/persona-source'
 import { addMessage, resetChatStore } from '../server/utils/chat-store'
+import { AUTHOR_MAX_LENGTH } from '../shared/utils/limits'
 import { fakeClock, loadPersonas } from './npc-helpers'
 
 function persona(id: string, name: string, scenario = 'demo'): string {
@@ -261,5 +265,62 @@ describe('dispatcher.replacePersonas (CA2)', () => {
     dispatcher.replacePersonas(other)
     expect(dispatcher.scenarioId()).toBe('autre')
     expect(dispatcher.list()).toHaveLength(6)
+  })
+})
+
+describe('029 CA5 : id unique tous scénarios, nom borné', () => {
+  const LONG_NAME = `${'N'.repeat(AUTHOR_MAX_LENGTH)}x`
+
+  it('fuite-donnees/x.md dont l\'id existe dans panne-checkout : rejetée, le message cite l\'autre chemin', async () => {
+    await write('panne-checkout/x.md', persona('x', 'Xavier Un', 'panne-checkout'))
+    await write('panne-checkout/y.md', persona('y', 'Yves Deux', 'panne-checkout'))
+    await write('fuite-donnees/x.md', persona('x', 'Xavier Bis', 'fuite-donnees'))
+    const result = await readPersonaDir(root, fs)
+    const errors = new Map(result.errors.map(error => [error.path, error.message]))
+    expect(errors.get('fuite-donnees/x.md')).toContain('Fiche PNJ fuite-donnees/x.md')
+    expect(errors.get('fuite-donnees/x.md')).toContain('id « x » déjà utilisé par panne-checkout/x.md')
+    expect(result.files.map(file => file.path)).not.toContain('fuite-donnees/x.md')
+    // Aucune ne l'emporte selon l'ordre des chemins : l'autre est écartée aussi, en citant la première
+    expect(errors.get('panne-checkout/x.md')).toContain('déjà utilisé par fuite-donnees/x.md')
+    expect(result.files.map(file => file.path)).toEqual(['panne-checkout/y.md'])
+  })
+
+  it('rechargement : la version précédente de panne-checkout/x.md reste en service', async () => {
+    await write('panne-checkout/x.md', persona('x', 'Xavier Un', 'panne-checkout'))
+    await write('panne-checkout/y.md', persona('y', 'Yves Deux', 'panne-checkout'))
+    const before = await readPersonaDir(root, fs)
+    await write('fuite-donnees/x.md', persona('x', 'Xavier Bis', 'fuite-donnees'))
+    const outcome = mergePersonaReload(before.files, await readPersonaDir(root, fs), 'dir')
+    expect(outcome.files.map(file => file.path)).toEqual(['panne-checkout/x.md', 'panne-checkout/y.md'])
+    expect(outcome.report.kept).toEqual(['panne-checkout/x.md'])
+    expect(outcome.report.errors.map(error => error.path)).toContain('fuite-donnees/x.md')
+  })
+
+  it(`nom de ${AUTHOR_MAX_LENGTH + 1} caractères : rejetée ; ${AUTHOR_MAX_LENGTH} : acceptée`, async () => {
+    await write('demo/long.md', persona('long', LONG_NAME))
+    await write('demo/juste.md', persona('juste', 'N'.repeat(AUTHOR_MAX_LENGTH)))
+    const result = await readPersonaDir(root, fs)
+    expect(result.files.map(file => file.path)).toEqual(['demo/juste.md'])
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]!.path).toBe('demo/long.md')
+    expect(result.errors[0]!.message).toContain(`de plus de ${AUTHOR_MAX_LENGTH} caractères`)
+  })
+
+  it('édition en ligne : 422 pour un id déjà utilisé ailleurs et pour un nom trop long', async () => {
+    await write('panne-checkout/x.md', persona('x', 'Xavier Un', 'panne-checkout'))
+    await write('fuite-donnees/z.md', persona('z', 'Zoé Trois', 'fuite-donnees'))
+    const layer = createPersonaLayer((await readPersonaDir(root, fs)).files)
+    const sameId = layer.edit('fuite-donnees/z.md', persona('x', 'Zoé Trois', 'fuite-donnees'))
+    expect(sameId).toMatchObject({ ok: false, status: 422 })
+    expect(!sameId.ok && sameId.errors[0]!.message).toContain('id « x » déjà utilisé par panne-checkout/x.md')
+    const long = layer.edit('fuite-donnees/z.md', persona('z', LONG_NAME, 'fuite-donnees'))
+    expect(long).toMatchObject({ ok: false, status: 422 })
+    expect(!long.ok && long.errors[0]!.message).toContain(`de plus de ${AUTHOR_MAX_LENGTH} caractères`)
+    expect(layer.isModified('fuite-donnees/z.md')).toBe(false)
+  })
+
+  it('render.yaml : NPC_ENGINE en sync: false', () => {
+    const yaml = readFileSync(resolve(import.meta.dirname, '../render.yaml'), 'utf8')
+    expect(yaml).toMatch(/- key: NPC_ENGINE\n\s+sync: false\n/)
   })
 })

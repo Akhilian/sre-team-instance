@@ -58,7 +58,7 @@ describe('PNJ (019)', () => {
     expect((await postJson(`${server.url}/api/admin/npcs`, { enabled: 'oui' }, ADMIN)).status).toBe(400)
     const response = await setEnabled(true)
     expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ enabled: true, engine: 'keywords', scenarioId: 'panne-checkout' })
+    expect(await response.json()).toMatchObject({ enabled: true, engine: 'keywords', lastModelCall: null, scenarioId: 'panne-checkout' })
 
     const state = await npcs()
     expect(state.enabled).toBe(true)

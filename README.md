@@ -70,7 +70,7 @@ Plafonds fixes, regroupés dans `shared/utils/limits.ts` :
 | auteurs par réaction | 100 | 409 |
 | réponse d'un PNJ | 600 caractères | tronquée |
 | PNJ qui répondent à un même message | 3 | mentions suivantes ignorées |
-| réponses de PNJ par minute glissante | par canal ou conversation : 6 par PNJ, 20 tous PNJ confondus ; 60 au total dans les canaux d'équipe, et un budget séparé de 120 pour les conversations directes (au plus 180 appels au modèle par minute) | le PNJ se tait, sans erreur |
+| réponses de PNJ par minute glissante | par canal ou conversation : 6 par PNJ, 20 tous PNJ confondus ; 60 au total dans les canaux d'équipe, et un budget séparé de 120 pour les conversations directes (au plus 180 appels au modèle par minute) | le PNJ publie une seule fois par minute et par canal « Je suis sollicité de toutes parts, je reviens vers vous dans une minute. » (sans appel au moteur), puis se tait |
 
 ## Personnages non joueurs (PNJ)
 
@@ -80,7 +80,9 @@ Claire Dumont (CEO), Marc Lefort (CFO), Inès Garnier (communication, agence ext
 (prestataire de paiement fictif Paiemio) et Julien Moreau (Release Manager de l'équipe Paiements, seul
 à connaître le déploiement récent). Aucune étape du scénario ne donne la cause : il faut recouper. Un participant les interroge
 en les mentionnant (`@Julien Moreau quel déploiement récent ?`) : chaque PNJ mentionné répond dans le
-fil du message après 1 à 2 s, avec le badge « PNJ ». Leurs noms sont réservés (un message signé d'un
+fil du message après 1 à 2 s, avec le badge « PNJ ». Dans un fil, une réponse sans aucune mention `@…`
+s'adresse au PNJ qui a écrit le dernier message du fil : il répond sans être mentionné (une mention
+d'un humain, `@Bob`, ne déclenche aucun PNJ). Leurs noms sont réservés (un message signé d'un
 nom de PNJ est refusé en 400), et ils ne répondent jamais à un autre PNJ, à une annonce ni à une alerte.
 
 Le scénario `fuite-donnees` (« Fuite de données clients ») a ses 5 PNJ propres : Yanis Belkacem (analyste
@@ -89,7 +91,8 @@ SOC, lanceur d'alerte), Hugo Lemaire (développeur de l'équipe Data, auteur du 
 est la décision (notification, information des personnes, préservation des preuves) et la communication ;
 le recoupement voulu est décrit en tête de `server/scenarios/fuite-donnees.ts`. Avant tout lancement, les PNJ
 proposés sont ceux de `panne-checkout` ; lancer un scénario n'active que ses PNJ (mentions, conversations
-directes et liste « Conversations »), les ids de PNJ sont donc distincts d'un scénario à l'autre.
+directes et liste « Conversations »), les ids de PNJ sont donc distincts d'un scénario à l'autre (une
+fiche dont l'id existe dans un autre scénario, ou dont le nom dépasse 50 caractères, est refusée).
 
 - **Activation** : lancer `panne-checkout` ou `fuite-donnees` depuis `/admin` active ses PNJ ; l'interrupteur « PNJ actifs »
   de `/admin` (`POST /api/admin/npcs {enabled}`, code animateur) les coupe ou les rallume ; « Tout
@@ -189,7 +192,9 @@ ou auto-hébergée (serveur Ollama/vLLM exposé, fournisseur compatible), saisie
 Le moteur `anthropic` appelle l'API Messages de Claude (`POST {NPC_ANTHROPIC_BASE_URL}/v1/messages`)
 depuis le serveur, avec le `fetch` natif (sans SDK) et le même prompt que `openai-compatible` (fiche,
 extraits retenus, historique du fil), converti au format Anthropic : consigne dans `system`, messages
-alternés `user` / `assistant`. Réponses courtes (`max_tokens` 300, tronquées à 600 caractères).
+alternés `user` / `assistant`. Ni `temperature`, ni `top_p`, ni `top_k` (Claude Haiku 5.5 les refuse en
+400) ; la réflexion reste active avec `output_config: {effort: "low"}` et `max_tokens` 1024 (réflexion
+comprise), seuls les blocs `text` sont gardés, puis tronqués à 600 caractères.
 
 | Variable | Rôle |
 | --- | --- |
@@ -199,12 +204,20 @@ alternés `user` / `assistant`. Réponses courtes (`max_tokens` 300, tronquées 
 | `NPC_ANTHROPIC_BASE_URL` | facultatif : `https://api.anthropic.com` par défaut, à surcharger seulement pour les tests (slash final toléré) |
 | `NPC_LLM_TIMEOUT_MS` | délai maximal d'un appel, partagé avec `openai-compatible` (défaut 8000, plafonné à 14000) |
 
-Si l'API fait défaut (réseau, statut d'erreur dont 401 ou 529, délai, JSON invalide, texte vide), le PNJ
+Si l'API fait défaut (réseau, statut d'erreur dont 400, 401 ou 529, délai, JSON invalide, texte vide,
+`stop_reason` `refusal`, ou `max_tokens` sans texte), le PNJ
 répond avec `keywords` et les journaux contiennent une ligne `[npc] anthropic indisponible (…) : repli
 keywords`, sans la clé ni le corps de l'erreur. Sur Render, saisir `ANTHROPIC_API_KEY` (et éventuellement
 `NPC_ANTHROPIC_MODEL`) dans **Environment** (déclarées en `sync: false` dans `render.yaml`), puis
 `NPC_ENGINE=anthropic`. Sans clé sous la main : `node scripts/fake-anthropic.mjs` lance un faux serveur
-sur `http://127.0.0.1:11998` (port en argument ou `PORT`), à indiquer dans `NPC_ANTHROPIC_BASE_URL`.
+sur `http://127.0.0.1:11998` (port en argument ou `PORT`), à indiquer dans `NPC_ANTHROPIC_BASE_URL`. Il
+refuse en 400 `temperature`, `top_p` et `top_k`, comme l'API réelle ; `FAKE_ANTHROPIC_MODE` (ou à chaud
+`POST /__mode {"mode": …}`) choisit sa réponse : `text` (défaut), `thinking`, `max_tokens` ou `refusal`.
+
+`/admin` affiche, à côté du moteur, l'issue du dernier appel au modèle (`anthropic` ou
+`openai-compatible`) : « réussi à HH:MM » ou « échec (raison) à HH:MM, repli mots-clés »
+(`lastModelCall` de `GET /api/admin/npcs`, `null` avec `keywords` ou avant tout appel). Sur Render,
+`NPC_ENGINE` est déclarée en `sync: false` : la saisir dans **Environment** (vide = `keywords`).
 
 ## Persistance des conversations
 

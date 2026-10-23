@@ -1,9 +1,11 @@
 // Moteur `anthropic` : API Messages de Claude (POST /v1/messages), appelée par le serveur avec le fetch
 // natif, sans SDK. Même prompt que les autres moteurs à modèle (buildNpcPrompt), converti au format
-// Anthropic (system à part, alternance stricte user/assistant). Au moindre échec (réseau, statut, délai,
-// JSON, texte vide), la réponse est celle du moteur de repli (keywords), avec une ligne de journal sans
-// clé ni corps d'erreur. fetch et logger injectables pour les tests.
-import type { NpcRequest, NpcResponder } from '../../../shared/types/npc'
+// Anthropic (system à part, alternance stricte user/assistant). Ni temperature, ni top_p, ni top_k :
+// Claude Haiku 5.5 renvoie 400 pour toute valeur autre que celle par défaut. La réflexion reste active
+// (effort bas) et ses blocs sont ignorés. Au moindre échec (réseau, statut, délai, JSON, texte vide, refus,
+// max_tokens sans texte), la réponse est celle du moteur de repli (keywords), avec une ligne de journal
+// sans clé ni corps d'erreur. fetch et logger injectables pour les tests.
+import type { ModelCallOutcome, NpcRequest, NpcResponder } from '../../../shared/types/npc'
 import { NPC_REPLY_MAX_LENGTH } from '../../../shared/utils/limits'
 import type { Env } from '../../utils/env'
 import { truncateText } from '../../utils/chat-store'
@@ -14,9 +16,10 @@ import { timeoutFromEnv } from './openai-compatible'
 export const ANTHROPIC_DEFAULT_BASE_URL = 'https://api.anthropic.com'
 export const ANTHROPIC_DEFAULT_MODEL = 'claude-haiku-5-5'
 const ANTHROPIC_VERSION = '2023-06-01'
-/** Réponses courtes et peu créatives : 2 à 4 phrases fidèles à la fiche */
-const TEMPERATURE = 0.3
-const MAX_TOKENS = 300
+/** La réflexion (active par défaut) compte dans max_tokens : marge pour elle et 2 à 4 phrases de réponse */
+const MAX_TOKENS = 1024
+/** Réflexion courte : la fiche suffit à répondre */
+const OUTPUT_CONFIG = { effort: 'low' } as const
 /** Tour user ajouté quand la conversation commence par un message du PNJ (l'API exige un user en tête) */
 const CONVERSATION_START = '(Début de la conversation)'
 
@@ -61,6 +64,8 @@ export interface AnthropicOptions {
   /** Moteur utilisé quand l'API fait défaut */
   fallback: NpcResponder
   logger: Pick<Console, 'warn'>
+  /** Issue de chaque appel à l'API (réussi, ou échec et sa raison courte) */
+  onOutcome?: (outcome: ModelCallOutcome) => void
 }
 
 /** Échec de l'API, avec une raison courte et sans donnée sensible, pour le journal */
@@ -96,7 +101,7 @@ export function createAnthropicResponder(options: AnthropicOptions): NpcResponde
         body: JSON.stringify({
           model: options.model,
           max_tokens: MAX_TOKENS,
-          temperature: TEMPERATURE,
+          output_config: OUTPUT_CONFIG,
           system,
           messages,
         }),
@@ -117,18 +122,23 @@ export function createAnthropicResponder(options: AnthropicOptions): NpcResponde
       const name = (error as { name?: unknown } | null)?.name
       throw new ModelUnavailable(name === 'TimeoutError' || name === 'AbortError' ? 'délai dépassé' : 'erreur réseau')
     }
+    const stopReason = (body as { stop_reason?: unknown } | null)?.stop_reason
+    if (stopReason === 'refusal') throw new ModelUnavailable('refus')
     const text = textOf(body)
-    if (text === '') throw new ModelUnavailable('réponse vide')
+    if (text === '') throw new ModelUnavailable(stopReason === 'max_tokens' ? 'max_tokens sans texte' : 'réponse vide')
     return truncateText(text, NPC_REPLY_MAX_LENGTH)
   }
 
   return {
     async respond(request) {
       try {
-        return await complete(request)
+        const text = await complete(request)
+        options.onOutcome?.({ ok: true })
+        return text
       }
       catch (error) {
         const reason = error instanceof ModelUnavailable ? error.message : 'erreur inattendue'
+        options.onOutcome?.({ ok: false, reason })
         options.logger.warn(`[npc] anthropic indisponible (${reason}) : repli keywords`)
         return options.fallback.respond(request)
       }
@@ -137,7 +147,11 @@ export function createAnthropicResponder(options: AnthropicOptions): NpcResponde
 }
 
 /** Fabrique du registre : lève une erreur (sans valeur sensible) si ANTHROPIC_API_KEY manque ou est vide */
-export function anthropicFromEnv(env: Env, logger: Pick<Console, 'warn'> = console): NpcResponder {
+export function anthropicFromEnv(
+  env: Env,
+  logger: Pick<Console, 'warn'> = console,
+  onOutcome?: (outcome: ModelCallOutcome) => void,
+): NpcResponder {
   const apiKey = env.ANTHROPIC_API_KEY?.trim() ?? ''
   if (apiKey === '') throw new Error('ANTHROPIC_API_KEY manquant')
   return createAnthropicResponder({
@@ -147,5 +161,6 @@ export function anthropicFromEnv(env: Env, logger: Pick<Console, 'warn'> = conso
     timeoutMs: timeoutFromEnv(env),
     fallback: createKeywordsResponder(),
     logger,
+    onOutcome,
   })
 }

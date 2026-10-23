@@ -2,7 +2,7 @@
 // llama.cpp…), appelé par le serveur avec le fetch natif (jamais par le navigateur). Au moindre échec
 // (réseau, statut, délai, JSON, réponse vide), la réponse est celle du moteur de repli (keywords), avec
 // une ligne de journal sans URL ni clé. fetch et logger injectables pour les tests.
-import type { NpcRequest, NpcResponder } from '../../../shared/types/npc'
+import type { ModelCallOutcome, NpcRequest, NpcResponder } from '../../../shared/types/npc'
 import { NPC_REPLY_MAX_LENGTH } from '../../../shared/utils/limits'
 import type { Env } from '../../utils/env'
 import { truncateText } from '../../utils/chat-store'
@@ -27,6 +27,8 @@ export interface OpenAiCompatibleOptions {
   /** Moteur utilisé quand le modèle fait défaut */
   fallback: NpcResponder
   logger: Pick<Console, 'warn'>
+  /** Issue de chaque appel au modèle (réussi, ou échec et sa raison courte) */
+  onOutcome?: (outcome: ModelCallOutcome) => void
 }
 
 /** Échec du modèle, avec une raison courte et sans donnée sensible, pour le journal */
@@ -91,10 +93,13 @@ export function createOpenAiCompatibleResponder(options: OpenAiCompatibleOptions
   return {
     async respond(request) {
       try {
-        return await complete(request)
+        const text = await complete(request)
+        options.onOutcome?.({ ok: true })
+        return text
       }
       catch (error) {
         const reason = error instanceof ModelUnavailable ? error.message : 'erreur inattendue'
+        options.onOutcome?.({ ok: false, reason })
         options.logger.warn(`[npc] openai-compatible indisponible (${reason}) : repli keywords`)
         return options.fallback.respond(request)
       }
@@ -111,7 +116,11 @@ export function timeoutFromEnv(env: Env): number {
 }
 
 /** Fabrique du registre : lève une erreur (sans valeur sensible) si NPC_LLM_BASE_URL ou NPC_LLM_MODEL manque */
-export function openAiCompatibleFromEnv(env: Env, logger: Pick<Console, 'warn'> = console): NpcResponder {
+export function openAiCompatibleFromEnv(
+  env: Env,
+  logger: Pick<Console, 'warn'> = console,
+  onOutcome?: (outcome: ModelCallOutcome) => void,
+): NpcResponder {
   const baseUrl = env.NPC_LLM_BASE_URL?.trim() ?? ''
   const model = env.NPC_LLM_MODEL?.trim() ?? ''
   const missing = [baseUrl === '' && 'NPC_LLM_BASE_URL', model === '' && 'NPC_LLM_MODEL'].filter(Boolean)
@@ -123,5 +132,6 @@ export function openAiCompatibleFromEnv(env: Env, logger: Pick<Console, 'warn'> 
     timeoutMs: timeoutFromEnv(env),
     fallback: createKeywordsResponder(),
     logger,
+    onOutcome,
   })
 }

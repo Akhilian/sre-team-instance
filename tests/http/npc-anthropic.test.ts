@@ -1,6 +1,8 @@
-// 024 CA4 : moteur anthropic sur le build, branché sur un faux serveur Anthropic (node:http)
+// 024 CA4 : moteur anthropic sur le build, branché sur un faux serveur Anthropic (node:http) ;
+// 029 CA2 : faux serveur strict (temperature refusée), réflexion, max_tokens et lastModelCall
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { Message } from '../../shared/types/chat'
+import type { NpcAdminState } from '../../shared/types/npc'
 import { FAKE_CLAUDE_PREFIX, startFakeAnthropic } from '../../scripts/fake-anthropic.mjs'
 import { postJson, startServer, type TestServer } from './server'
 
@@ -53,6 +55,7 @@ describe('PNJ anthropic (024)', () => {
   beforeEach(async () => {
     fake.state.status = 200
     fake.state.delayMs = 0
+    fake.state.mode = 'text'
     fake.state.requests.length = 0
     expect((await postJson(`${server.url}/api/admin/reset`, { scope: 'all' }, ADMIN)).status).toBe(200)
     expect((await postJson(`${server.url}/api/admin/npcs`, { enabled: true }, ADMIN)).status).toBe(200)
@@ -92,5 +95,64 @@ describe('PNJ anthropic (024)', () => {
     const logs = server.stdout() + server.stderr()
     expect(logs).toContain('[npc] anthropic indisponible (HTTP 500) : repli keywords')
     expect(logs).not.toContain(API_KEY)
+  })
+})
+
+async function adminState(): Promise<NpcAdminState> {
+  const response = await fetch(`${server.url}/api/admin/npcs`, { headers: ADMIN })
+  expect(response.status).toBe(200)
+  return response.json()
+}
+
+describe('faux serveur strict et lastModelCall (029 CA2)', () => {
+  beforeEach(async () => {
+    fake.state.status = 200
+    fake.state.delayMs = 0
+    fake.state.mode = 'text'
+    fake.state.requests.length = 0
+    expect((await postJson(`${server.url}/api/admin/reset`, { scope: 'all' }, ADMIN)).status).toBe(200)
+    expect((await postJson(`${server.url}/api/admin/npcs`, { enabled: true }, ADMIN)).status).toBe(200)
+  })
+
+  it('appel direct au faux serveur avec temperature: 0.3 : 400 invalid_request_error', async () => {
+    const response = await postJson(`${fake.baseUrl}/v1/messages`, {
+      model: 'claude-haiku-5-5',
+      max_tokens: 1024,
+      temperature: 0.3,
+      messages: [{ role: 'user', content: 'Bonjour' }],
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({ type: 'error', error: { type: 'invalid_request_error' } })
+  })
+
+  it('mode thinking : réponse [faux Claude], corps sans temperature, lastModelCall.ok', async () => {
+    fake.state.mode = 'thinking'
+    const root = await ask(`@${RELEASE} quel déploiement récent ?`)
+    const reply = await waitForNpcReply(root.id, 5000)
+    expect(reply!.text.startsWith(FAKE_CLAUDE_PREFIX)).toBe(true)
+    const received = fake.state.requests[0]!.body
+    expect(received).toMatchObject({ max_tokens: 1024, output_config: { effort: 'low' } })
+    for (const field of ['temperature', 'top_p', 'top_k']) expect(received).not.toHaveProperty(field)
+    const { lastModelCall } = await adminState()
+    expect(lastModelCall).toMatchObject({ ok: true })
+    expect(Number.isNaN(Date.parse(lastModelCall!.at))).toBe(false)
+  })
+
+  it('mode max_tokens : réponse keywords, lastModelCall { ok: false, reason }', async () => {
+    fake.state.mode = 'max_tokens'
+    const root = await ask(`@${RELEASE} quel déploiement récent ?`)
+    const reply = await waitForNpcReply(root.id, 5000)
+    expect(reply!.text).toContain('v2.41.0')
+    expect(reply!.text).not.toContain(FAKE_CLAUDE_PREFIX)
+    const { lastModelCall } = await adminState()
+    expect(lastModelCall).toMatchObject({ ok: false, reason: 'max_tokens sans texte' })
+    expect(server.stdout() + server.stderr()).toContain('[npc] anthropic indisponible (max_tokens sans texte) : repli keywords')
+  })
+
+  it('POST /__mode change le mode à chaud ; mode inconnu : 400', async () => {
+    expect((await postJson(`${fake.baseUrl}/__mode`, { mode: 'refusal' })).status).toBe(200)
+    expect(fake.state.mode).toBe('refusal')
+    expect((await postJson(`${fake.baseUrl}/__mode`, { mode: 'autre' })).status).toBe(400)
+    expect(fake.state.mode).toBe('refusal')
   })
 })

@@ -70,11 +70,15 @@ const timelinePreview = ref<string | null>(null)
 
 // Canaux créés depuis un autre onglet : liste rechargée au retour sur la page. Les sélections
 // (refs indépendantes de la liste) ne sont pas touchées.
+// L'état des PNJ (dernier appel au modèle) est relu de même.
 function onWindowFocus() {
   void refreshChannels()
+  void refreshNpcState()
 }
 function onVisibilityChange() {
-  if (document.visibilityState === 'visible') void refreshChannels()
+  if (document.visibilityState !== 'visible') return
+  void refreshChannels()
+  void refreshNpcState()
 }
 
 onMounted(() => {
@@ -222,6 +226,33 @@ async function loadNpcs() {
     }
   }
 }
+
+/** Relit l'état des PNJ seul (sans les fiches, qui peuvent être en cours d'édition) ; ignoré sans état affiché */
+async function refreshNpcState() {
+  const requestCode = code.value
+  if (requestCode === '' || !npcState.value) return
+  try {
+    const state = await $fetch<NpcAdminState>('/api/admin/npcs', { headers: { 'x-facilitator-code': requestCode } })
+    if (requestCode === code.value && !unmounted) npcState.value = state
+  }
+  catch {
+    // état précédent gardé : la prochaine validation du code fera foi
+  }
+}
+
+/** HH:MM locale d'un horodatage ISO */
+function clockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+}
+
+/** « dernier appel au modèle : réussi à HH:MM » ou « échec (raison) à HH:MM, repli mots-clés » */
+const lastModelCallText = computed(() => {
+  const call = npcState.value?.lastModelCall
+  if (!call) return null
+  return call.ok
+    ? `dernier appel au modèle : réussi à ${clockTime(call.at)}`
+    : `dernier appel au modèle : échec (${call.reason ?? 'raison inconnue'}) à ${clockTime(call.at)}, repli mots-clés`
+})
 
 /** « Recharger les fiches » : relit la source en service ; 422 = aucune fiche valide, rien n'est remplacé */
 function reloadPersonas() {
@@ -601,6 +632,7 @@ function reset(scope: ResetScope) {
         <p v-if="!npcState">Saisissez et validez le code animateur pour afficher les PNJ.</p>
         <template v-else>
           <p>Mentionnés par <strong>@Nom</strong>, ils répondent dans le fil après quelques secondes (moteur {{ npcState.engine }}). Lancer le scénario les active, « Tout réinitialiser » les coupe.</p>
+          <p v-if="lastModelCallText" data-testid="npc-last-model-call" :class="`model-call model-call--${npcState.lastModelCall?.ok ? 'ok' : 'failed'}`">{{ lastModelCallText }}</p>
           <label class="switch">
             <input
               type="checkbox"
@@ -934,6 +966,18 @@ function reset(scope: ResetScope) {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   white-space: pre;
+}
+
+.model-call {
+  font-size: 13px;
+}
+
+.model-call--ok {
+  color: #237b4b;
+}
+
+.model-call--failed {
+  color: #c4314b;
 }
 
 .reload-report__errors {

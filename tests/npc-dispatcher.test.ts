@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Message } from '../shared/types/chat'
 import type { NpcRequest, NpcResponder } from '../shared/types/npc'
-import { createNpcDispatcher } from '../server/npc/dispatcher'
+import { createNpcDispatcher, NPC_BUSY_REPLY } from '../server/npc/dispatcher'
 import { createKeywordsResponder } from '../server/npc/engines/keywords'
 import { createLexicalRetriever } from '../server/npc/lexical-retriever'
 import {
@@ -129,7 +129,7 @@ describe('createNpcDispatcher', () => {
     expect(npcReplies()).toEqual([])
   })
 
-  it('la 7e mention du même PNJ dans la minute reste sans réponse', async () => {
+  it('la 7e mention du même PNJ dans la minute n\'appelle pas le moteur', async () => {
     const { clock, dispatcher } = setup()
     dispatcher.setEnabled(true)
     for (let index = 1; index <= 6; index++) {
@@ -140,7 +140,7 @@ describe('createNpcDispatcher', () => {
     // Un autre PNJ répond toujours
     expect(dispatcher.handle(post(`@${CFO.name} combien ça coûte ?`))).toEqual(['cfo'])
     await clock.advance(5000)
-    expect(npcReplies().filter(message => message.npc?.id === 'release-manager')).toHaveLength(6)
+    expect(npcReplies().filter(message => message.npc?.id === 'release-manager' && message.text !== NPC_BUSY_REPLY)).toHaveLength(6)
     // Une minute après la première réponse planifiée, le PNJ peut répondre de nouveau
     await clock.advance(30_000)
     expect(dispatcher.handle(post(`@${RELEASE.name} question 8`))).toEqual(['release-manager'])
@@ -390,5 +390,135 @@ describe('addNpcMessage', () => {
     addNpcMessage(CHANNEL, { npc: CFO, text: 'Les chiffres' })
     listMessages(CHANNEL)[0]!.npc!.id = 'modifié'
     expect(listMessages(CHANNEL)[0]!.npc!.id).toBe('cfo')
+  })
+})
+
+describe('029 CA3 : réponse implicite dans un fil', () => {
+  beforeEach(() => resetChatStore())
+
+  function threadOf(persona = RELEASE) {
+    return addNpcMessage(CHANNEL, { npc: persona, text: 'Je regarde le dernier déploiement.' })
+  }
+
+  it('dans le fil ouvert par A, une réponse sans mention déclenche A seul, dans ce fil', async () => {
+    const { clock, dispatcher } = setup()
+    dispatcher.setEnabled(true)
+    const root = threadOf()
+    expect(dispatcher.handle(post('Quel déploiement récent ?', root.id))).toEqual(['release-manager'])
+    await clock.advance(5000)
+    const replies = npcReplies().filter(message => message.id !== root.id)
+    expect(replies).toHaveLength(1)
+    expect(replies[0]).toMatchObject({ parentId: root.id, npc: { id: 'release-manager' } })
+  })
+
+  it('A a écrit le dernier message du fil (pas la racine) : A répond', () => {
+    const { dispatcher } = setup()
+    dispatcher.setEnabled(true)
+    const root = post('Le checkout est en panne')
+    addNpcMessage(CHANNEL, { npc: CFO, text: 'Combien de commandes perdues ?', parentId: root.id })
+    expect(dispatcher.handle(post('Environ 200 par minute', root.id))).toEqual(['cfo'])
+  })
+
+  it('dernier message du fil écrit par un humain : pas de réponse implicite', () => {
+    const { dispatcher } = setup()
+    dispatcher.setEnabled(true)
+    const root = threadOf()
+    post('Merci, je regarde aussi', root.id)
+    expect(dispatcher.handle(post('Quel déploiement récent ?', root.id))).toEqual([])
+  })
+
+  it('une réponse qui contient @Bob (humain) ne déclenche rien', () => {
+    const { dispatcher } = setup()
+    dispatcher.setEnabled(true)
+    const root = threadOf()
+    expect(dispatcher.handle(post('@Bob tu peux regarder le déploiement ?', root.id))).toEqual([])
+    expect(dispatcher.handle(post('Bob, @Bob ?', root.id))).toEqual([])
+  })
+
+  it('une réponse qui mentionne @B déclenche B seul', () => {
+    const { dispatcher } = setup()
+    dispatcher.setEnabled(true)
+    const root = threadOf()
+    expect(dispatcher.handle(post(`@${CFO.name} combien ça coûte ?`, root.id))).toEqual(['cfo'])
+  })
+
+  it('un message de PNJ dans le fil ne déclenche rien', () => {
+    const { dispatcher } = setup()
+    dispatcher.setEnabled(true)
+    const root = threadOf()
+    expect(dispatcher.handle(addNpcMessage(CHANNEL, { npc: CFO, text: 'Je chiffre la perte.', parentId: root.id }))).toEqual([])
+  })
+
+  it('un message racine sans mention ne déclenche rien, même juste après un message de PNJ', () => {
+    const { dispatcher } = setup()
+    dispatcher.setEnabled(true)
+    threadOf()
+    expect(dispatcher.handle(post('Quel déploiement récent ?'))).toEqual([])
+  })
+
+  it('A d\'un autre scénario (inactif) : pas de réponse implicite', () => {
+    const { dispatcher } = setup()
+    dispatcher.setEnabled(true)
+    const soc = loadPersonas('fuite-donnees').find(persona => persona.id === 'soc')!
+    const root = addNpcMessage(CHANNEL, { npc: soc, text: 'Alerte exfiltration.' })
+    expect(dispatcher.handle(post('Quels volumes ?', root.id))).toEqual([])
+  })
+})
+
+describe('029 CA4 : plafond atteint, réponse fixe', () => {
+  beforeEach(() => resetChatStore())
+
+  it('7e mention : réponse fixe sans moteur ; 8e : rien ; après 60 s : réponse normale', async () => {
+    const respond = vi.fn(async () => 'réponse du moteur')
+    const { clock, dispatcher } = setup({ responder: { respond } })
+    dispatcher.setEnabled(true)
+    for (let index = 1; index <= 6; index++) {
+      expect(dispatcher.handle(post(`@${RELEASE.name} question ${index}`))).toEqual(['release-manager'])
+      await clock.advance(2000)
+    }
+    expect(respond).toHaveBeenCalledTimes(6)
+    const seventh = post(`@${RELEASE.name} question 7`)
+    expect(dispatcher.handle(seventh)).toEqual([])
+    await clock.advance(5000)
+    expect(respond).toHaveBeenCalledTimes(6)
+    const busy = npcReplies().filter(message => message.text === NPC_BUSY_REPLY)
+    expect(busy).toHaveLength(1)
+    expect(busy[0]).toMatchObject({ parentId: seventh.id, npc: { id: 'release-manager' } })
+
+    expect(dispatcher.handle(post(`@${RELEASE.name} question 8`))).toEqual([])
+    await clock.advance(5000)
+    expect(npcReplies()).toHaveLength(7)
+    expect(respond).toHaveBeenCalledTimes(6)
+
+    // 60 s après la première réponse planifiée
+    await clock.advance(60_000)
+    expect(dispatcher.handle(post(`@${RELEASE.name} question 9`))).toEqual(['release-manager'])
+    await clock.advance(2000)
+    expect(respond).toHaveBeenCalledTimes(7)
+    expect(npcReplies().at(-1)!.text).toBe('réponse du moteur')
+  })
+
+  it('la réponse fixe n\'entre pas dans les budgets : un autre PNJ répond encore', async () => {
+    const { clock, dispatcher } = setup()
+    dispatcher.setEnabled(true)
+    for (let index = 1; index <= 8; index++) dispatcher.handle(post(`@${RELEASE.name} question ${index}`))
+    await clock.advance(10_000)
+    expect(npcReplies().filter(message => message.text === NPC_BUSY_REPLY)).toHaveLength(1)
+    expect(dispatcher.handle(post(`@${CFO.name} combien ?`))).toEqual(['cfo'])
+  })
+
+  it('réponse implicite au-delà du plafond : même réponse fixe, dans le fil', async () => {
+    const { clock, dispatcher } = setup()
+    dispatcher.setEnabled(true)
+    const root = addNpcMessage(CHANNEL, { npc: RELEASE, text: 'Je regarde.' })
+    for (let index = 1; index <= 6; index++) {
+      // Chaque question suit la réponse précédente de Julien
+      expect(dispatcher.handle(post(`Question ${index}`, root.id))).toEqual(['release-manager'])
+      await clock.advance(2000)
+    }
+    expect(dispatcher.handle(post('Question 7', root.id))).toEqual([])
+    const busy = npcReplies().filter(message => message.text === NPC_BUSY_REPLY)
+    expect(busy).toHaveLength(1)
+    expect(busy[0]).toMatchObject({ parentId: root.id, npc: { id: 'release-manager' } })
   })
 })

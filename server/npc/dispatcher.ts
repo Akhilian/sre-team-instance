@@ -1,6 +1,8 @@
 // Orchestrateur des PNJ : après chaque message publié, chaque PNJ actif mentionné (@Nom complet) répond
-// dans le fil du message, après un délai simulé ; dans une conversation directe, le PNJ de la conversation
-// répond à tout message, sans mention. Activation, plafonds de débit et garde-fous ici ;
+// dans le fil du message, après un délai simulé ; une réponse en fil sans aucune mention s'adresse au PNJ
+// qui a écrit le dernier message du fil ; dans une conversation directe, le PNJ de la conversation
+// répond à tout message, sans mention. Plafond atteint : une réponse fixe « je reviens vers vous », au plus
+// une fois par minute par PNJ et par canal. Activation, plafonds de débit et garde-fous ici ;
 // la formulation revient au retriever et au moteur injectés. Module pur, sur le modèle de
 // scenario-runner.ts : planificateur, horloge et publication injectés.
 import type { Message } from '../../shared/types/chat'
@@ -22,6 +24,12 @@ const RATE_WINDOW_MS = 60_000
 export const NPC_RESPOND_TIMEOUT_MS = 15_000
 /** Écart entre les réponses de plusieurs PNJ mentionnés dans un même message */
 const NPC_STAGGER_MS = 700
+/** Réponse publiée sans moteur quand un PNJ ne peut plus répondre faute de place dans les plafonds */
+export const NPC_BUSY_REPLY = 'Je suis sollicité de toutes parts, je reviens vers vous dans une minute.'
+/** Écart minimal entre deux réponses fixes d'un même PNJ dans un même canal */
+const NPC_BUSY_WINDOW_MS = 60_000
+/** Mention @… quelconque (PNJ ou humain) : @ en début de texte ou après une espace ou ponctuation, suivi d'un non-blanc */
+const ANY_MENTION = /(?:^|[\s\p{P}\p{S}])@\S/u
 
 export interface NpcReply {
   persona: NpcPersona
@@ -85,7 +93,10 @@ export interface NpcDispatcher {
   replacePersonas: (personas: readonly NpcPersona[]) => void
   /** Fiche dont le nom (casse ignorée) est name, tous scénarios confondus */
   findByName: (name: string) => NpcPersona | undefined
-  /** Planifie les réponses au message ; renvoie les ids des PNJ qui vont répondre */
+  /**
+   * Planifie les réponses au message ; renvoie les ids des PNJ qui vont répondre par le moteur (les
+   * réponses fixes de plafond atteint, publiées tout de suite, n'y figurent pas)
+   */
   handle: (message: Message) => string[]
   /**
    * Annule les réponses en attente (planifiées ou en cours de formulation) : ni publication ni onError
@@ -120,6 +131,8 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
   // du canal) et `channelId:personaId` ; allReplies (canaux d'équipe) et directReplies (conversations
   // directes, budget séparé) bornent les appels au moteur
   const repliesByKey = new Map<string, number[]>()
+  // Dernière réponse fixe « sollicité de toutes parts », par `channelId:personaId` (hors budgets)
+  const busyRepliesByKey = new Map<string, number>()
   let allReplies: number[] = []
   let directReplies: number[] = []
   const pending = new Set<Handle>()
@@ -202,6 +215,40 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
     return found.slice(0, NPC_MENTIONS_PER_MESSAGE_MAX)
   }
 
+  /**
+   * Réponse implicite dans un fil d'équipe (H2) : le PNJ actif auteur du dernier message du fil avant
+   * message (racine comprise), si message ne contient aucune mention @… ; sinon aucun.
+   */
+  function implicitTarget(message: Message, history: readonly Message[], candidates: readonly NpcPersona[]): NpcPersona[] {
+    const rootId = message.parentId
+    if (rootId === undefined || ANY_MENTION.test(message.text)) return []
+    const last = history
+      .filter(candidate => (candidate.id === rootId || candidate.parentId === rootId) && candidate.rev < message.rev)
+      .at(-1)
+    const persona = last?.npc ? candidates.find(candidate => candidate.id === last.npc!.id) : undefined
+    return persona ? [persona] : []
+  }
+
+  /**
+   * Plafond atteint : réponse fixe publiée sans moteur, au plus une fois par minute pour ce PNJ dans ce
+   * canal ; hors budgets. Un échec de publication est signalé à onError.
+   */
+  function publishBusyReply(persona: NpcPersona, channelId: string, parentId: string | undefined) {
+    const now = deps.now()
+    const key = `${channelId}:${persona.id}`
+    const last = busyRepliesByKey.get(key)
+    if (last !== undefined && now - last < NPC_BUSY_WINDOW_MS) return
+    busyRepliesByKey.set(key, now)
+    const busy: NpcReply = { persona, channelId, text: NPC_BUSY_REPLY }
+    if (parentId !== undefined) busy.parentId = parentId
+    try {
+      deps.publish(busy)
+    }
+    catch (error) {
+      onError(error)
+    }
+  }
+
   /** Rejette si promise n'est pas réglée en ms ; le minuteur est annulé dès qu'elle l'est */
   function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     let handle: Handle | undefined
@@ -267,20 +314,27 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
       // Seul le propriétaire peut y écrire (vérifié par la route).
       const directNpcId = deps.directNpcId?.(message.channelId)
       const direct = directNpcId !== undefined
-      const targets = direct
-        ? active().filter(persona => persona.id === directNpcId)
-        : mentioned(message.text, active())
+      const candidates = active()
+      let targets = direct
+        ? candidates.filter(persona => persona.id === directNpcId)
+        : mentioned(message.text, candidates)
+      // Historique lu seulement s'il peut servir (réponse à planifier, ou fil d'équipe sans mention de PNJ)
+      const fullHistory = targets.length > 0 || (!direct && message.parentId !== undefined)
+        ? (deps.history?.(message) ?? []).filter(candidate => candidate.id !== message.id)
+        : []
+      if (!direct && targets.length === 0) targets = implicitTarget(message, fullHistory, candidates)
       if (targets.length === 0) return []
 
       // En canal d'équipe, toujours dans le fil ; en conversation directe, à la racine pour un message racine
       const parentId = direct ? message.parentId : message.parentId ?? message.id
-      const history = (deps.history?.(message) ?? [])
-        .filter(candidate => candidate.id !== message.id)
-        .slice(-NPC_HISTORY_MAX)
+      const history = fullHistory.slice(-NPC_HISTORY_MAX)
       const scheduled: string[] = []
       const startGeneration = generation
       targets.forEach((persona) => {
-        if (!takeRateSlot(persona, message.channelId, direct)) return
+        if (!takeRateSlot(persona, message.channelId, direct)) {
+          publishBusyReply(persona, message.channelId, parentId)
+          return
+        }
         const delay = (deps.delayMs?.() ?? 1500) + scheduled.length * NPC_STAGGER_MS
         // Frappe signalée dès la planification ; l'annulation (cancelPending) la termine aussi
         const token = startTyping(persona, message.channelId)

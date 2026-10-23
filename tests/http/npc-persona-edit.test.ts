@@ -1,5 +1,6 @@
 // 026 CA2 et CA3 : édition en ligne d'une fiche (PUT /api/admin/npc-personas/edit), retour à l'original
-// (POST …/revert), refus et dérogation de taille de corps limitée à la route d'édition
+// (POST …/revert), refus et dérogation de taille de corps limitée à la route d'édition ; 029 CA5 : id déjà
+// utilisé dans un autre scénario et nom trop long refusés en 422
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { Message } from '../../shared/types/chat'
 import type { NpcPersonaEditErrorResponse, NpcPersonaFileSummary, NpcPersonasAdminState } from '../../shared/types/npc'
@@ -117,6 +118,23 @@ describe('refus (026 CA3)', () => {
     const { errors } = await response.json() as NpcPersonaEditErrorResponse
     expect(errors[0]!.message).toContain('« name »')
     expect(await served()).toMatchObject({ markdown: original, modified: false })
+  })
+
+  it('029 CA5 : id déjà utilisé dans un autre scénario, ou nom de 51 caractères : 422, rien ne change', async () => {
+    const socPath = 'fuite-donnees/soc.md'
+    const soc = (await personas()).find(entry => entry.path === socPath)!
+    const sameId = await put({ path: socPath, markdown: soc.markdown.replace(/^id: soc$/m, 'id: cfo') })
+    expect(sameId.status).toBe(422)
+    const idErrors = (await sameId.json() as NpcPersonaEditErrorResponse).errors
+    expect(idErrors[0]!.message).toContain('id « cfo » déjà utilisé par panne-checkout/cfo.md')
+
+    const longName = await put({ path: PATH, markdown: original.replace(/^name: .*$/m, `name: ${'N'.repeat(51)}`) })
+    expect(longName.status).toBe(422)
+    const nameErrors = (await longName.json() as NpcPersonaEditErrorResponse).errors
+    expect(nameErrors[0]!.message).toContain('de plus de 50 caractères')
+
+    expect(await served()).toMatchObject({ markdown: original, modified: false })
+    expect((await personas()).find(entry => entry.path === socPath)).toMatchObject({ markdown: soc.markdown, modified: false })
   })
 
   it('erreur de ligne : 422 avec line', async () => {

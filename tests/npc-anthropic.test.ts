@@ -1,4 +1,5 @@
-// 024 CA1 à CA3 : conversion du prompt au format Anthropic, adaptateur anthropic (fetch simulé) et repli keywords
+// 024 CA1 à CA3 : conversion du prompt au format Anthropic, adaptateur anthropic (fetch simulé) et repli keywords ;
+// 029 CA1 : corps sans paramètres d'échantillonnage, réflexion ignorée, refus et max_tokens sans texte
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Message } from '../shared/types/chat'
 import type { NpcRequest } from '../shared/types/npc'
@@ -33,9 +34,11 @@ async function request(question: string, history: Message[] = []): Promise<NpcRe
   return { persona: RELEASE, excerpts: await retriever.retrieve(RELEASE, question), history, question }
 }
 
-function okResponse(content: unknown): Response {
-  return new Response(JSON.stringify({ id: 'msg_1', type: 'message', role: 'assistant', content }), { status: 200 })
+function okResponse(content: unknown, stopReason = 'end_turn'): Response {
+  return new Response(JSON.stringify({ id: 'msg_1', type: 'message', role: 'assistant', content, stop_reason: stopReason }), { status: 200 })
 }
+
+const THINKING = { type: 'thinking', thinking: '', signature: 'sig' }
 
 function expectAlternating(messages: { role: string }[]) {
   expect(messages[0]!.role).toBe('user')
@@ -46,6 +49,7 @@ function expectAlternating(messages: { role: string }[]) {
 
 function responder(fetchImpl: typeof fetch, options: { timeoutMs?: number } = {}) {
   const logger = { warn: vi.fn() }
+  const onOutcome = vi.fn()
   const fetchMock = vi.fn(fetchImpl)
   const engine = createAnthropicResponder({
     baseUrl: 'https://api.anthropic.com',
@@ -55,8 +59,9 @@ function responder(fetchImpl: typeof fetch, options: { timeoutMs?: number } = {}
     fetch: fetchMock as typeof fetch,
     fallback: keywords,
     logger,
+    onOutcome,
   })
-  return { engine, logger, fetchMock }
+  return { engine, logger, fetchMock, onOutcome }
 }
 
 describe('toAnthropicMessages (CA1)', () => {
@@ -136,9 +141,10 @@ describe('adaptateur anthropic (CA2)', () => {
     })
     const body = JSON.parse(String(init.body))
     expect(body.model).toBe('claude-haiku-5-5')
-    expect(body.max_tokens).toBeGreaterThan(0)
-    expect(body.max_tokens).toBeLessThanOrEqual(300)
-    expect(body.temperature).toBeLessThanOrEqual(0.5)
+    expect(body.max_tokens).toBe(1024)
+    expect(body.output_config).toEqual({ effort: 'low' })
+    for (const field of ['temperature', 'top_p', 'top_k']) expect(body).not.toHaveProperty(field)
+    expect(Object.keys(body).sort()).toEqual(['max_tokens', 'messages', 'model', 'output_config', 'system'])
     expect(typeof body.system).toBe('string')
     expect(body.system).toContain(RELEASE.name)
     expect(body.system).toBe(buildNpcPrompt(req)[0]!.content)
@@ -159,6 +165,39 @@ describe('adaptateur anthropic (CA2)', () => {
     expect(text).not.toContain('outil')
     const long = responder(async () => okResponse([{ type: 'text', text: 'x'.repeat(2000) }]))
     expect([...await long.engine.respond(await request('Quel déploiement ?'))]).toHaveLength(600)
+    expect(logger.warn).not.toHaveBeenCalled()
+  })
+})
+
+describe('029 CA1 : réflexion, refus et max_tokens', () => {
+  it('réponse [thinking, text] : le texte seul, issue réussie', async () => {
+    const { engine, logger, onOutcome } = responder(async () => okResponse([THINKING, { type: 'text', text: 'Le déploiement v2.41.0.' }]))
+    expect(await engine.respond(await request('Quel déploiement récent ?'))).toBe('Le déploiement v2.41.0.')
+    expect(logger.warn).not.toHaveBeenCalled()
+    expect(onOutcome).toHaveBeenCalledExactlyOnceWith({ ok: true })
+  })
+
+  const failures: [string, string, () => Response][] = [
+    ['max_tokens sans texte', 'max_tokens sans texte', () => okResponse([THINKING], 'max_tokens')],
+    ['refus', 'refus', () => okResponse([], 'refusal')],
+    ['refus avec texte', 'refus', () => okResponse([{ type: 'text', text: 'Je ne peux pas.' }], 'refusal')],
+  ]
+  for (const [label, reason, make] of failures) {
+    it(`${label} : réponse keywords, une ligne warn (${reason}) sans la clé`, async () => {
+      const { engine, logger, onOutcome } = responder(async () => make())
+      const req = await request('Quel déploiement récent ?')
+      expect(await engine.respond(req)).toBe(await keywords.respond(req))
+      expect(logger.warn).toHaveBeenCalledOnce()
+      const line = String(logger.warn.mock.calls[0]![0])
+      expect(line).toBe(`[npc] anthropic indisponible (${reason}) : repli keywords`)
+      expect(line).not.toContain(API_KEY)
+      expect(onOutcome).toHaveBeenCalledExactlyOnceWith({ ok: false, reason })
+    })
+  }
+
+  it('max_tokens avec du texte : le texte est gardé', async () => {
+    const { engine, logger } = responder(async () => okResponse([THINKING, { type: 'text', text: 'Réponse coupée' }], 'max_tokens'))
+    expect(await engine.respond(await request('Quel déploiement ?'))).toBe('Réponse coupée')
     expect(logger.warn).not.toHaveBeenCalled()
   })
 })

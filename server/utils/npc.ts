@@ -3,7 +3,7 @@
 // moteur choisi par NPC_ENGINE, orchestrateur unique du processus (état activé en mémoire seulement)
 // et publication dans le store des canaux. La logique pure vit dans server/npc/.
 import type { Message } from '../../shared/types/chat'
-import type { NpcAdminState, NpcPersona, NpcPersonaFileSummary, NpcPersonasAdminState } from '../../shared/types/npc'
+import type { LastModelCall, NpcAdminState, NpcPersona, NpcPersonaFileSummary, NpcPersonasAdminState } from '../../shared/types/npc'
 import { createNpcDispatcher, type NpcDispatcher } from '../npc/dispatcher'
 import { type ResolvedNpcEngine, resolveNpcEngine } from '../npc/engines'
 import { createLexicalRetriever } from '../npc/lexical-retriever'
@@ -31,6 +31,8 @@ const NPC_REPLY_DELAY_MIN_MS = 1000
 const NPC_REPLY_DELAY_SPREAD_MS = 1000
 
 let engine: ResolvedNpcEngine | undefined
+/** Dernier appel au modèle (moteurs anthropic et openai-compatible), en mémoire ; null avant tout appel */
+let lastModelCall: LastModelCall | null = null
 let dispatcher: Promise<NpcDispatcher> | undefined
 /** Fiches chargées par useNpcDispatcher(), pour les recherches synchrones (étapes de scénario) */
 let loadedPersonas: readonly NpcPersona[] = []
@@ -48,7 +50,9 @@ function refreshLoadedPersonas() {
 
 /** Moteur du processus, résolu une fois (avertissement unique si NPC_ENGINE est inconnu) */
 function npcEngine(): ResolvedNpcEngine {
-  engine ??= resolveNpcEngine(processEnv())
+  engine ??= resolveNpcEngine(processEnv(), console, (outcome) => {
+    lastModelCall = { at: new Date().toISOString(), ...outcome }
+  })
   return engine
 }
 
@@ -204,6 +208,7 @@ export async function npcAdminState(): Promise<NpcAdminState> {
     enabled: current.isEnabled(),
     npcs: current.list(),
     engine: npcEngineName(),
+    lastModelCall,
     scenarioId: current.scenarioId(),
   }
 }

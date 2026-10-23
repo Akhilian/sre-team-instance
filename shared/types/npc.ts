@@ -84,10 +84,24 @@ export interface NpcsResponse {
   npcs: NpcSummary[]
 }
 
+/** Issue d'un appel au modèle (moteurs anthropic et openai-compatible) */
+export interface ModelCallOutcome {
+  ok: boolean
+  /** Raison courte de l'échec (« HTTP 400 », « refus »…), sans donnée sensible */
+  reason?: string
+}
+
+/** Dernier appel au modèle, daté (at : ISO 8601) */
+export interface LastModelCall extends ModelCallOutcome {
+  at: string
+}
+
 /** Réponse de GET|POST /api/admin/npcs */
 export interface NpcAdminState extends NpcsResponse {
   /** Moteur de réponse en service (NPC_ENGINE) */
   engine: string
+  /** Dernier appel au modèle ; null avec keywords ou avant tout appel */
+  lastModelCall: LastModelCall | null
   /** Scénario dont les PNJ sont proposés */
   scenarioId: string
 }

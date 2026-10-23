@@ -1,12 +1,14 @@
 // Sources des fiches de PNJ : un dossier du disque (NPC_PERSONAS_DIR, <dir>/<scénario>/<id>.md) ou les
 // fiches embarquées au build (assets:npc). Module pur : le système de fichiers et le stockage sont
 // injectés, testable avec Vitest dans un dossier temporaire. Validation commune aux deux sources
-// (parseur, id et scénario cohérents avec le chemin, nom unique) et fusion d'un rechargement.
+// (parseur, id et scénario cohérents avec le chemin, id et nom uniques tous scénarios confondus, nom
+// signable) et fusion d'un rechargement.
 //
 // Garde-fous de lecture du dossier : le chemin vient de l'appelant (l'environnement seulement), noms de
 // dossier et de fichier contrôlés, chemin réel confiné sous le chemin réel du dossier (lien symbolique
 // sortant refusé), taille par fiche et nombre de fiches plafonnés.
 import type { NpcPersona, NpcPersonaReloadReport, NpcPersonaSource } from '../../shared/types/npc'
+import { AUTHOR_MAX_LENGTH } from '../../shared/utils/limits'
 import { parsePersona } from './persona-parser'
 
 /** Taille maximale d'une fiche, en octets */
@@ -84,8 +86,9 @@ function isInside(root: string, real: string): boolean {
 }
 
 /**
- * Valide une fiche de chemin path : taille, parseur, id et scénario égaux au chemin, nom libre parmi others
- * (casse ignorée). Lève PersonaParseError (avec sa ligne éventuelle) ou une erreur de message explicite.
+ * Valide une fiche de chemin path : taille, parseur, id et scénario égaux au chemin, nom d'au plus
+ * AUTHOR_MAX_LENGTH caractères (signature des messages), id libre parmi others (tous scénarios : il
+ * désigne le PNJ dans les messages et les conversations directes) et nom libre (casse ignorée). Lève PersonaParseError (avec sa ligne éventuelle) ou une erreur de message explicite.
  * Commune à la lecture des sources et à l'édition en ligne (026).
  */
 export function checkPersonaFile(path: string, markdown: string, others: readonly PersonaFile[]): PersonaFile {
@@ -93,12 +96,22 @@ export function checkPersonaFile(path: string, markdown: string, others: readonl
     throw new PersonaSourceError(`fiche de plus de ${PERSONA_FILE_MAX_BYTES / 1024} Ko`)
   }
   const persona = parsePersona(markdown, path)
+  // Avant la cohérence avec le chemin : en édition, un id repris d'un autre PNJ reçoit ce message explicite
+  const sameId = others.find(other => other.path !== path && other.persona.id === persona.id)
+  if (sameId) throw new PersonaSourceError(idTakenMessage(persona.id, sameId.path))
   if (`${persona.scenarioId}/${persona.id}.md` !== path) {
     throw new PersonaSourceError(`id « ${persona.id} » ou scénario « ${persona.scenarioId} » différent du chemin`)
+  }
+  if (persona.name.length > AUTHOR_MAX_LENGTH) {
+    throw new PersonaSourceError(`nom « ${persona.name} » de plus de ${AUTHOR_MAX_LENGTH} caractères`)
   }
   const taken = others.find(other => other.path !== path && other.persona.name.toLowerCase() === persona.name.toLowerCase())
   if (taken) throw new PersonaSourceError(`nom « ${persona.name} » déjà pris par ${taken.path}`)
   return { path, markdown, persona }
+}
+
+function idTakenMessage(id: string, otherPath: string): string {
+  return `id « ${id} » déjà utilisé par ${otherPath}`
 }
 
 /** Message d'erreur d'une fiche, préfixé « Fiche PNJ <chemin> : » (déjà fait par le parseur) */
@@ -109,7 +122,8 @@ export function personaErrorMessage(path: string, error: unknown): string {
 
 /**
  * Lit, parse et valide les candidats dans l'ordre (triés par chemin) avec checkPersonaFile. Au plus
- * PERSONA_FILES_MAX fiches lues.
+ * PERSONA_FILES_MAX fiches lues. Un id porté par plusieurs fiches valides (scénarios différents) les
+ * écarte toutes, chacune avec un message qui cite l'autre : aucune ne l'emporte selon l'ordre des chemins.
  */
 async function validateCandidates(candidates: PersonaCandidate[], errors: PersonaLoadError[]): Promise<PersonaLoadResult> {
   const files: PersonaFile[] = []
@@ -119,14 +133,40 @@ async function validateCandidates(candidates: PersonaCandidate[], errors: Person
       errors.push({ path: candidate.path, message: `plus de ${PERSONA_FILES_MAX} fiches : fiche ignorée` })
     }
   })
-  for (const { path, read } of sorted.slice(0, PERSONA_FILES_MAX)) {
+  // Erreurs de lecture et de validation, rendues dans l'ordre des chemins
+  const failed: PersonaLoadError[] = []
+  const read: { path: string, markdown: string }[] = []
+  for (const candidate of sorted.slice(0, PERSONA_FILES_MAX)) {
     try {
-      files.push(checkPersonaFile(path, await read(), files))
+      read.push({ path: candidate.path, markdown: await candidate.read() })
     }
     catch (error) {
-      errors.push({ path, message: personaErrorMessage(path, error) })
+      failed.push({ path: candidate.path, message: personaErrorMessage(candidate.path, error) })
     }
   }
+  // Chemins des fiches valides seules, par id
+  const pathsById = new Map<string, string[]>()
+  for (const { path, markdown } of read) {
+    try {
+      const { id } = checkPersonaFile(path, markdown, []).persona
+      pathsById.set(id, [...pathsById.get(id) ?? [], path])
+    }
+    catch {
+      // erreur signalée ci-dessous
+    }
+  }
+  for (const { path, markdown } of read) {
+    try {
+      const file = checkPersonaFile(path, markdown, files)
+      const other = pathsById.get(file.persona.id)?.find(candidate => candidate !== path)
+      if (other !== undefined) throw new PersonaSourceError(idTakenMessage(file.persona.id, other))
+      files.push(file)
+    }
+    catch (error) {
+      failed.push({ path, message: personaErrorMessage(path, error) })
+    }
+  }
+  errors.push(...failed.sort(byPath))
   return { files, errors }
 }
 
@@ -233,7 +273,7 @@ export interface PersonaReloadOutcome {
 
 /**
  * Fusion d'un rechargement : les fiches valides remplacent les fiches en cours ; une fiche en erreur
- * garde sa version précédente si elle existe (et si son nom n'est pas repris par une fiche chargée) ;
+ * garde sa version précédente si elle existe (et si son nom et son id ne sont pas repris par une fiche chargée) ;
  * une fiche absente du résultat disparaît. Sans aucune fiche valide, rien n'est remplacé.
  */
 export function mergePersonaReload(
@@ -247,9 +287,11 @@ export function mergePersonaReload(
   }
   const failed = new Set(result.errors.map(error => error.path))
   const names = new Set(loaded.map(file => file.persona.name.toLowerCase()))
+  const ids = new Set(loaded.map(file => file.persona.id))
   const kept = previous.filter(file => failed.has(file.path)
     && !loaded.some(other => other.path === file.path)
-    && !names.has(file.persona.name.toLowerCase()))
+    && !names.has(file.persona.name.toLowerCase())
+    && !ids.has(file.persona.id))
   const files = [...loaded, ...kept].sort(byPath)
   return {
     files,

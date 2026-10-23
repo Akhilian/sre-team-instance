@@ -17,9 +17,10 @@ services:
       # Fiches des PNJ lues dans un dossier (optionnel, disque persistant requis) : <dir>/<scénario>/<id>.md
       - key: NPC_PERSONAS_DIR
         sync: false
-      # Moteur de réponse des PNJ : keywords (défaut, sans modèle), openai-compatible ou anthropic (voir README)
+      # Moteur de réponse des PNJ : keywords (défaut du code si vide), openai-compatible ou anthropic (voir README).
+      # Saisi dans le tableau de bord : un blueprint ne réécrase pas le choix fait avant l'atelier.
       - key: NPC_ENGINE
-        value: keywords
+        sync: false
       # openai-compatible : URL publique ou auto-hébergée de l'API (/v1 compris), modèle et clé éventuelle
       - key: NPC_LLM_BASE_URL
         sync: false
