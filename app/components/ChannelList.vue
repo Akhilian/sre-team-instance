@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import type { Channel } from '~~/shared/types/chat'
 
-defineProps<{
+const props = defineProps<{
   channels: Channel[]
   currentId: string
+  /** Non-lus par id de canal ; vide au SSR et avant montage */
+  unread?: Record<string, number>
 }>()
+
+function unreadCount(channelId: string): number {
+  if (channelId === props.currentId) return 0
+  return props.unread?.[channelId] ?? 0
+}
 
 const emit = defineEmits<{
   created: [channel: Channel]
@@ -110,9 +117,18 @@ async function submit() {
           <NuxtLink
             :to="`/channels/${channel.id}`"
             class="channel-list__link"
-            :class="{ 'channel-list__link--active': channel.id === currentId }"
+            :class="{
+              'channel-list__link--active': channel.id === currentId,
+              'channel-list__link--unread': unreadCount(channel.id) > 0,
+            }"
           >
-            {{ channel.name }}
+            <span class="channel-list__name">{{ channel.name }}</span>
+            <span
+              v-if="unreadCount(channel.id) > 0"
+              class="channel-list__badge"
+              data-testid="unread-badge"
+              :aria-label="`${unreadCount(channel.id)} message(s) non lu(s)`"
+            >{{ unreadBadgeLabel(unreadCount(channel.id)) }}</span>
           </NuxtLink>
         </li>
       </ul>
@@ -253,7 +269,9 @@ async function submit() {
 }
 
 .channel-list__link {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 7px 12px 7px 54px;
   border-radius: 4px;
   color: var(--teams-text);
@@ -269,5 +287,31 @@ async function submit() {
   font-weight: 600;
   color: var(--teams-purple);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.channel-list__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-list__link--unread {
+  font-weight: 700;
+}
+
+.channel-list__badge {
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--teams-purple);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
 }
 </style>

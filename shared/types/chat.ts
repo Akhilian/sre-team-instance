@@ -4,6 +4,14 @@ export interface Channel {
   name: string
 }
 
+/** Canal avec de quoi calculer les non-lus côté client (GET /api/channels) */
+export interface ChannelSummary extends Channel {
+  /** Tous les messages du canal : racines, réponses et annonces */
+  messageCount: number
+  /** createdAt du message le plus récent ; null si le canal est vide */
+  lastMessageAt: string | null
+}
+
 export interface Message {
   id: string
   channelId: string

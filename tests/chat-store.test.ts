@@ -8,6 +8,7 @@ import {
   addChannel,
   addMessage,
   clearMessages,
+  listChannelSummaries,
   listChannels,
   listMessages,
   resetChatStore,
@@ -227,5 +228,46 @@ describe('addChannel', () => {
     const before = listChannels()
     expect(() => addChannel({ name: 'Incident base de donnees' })).toThrow(ChannelConflictError)
     expect(listChannels()).toEqual(before)
+  })
+})
+
+describe('listChannelSummaries', () => {
+  beforeEach(() => resetChatStore())
+
+  it('suit l\'ordre de listChannels avec les clés id, name, messageCount, lastMessageAt', () => {
+    addChannel({ name: 'Base de données' })
+    const summaries = listChannelSummaries()
+    expect(summaries.map(summary => summary.id)).toEqual(listChannels().map(channel => channel.id))
+    for (const summary of summaries) {
+      expect(Object.keys(summary)).toEqual(['id', 'name', 'messageCount', 'lastMessageAt'])
+    }
+  })
+
+  it('renvoie 0 et null pour un canal vide', () => {
+    const general = listChannelSummaries().find(summary => summary.id === 'general')
+    expect(general).toEqual({ id: 'general', name: 'Général', messageCount: 0, lastMessageAt: null })
+  })
+
+  it('compte racines et réponses, et date le plus récent', () => {
+    const root = addMessage('general', { author: 'Alice', text: 'Alerte' })
+    const reply = addMessage('general', { author: 'Bob', text: 'Je regarde', parentId: root.id })
+    const general = listChannelSummaries().find(summary => summary.id === 'general')!
+    expect(general.messageCount).toBe(2)
+    expect(general.lastMessageAt).toBe(reply.createdAt)
+    const incident = listChannelSummaries().find(summary => summary.id === 'incident-en-cours')!
+    expect(incident).toMatchObject({ messageCount: 0, lastMessageAt: null })
+  })
+
+  it('compte aussi les annonces', () => {
+    const announcement = addAnnouncement('incident-en-cours', { text: 'Début de l\'exercice' })
+    const incident = listChannelSummaries().find(summary => summary.id === 'incident-en-cours')!
+    expect(incident).toMatchObject({ messageCount: 1, lastMessageAt: announcement.createdAt })
+  })
+
+  it('revient à 0 et null après clearMessages', () => {
+    addMessage('general', { author: 'Alice', text: 'Alerte' })
+    clearMessages()
+    const general = listChannelSummaries().find(summary => summary.id === 'general')!
+    expect(general).toMatchObject({ messageCount: 0, lastMessageAt: null })
   })
 })

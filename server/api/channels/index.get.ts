@@ -1,1 +1,1 @@
-export default defineEventHandler(() => listChannels())
+export default defineEventHandler(() => listChannelSummaries())

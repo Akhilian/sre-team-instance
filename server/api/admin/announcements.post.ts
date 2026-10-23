@@ -4,9 +4,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: 'Code animateur invalide' })
   }
 
-  // Corps absent ou non-objet : traité comme une annonce vide, donc refusé en 400
+  // Corps absent, illisible ou non-objet (tableau compris) : 400 avant tout appel au store,
+  // qui vérifierait sinon le canal avant le texte (404)
   const body = await readBody(event).catch(() => null)
-  const input = body && typeof body === 'object' ? body : {}
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw createError({ statusCode: 400, message: 'Corps JSON attendu : { channelId, text }' })
+  }
+  const input = body as { channelId?: unknown, text?: unknown }
   const channelId = typeof input.channelId === 'string' ? input.channelId : ''
 
   try {

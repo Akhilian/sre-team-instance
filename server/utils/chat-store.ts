@@ -1,6 +1,6 @@
 // Store en mémoire des canaux et messages : une seule instance Render, pas de persistance.
 // Module pur (sans auto-import Nuxt) pour être testable directement avec Vitest.
-import type { Channel, Message } from '../../shared/types/chat'
+import type { Channel, ChannelSummary, Message } from '../../shared/types/chat'
 import { isReactionEmoji } from '../../shared/utils/reactions'
 
 export const AUTHOR_MAX_LENGTH = 50
@@ -60,6 +60,21 @@ resetChatStore()
 
 export function listChannels(): Channel[] {
   return channels.map(channel => ({ ...channel }))
+}
+
+/** Même ordre que listChannels, avec le nombre de messages et la date du plus récent. */
+export function listChannelSummaries(): ChannelSummary[] {
+  return channels.map((channel) => {
+    const messages = messagesByChannel.get(channel.id) ?? []
+    const last = messages[messages.length - 1]
+    // Ordre des clés fixe (id, name, messageCount, lastMessageAt) : il se retrouve dans le JSON
+    return {
+      id: channel.id,
+      name: channel.name,
+      messageCount: messages.length,
+      lastMessageAt: last ? last.createdAt : null,
+    }
+  })
 }
 
 export function hasChannel(channelId: string): boolean {

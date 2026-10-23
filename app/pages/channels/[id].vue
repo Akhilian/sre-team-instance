@@ -17,7 +17,29 @@ const { data: messages, refresh } = await useFetch<Message[]>(
   { default: () => [] },
 )
 
-useHead({ title: () => `${channel.value?.name ?? 'Canal'} | SRE Team Instance` })
+// Non-lus : calculés côté client seulement (localStorage), vides au SSR et avant montage
+const unread = ref<Record<string, number>>({})
+const mounted = ref(false)
+
+function updateUnread() {
+  if (!mounted.value || !channels.value) return
+  const seen = parseSeen(localStorage.getItem(LAST_SEEN_STORAGE_KEY))
+  const { counts, nextSeen } = computeUnread(channels.value, seen, channelId.value)
+  localStorage.setItem(LAST_SEEN_STORAGE_KEY, JSON.stringify(nextSeen))
+  unread.value = counts
+}
+
+// À chaque poll (nouvelle liste de canaux) et à chaque navigation entre canaux
+watch([channels, channelId], updateUnread)
+
+const unreadTotal = computed(() => totalUnread(unread.value, channelId.value))
+
+useHead({
+  title: () => {
+    const prefix = unreadTotal.value > 0 ? `(${unreadTotal.value}) ` : ''
+    return `${prefix}${channel.value?.name ?? 'Canal'} | SRE Team Instance`
+  },
+})
 
 const { displayName, loaded, setDisplayName } = useDisplayName()
 const editingName = ref(false)
@@ -62,6 +84,8 @@ async function onChannelCreated(created: Channel) {
 let pollTimer: ReturnType<typeof setInterval> | undefined
 
 onMounted(() => {
+  mounted.value = true
+  updateUnread()
   pollTimer = setInterval(() => {
     // Pas de requête en double si la précédente n'est pas encore revenue.
     // La liste des canaux suit aussi, pour voir les canaux créés ailleurs.
@@ -105,7 +129,7 @@ onBeforeUnmount(() => {
 
     <div class="teams__body">
       <AppBar />
-      <ChannelList :channels="channels ?? []" :current-id="channelId" @created="onChannelCreated" />
+      <ChannelList :channels="channels ?? []" :current-id="channelId" :unread="unread" @created="onChannelCreated" />
 
       <main class="channel">
         <header class="channel__header">
