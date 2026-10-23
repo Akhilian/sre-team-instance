@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Outils d'animateur (page non liée dans la navigation) : annonce et carte d'alerte dans un canal,
-// scénario d'incident pré-écrit, réinitialisation des conversations. Le code animateur est gardé dans le sessionStorage, envoyé en x-facilitator-code.
+// scénario d'incident pré-écrit, chronologie pour le post-mortem, réinitialisation des conversations. Le code animateur est gardé dans le sessionStorage, envoyé en x-facilitator-code.
 import type { Message } from '~~/shared/types/chat'
 import type { ScenarioRun, ScenarioSummary, ScenariosResponse } from '~~/shared/types/scenario'
 import type { AlertSeverity } from '~~/shared/utils/alerts'
@@ -41,9 +41,14 @@ const scenarioRun = ref<ScenarioRun | null>(null)
 let scenarioPollTimer: ReturnType<typeof setTimeout> | undefined
 let unmounted = false
 
+// Chronologie : '' = tous les canaux
+const timelineChannelId = ref('')
+const timelinePreview = ref<string | null>(null)
+
 onMounted(() => {
-  // Le watch sur code charge les scénarios si un code était mémorisé
   code.value = sessionStorage.getItem(FACILITATOR_CODE_STORAGE_KEY) ?? ''
+  // Scénarios chargés seulement si un code était mémorisé, pas à chaque frappe
+  if (code.value !== '') loadScenarios()
 })
 
 onBeforeUnmount(() => {
@@ -53,8 +58,12 @@ onBeforeUnmount(() => {
 
 watch(code, (value) => {
   sessionStorage.setItem(FACILITATOR_CODE_STORAGE_KEY, value)
-  loadScenarios()
 })
+
+/** Bouton « Valider le code » ou Entrée dans le champ : (re)charge les scénarios avec le code saisi. */
+function validateCode() {
+  return loadScenarios()
+}
 
 const canPublish = computed(() => !busy.value && code.value !== '' && channelId.value !== '' && text.value.trim() !== '')
 const canPublishAlert = computed(() => !busy.value && code.value !== '' && alertChannelId.value !== ''
@@ -62,6 +71,7 @@ const canPublishAlert = computed(() => !busy.value && code.value !== '' && alert
 const canReset = computed(() => !busy.value && code.value !== '')
 const scenarioRunning = computed(() => scenarioRun.value?.status === 'running')
 const canStartScenario = computed(() => !busy.value && code.value !== '' && !scenarioRunning.value)
+const canExportTimeline = computed(() => !busy.value && code.value !== '')
 
 function errorText(error: unknown): string {
   const { statusCode, data } = error as { statusCode?: number, data?: { message?: string } }
@@ -186,6 +196,45 @@ function channelName(id: string): string {
   return channels.value.find(channel => channel.id === id)?.name ?? id
 }
 
+function timelineFileName(): string {
+  return `chronologie-${timelineChannelId.value || 'tous'}.md`
+}
+
+function fetchTimelineMarkdown(): Promise<string> {
+  const query: Record<string, string> = { format: 'md' }
+  if (timelineChannelId.value !== '') query.channelId = timelineChannelId.value
+  return $fetch<string>('/api/admin/timeline', {
+    headers: { 'x-facilitator-code': code.value },
+    query,
+    responseType: 'text',
+  })
+}
+
+function showTimeline() {
+  if (!canExportTimeline.value) return
+  return run(async () => {
+    timelinePreview.value = await fetchTimelineMarkdown()
+    return 'Chronologie affichée.'
+  })
+}
+
+function downloadTimeline() {
+  if (!canExportTimeline.value) return
+  return run(async () => {
+    // Un simple lien ne transmettrait pas le header du code animateur : passage par un Blob
+    const markdown = await fetchTimelineMarkdown()
+    const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = timelineFileName()
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 0)
+    return `Chronologie téléchargée (${timelineFileName()}).`
+  })
+}
+
 function reset() {
   if (!canReset.value) return
   if (!confirm('Effacer les messages de tous les canaux ? Les canaux sont conservés.')) return
@@ -208,7 +257,7 @@ function reset() {
     <main class="admin__content">
       <h1>Outils d'animateur</h1>
 
-      <section class="card">
+      <form class="card" @submit.prevent="validateCode">
         <label for="facilitator-code">Code animateur</label>
         <input
           id="facilitator-code"
@@ -218,7 +267,12 @@ function reset() {
           autocomplete="off"
           placeholder="Code communiqué à l'animateur"
         >
-      </section>
+        <div class="card__actions">
+          <button type="submit" class="button button--primary" data-testid="facilitator-code-submit" :disabled="code === ''">
+            Valider le code
+          </button>
+        </div>
+      </form>
 
       <form class="card" @submit.prevent="publish">
         <h2>Publier une annonce</h2>
@@ -288,7 +342,7 @@ function reset() {
 
       <section class="card" data-testid="scenario-panel">
         <h2>Scénario d'incident</h2>
-        <p v-if="!scenarios">Saisissez le code animateur pour afficher les scénarios.</p>
+        <p v-if="!scenarios">Saisissez et validez le code animateur pour afficher les scénarios.</p>
         <ul v-else class="scenarios">
           <li v-for="scenario in scenarios" :key="scenario.id" class="scenario" :data-testid="`scenario-${scenario.id}`">
             <div class="scenario__info">
@@ -344,6 +398,25 @@ function reset() {
             </button>
           </div>
         </div>
+      </section>
+
+      <section class="card" data-testid="timeline-panel">
+        <h2>Chronologie (post-mortem)</h2>
+        <p>Messages, annonces et alertes horodatés, pour préparer le post-mortem.</p>
+        <label for="timeline-channel">Canal</label>
+        <select id="timeline-channel" v-model="timelineChannelId" data-testid="timeline-channel">
+          <option value="">Tous les canaux</option>
+          <option v-for="channel in channels" :key="channel.id" :value="channel.id">{{ channel.name }}</option>
+        </select>
+        <div class="card__actions">
+          <button type="button" class="button" data-testid="timeline-show" :disabled="!canExportTimeline" @click="showTimeline">
+            Afficher
+          </button>
+          <button type="button" class="button button--primary" data-testid="timeline-download" :disabled="!canExportTimeline" @click="downloadTimeline">
+            Télécharger .md
+          </button>
+        </div>
+        <pre v-if="timelinePreview !== null" class="timeline-preview" data-testid="timeline-preview">{{ timelinePreview }}</pre>
       </section>
 
       <section class="card">
@@ -457,12 +530,17 @@ function reset() {
 
 .card__actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 8px;
   margin-top: 8px;
 }
 
 .button {
   padding: 6px 18px;
+  border: 1px solid #d1d1d1;
+  background: #fff;
+  color: inherit;
   border-radius: 4px;
   font-weight: 600;
   cursor: pointer;
@@ -591,6 +669,20 @@ function reset() {
 
 .scenario-step__status--cancelled {
   text-decoration: line-through;
+}
+
+.timeline-preview {
+  max-width: 100%;
+  max-height: 360px;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: #fafafa;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
 }
 
 .admin__status {

@@ -22,17 +22,19 @@
 
 - 009 — Présence + « en train d'écrire » (0ca8480) : `server/utils/presence-store.ts` (horloge injectée, 15 s / 5 s), `POST /api/presence`, avatars empilés, `typingLabel` ; seul `typing:false` efface la frappe.
 
-## 010 — Interface utilisable sur petit écran (2026-10-23, commit 683d4b8)
-- Livré : sous 768 px, liste des canaux en tiroir (bouton menu `channel-panel-toggle`, voile, Échap, fermeture au clic sur un canal), barre d'applications 48 px, bulles pleine largeur, palette de réactions au-dessus du bouton, bouton de réaction toujours visible en tactile (`hover: none`) ; `min-width: 900px` supprimé ; annonce avec `channelId` absent → 400. Correctif : le bouton d'ajout de réaction n'apparaissait jamais au survol sur bureau (sélecteur `:global` mal compilé) → `.message:hover :deep(.reactions__add)` dans `MessageList.vue`. Vérifié dans Chrome (survol bureau ; iframe 375 px : pas de défilement horizontal, tiroir ouvert/fermé, navigation).
-- Décisions : `vite.build.cssTarget` fixé dans `nuxt.config.ts` (garde la syntaxe `max-width:767px` dans le CSS construit) ; `overflow-wrap: anywhere` sur les bulles.
-- Dette / suite : la palette du premier message peut être coupée en haut sur mobile ; pas de test HTTP automatisé des routes (vérifiées par curl). Suites possibles : statut de présence (disponible / occupé), scénario d'incident pré-écrit déclenchable par l'animateur.
+- 010 — Interface petit écran (683d4b8) : tiroir des canaux sous 768 px, barre 48 px, `vite.build.cssTarget` fixé, correctif survol réactions `.message:hover :deep(.reactions__add)`.
 
 ## 011 — Cartes d'alerte façon connecteur « Alerting » et acquittement (2026-10-23, commit e1dccbe)
 - Livré : `POST /api/admin/alerts` (code animateur ; `severity` SEV1/2/3, `title`, `service`, `text`) → message `kind: "alert"` signé « Alerting » ; `POST /api/channels/:id/messages/:messageId/alert-status {name, status: acknowledged|resolved}` ouvert à tous (409 si transition impossible) ; `AlertCard.vue` (bande colorée par sévérité, badge de statut, « Acquittée par … à … », boutons Acquitter / Résoudre) ; formulaire « Publier une alerte » dans `/admin`. Vérifié dans Chrome (acquittement local, résolution par un autre participant synchronisée, rendu 375 px sans débordement).
 - Décisions : règles de sévérité/statut/transitions dans `shared/utils/alerts.ts` (partagé front/serveur) ; changer le statut ne compte pas comme non-lu.
 - Dette / suite : toujours pas de test HTTP automatisé des routes. Suites possibles : scénario d'incident pré-écrit (suite d'alertes/annonces planifiées déclenchée par l'animateur), statut de présence.
 
-## 012 — Scénario d'incident pré-écrit, lancé par l'animateur (2026-10-23, commit à renseigner)
+## 012 — Scénario d'incident pré-écrit, lancé par l'animateur (2026-10-23, commit a2d57e6)
 - Livré : scénarios dans `server/scenarios/` (`panne-checkout` : 14 étapes sur 14 min, alertes checkout-api / orders-db / payment-gateway… et annonces Support / Direction / CTO, indice : déploiement v2.41.0 ; `demo-express` : 3 étapes en 6 s) ; exécuteur `server/utils/scenario-runner.ts` (planificateur + horloge injectables) ; `GET /api/admin/scenarios`, `POST /api/admin/scenarios/:id/start` (404 / 409), `POST /api/admin/scenarios/stop` (409 si rien) ; reset arrête le scénario ; panneau de progression dans `/admin` (polling 2 s). Vérifié dans Chrome (lancement de la démo, 3 étapes publiées, statut « Terminé »).
 - Décisions : un seul scénario à la fois ; une étape en échec n'interrompt pas les suivantes ; garde `run !== current` contre les timers d'un ancien run.
 - Dette / suite : `/admin` recharge la liste des scénarios à chaque frappe du code (401 en rafale) ; une erreur réseau ponctuelle masque le panneau. Suites possibles : statut de présence, export de la chronologie (timeline) pour le post-mortem.
+
+## 013 — Chronologie de l'incident pour le post-mortem (2026-10-23, commit à renseigner)
+- Livré : `buildTimeline` / `timelineToMarkdown` dans `shared/utils/timeline.ts` (messages, réponses, annonces, alertes déclenchées / acquittées / résolues, triés ; tableau Markdown avec heure Europe/Paris et `|` échappé) ; `GET /api/admin/timeline?channelId=…&format=json|md` (code animateur ; 401 / 404 / 400 ; `.md` en pièce jointe `chronologie-<canal>.md`) ; section « Chronologie (post-mortem) » dans `/admin` (aperçu défilant, « Télécharger .md »). Dette 012 corrigée : bouton « Valider le code », plus de requêtes à chaque frappe. Vérifié dans Chrome (aperçu tous canaux / incident, 0 requête avant validation, 375 px sans débordement).
+- Décisions : heure formatée avec `hourCycle: 'h23'` ; `format` contrôlé avant `channelId` ; `channelId` vide = tous les canaux.
+- Dette / suite : toujours pas de test HTTP automatisé. Prochaine feature pressentie : persistance légère des messages (fichier) pour survivre à un redémarrage Render ; puis rôles d'incident, bandeau d'état SEV/statut.
