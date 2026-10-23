@@ -1,4 +1,4 @@
-// Détection des mentions `@nom` dans le texte d'un message (sans auto-import Nuxt : testée directement par Vitest)
+// Détection des mentions `@nom` dans le texte d'un message, partagée par le front et le serveur (PNJ). Module pur, testé directement par Vitest
 
 export type MessageSegment =
   | { type: 'text', value: string }

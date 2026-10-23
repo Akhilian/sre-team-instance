@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Channel, ChannelSummary, Message, MessagesDelta } from '~~/shared/types/chat'
+import type { NpcsResponse } from '~~/shared/types/npc'
 import { CHANNEL_MESSAGES_MAX } from '~~/shared/utils/limits'
 import { mergeMessages } from '~/utils/messages'
 
@@ -26,6 +27,10 @@ const { data: messages } = await useFetch<Message[]>(
   () => `/api/channels/${channelId.value}/messages`,
   { default: () => [] },
 )
+
+// PNJ du scénario : leurs noms sont surlignés comme mentions avant même leur première réponse
+const { data: npcState } = await useFetch<NpcsResponse>('/api/npcs')
+const npcNames = computed(() => npcState.value?.npcs.map(npc => npc.name) ?? [])
 
 // Non-lus : calculés côté client seulement (localStorage), vides au SSR et avant montage
 const unread = ref<Record<string, number>>({})
@@ -362,7 +367,7 @@ onBeforeUnmount(() => {
           </div>
         </header>
 
-        <MessageList :messages="messages ?? []" :me="displayName" :reply="reply" :react="react" :set-alert-status="setAlertStatus" @typing="onTyping" />
+        <MessageList :messages="messages ?? []" :me="displayName" :npc-names="npcNames" :reply="reply" :react="react" :set-alert-status="setAlertStatus" @typing="onTyping" />
         <p class="typing-indicator" data-testid="typing-indicator" aria-live="polite">{{ typingText }}</p>
         <Composer :disabled="!displayName" :channel-name="channel?.name ?? ''" :send="send" @typing="onTyping" />
       </main>

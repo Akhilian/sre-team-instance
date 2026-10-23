@@ -29,3 +29,13 @@ export const WRITE_RATE_LIMIT = 120
 export const WRITE_RATE_IP_LIMIT = 600
 /** Durée de la fenêtre fixe du limiteur de débit */
 export const WRITE_RATE_WINDOW_MS = 10_000
+
+// PNJ (phase 2) : réponses courtes et bornées, quel que soit le moteur (keywords ou, plus tard, un modèle)
+/** Longueur maximale d'une réponse de PNJ : tronquée au-delà */
+export const NPC_REPLY_MAX_LENGTH = 600
+/** PNJ distincts qui répondent à un même message (mentions suivantes ignorées) */
+export const NPC_MENTIONS_PER_MESSAGE_MAX = 3
+/** Réponses d'un même PNJ par minute glissante : il se tait au-delà */
+export const NPC_REPLIES_PER_NPC_PER_MINUTE = 6
+/** Réponses de tous les PNJ par minute glissante : ils se taisent au-delà */
+export const NPC_REPLIES_PER_MINUTE = 20

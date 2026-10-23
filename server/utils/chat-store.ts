@@ -15,6 +15,7 @@ import {
   CHANNELS_MAX,
   CHANNEL_MESSAGES_MAX,
   CHANNEL_NAME_MAX_LENGTH,
+  NPC_REPLY_MAX_LENGTH,
   REACTION_AUTHORS_MAX,
   TEXT_MAX_LENGTH,
 } from '../../shared/utils/limits'
@@ -179,6 +180,7 @@ function copyMessage(message: Message): Message {
     copy.reactions = message.reactions.map(reaction => ({ emoji: reaction.emoji, authors: [...reaction.authors] }))
   }
   if (message.alert) copy.alert = { ...message.alert }
+  if (message.npc) copy.npc = { ...message.npc }
   return copy
 }
 
@@ -267,6 +269,44 @@ export function addMessage(
     rev: 0,
   }
   // Les racines restent sans champ parentId
+  if (parentId !== undefined) message.parentId = parentId
+  pushMessage(messages, message)
+  notifyChange()
+  return copyMessage(message)
+}
+
+/** Texte ramené à maxLength caractères au plus, points de suspension compris */
+export function truncateText(text: string, maxLength: number): string {
+  const chars = [...text]
+  return chars.length <= maxLength ? text : `${chars.slice(0, maxLength - 1).join('').trimEnd()}…`
+}
+
+/**
+ * Réponse d'un PNJ, publiée par le serveur (jamais via le corps HTTP) : signée de son nom, marquée npc,
+ * dans le fil parentId (racine du même canal). Texte tronqué à NPC_REPLY_MAX_LENGTH ; même plafond FIFO
+ * et même curseur rev que les autres messages, pour apparaître dans les deltas du polling.
+ */
+export function addNpcMessage(
+  channelId: string,
+  input: { npc: { id: string, name: string, role: string }, text: string, parentId?: string },
+): Message {
+  const messages = messagesByChannel.get(channelId)
+  if (!messages) throw new ChannelNotFoundError(channelId)
+
+  const author = requireText(input.npc.name, 'author', AUTHOR_MAX_LENGTH)
+  const raw = typeof input.text === 'string' ? input.text.trim() : ''
+  const text = requireText(truncateText(raw, Math.min(NPC_REPLY_MAX_LENGTH, TEXT_MAX_LENGTH)), 'text', TEXT_MAX_LENGTH)
+  const parentId = input.parentId === undefined ? undefined : requireParentId(input.parentId, messages)
+
+  const message: Message = {
+    id: crypto.randomUUID(),
+    channelId,
+    author,
+    text,
+    createdAt: new Date().toISOString(),
+    rev: 0,
+    npc: { id: input.npc.id, role: input.npc.role },
+  }
   if (parentId !== undefined) message.parentId = parentId
   pushMessage(messages, message)
   notifyChange()
@@ -521,6 +561,11 @@ function isValidAlert(value: unknown): boolean {
   return isRecord(value) && isAlertSeverity(value.severity) && isAlertStatus(value.status)
 }
 
+/** Signature de PNJ : id et rôle en chaînes */
+function isValidNpc(value: unknown): boolean {
+  return isRecord(value) && typeof value.id === 'string' && typeof value.role === 'string'
+}
+
 /** En v2, Message.rev est obligatoire ; en v1 il est absent et attribué à l'import. */
 function isValidMessage(value: unknown, channelId: string, withRev: boolean): value is Message {
   return isRecord(value)
@@ -532,6 +577,7 @@ function isValidMessage(value: unknown, channelId: string, withRev: boolean): va
     && typeof value.createdAt === 'string'
     && (value.reactions === undefined || (Array.isArray(value.reactions) && value.reactions.every(isValidReaction)))
     && (value.alert === undefined || isValidAlert(value.alert))
+    && (value.npc === undefined || isValidNpc(value.npc))
 }
 
 /**

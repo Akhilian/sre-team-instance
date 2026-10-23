@@ -14,3 +14,6 @@ services:
       # Persistance des conversations (optionnelle) : URL d'un Redis externe (Render Key Value, Upstash…)
       - key: REDIS_URL
         sync: false
+      # Moteur de réponse des PNJ : keywords (défaut, sans modèle)
+      - key: NPC_ENGINE
+        value: keywords

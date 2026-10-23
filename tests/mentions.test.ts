@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mentionsName, splitMentions } from '../app/utils/mentions'
+import { mentionsName, splitMentions } from '../shared/utils/mentions'
 
 const names = ['Alice', 'Alice Martin', 'Bob']
 

@@ -8,7 +8,7 @@ import { resolve } from 'node:path'
 const ENTRY = resolve(import.meta.dirname, '../../.output/server/index.mjs')
 
 // Variables héritées qui changeraient le comportement testé (Vitest fixe NODE_ENV=test)
-const CLEARED = ['NODE_ENV', 'FACILITATOR_CODE', 'REDIS_URL', 'CHAT_DATA_DIR', 'PORT', 'NITRO_PORT', 'HOST', 'NITRO_HOST']
+const CLEARED = ['NODE_ENV', 'FACILITATOR_CODE', 'REDIS_URL', 'CHAT_DATA_DIR', 'PORT', 'NITRO_PORT', 'HOST', 'NITRO_HOST', 'NPC_ENGINE', 'NPC_REPLY_DELAY_MS']
 
 export interface TestServer {
   url: string

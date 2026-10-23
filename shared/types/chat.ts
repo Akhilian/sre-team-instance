@@ -33,6 +33,14 @@ export interface Message {
   kind?: 'announcement' | 'alert'
   /** Détails de l'alerte, présent seulement quand kind === 'alert' ; text en est la description */
   alert?: Alert
+  /** Présent seulement sur la réponse d'un PNJ (posé par le serveur, jamais par le corps HTTP) */
+  npc?: MessageNpc
+}
+
+/** Signature d'un message de PNJ : author porte son nom */
+export interface MessageNpc {
+  id: string
+  role: string
 }
 
 /** Réponse de GET /api/channels/:id/messages?since=<rev> */

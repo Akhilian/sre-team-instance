@@ -11,6 +11,10 @@ export default defineNuxtConfig({
       cssTarget: ['chrome100', 'edge100', 'firefox100', 'safari15'],
     },
   },
+  nitro: {
+    // Fiches des PNJ (Markdown) embarquées dans le build, lues par useStorage('assets:npc')
+    serverAssets: [{ baseName: 'npc', dir: 'npc/personas' }],
+  },
   app: {
     head: {
       htmlAttrs: { lang: 'fr' },

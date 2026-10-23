@@ -5,10 +5,11 @@ Application full-stack [Nuxt 4](https://nuxt.com/docs) : front Vue et API dans l
 ## Structure
 
 - `app/` : front façon Teams (pages dans `app/pages/` : `/` redirige vers le canal d'incident, `/channels/:id` affiche le fil avec rafraîchissement toutes les 3 s ; composants dans `app/components/`, nom d'affichage mémorisé dans le `localStorage`)
-- `server/api/` : back-end (routes API Nitro, ex. `GET /api/health`, `GET /api/channels`, `GET|POST /api/channels/:id/messages`, `POST /api/channels/:id/messages/:messageId/reactions`, `POST /api/channels/:id/messages/:messageId/alert-status` (acquitter / résoudre une alerte), `POST /api/presence` (présence et frappe, en mémoire), et pour l'animateur `POST /api/admin/announcements`, `POST /api/admin/alerts`, `POST /api/admin/reset` et les scénarios `GET /api/admin/scenarios`, `POST /api/admin/scenarios/:id/start`, `POST /api/admin/scenarios/stop`)
+- `server/api/` : back-end (routes API Nitro, ex. `GET /api/health`, `GET /api/channels`, `GET|POST /api/channels/:id/messages`, `POST /api/channels/:id/messages/:messageId/reactions`, `POST /api/channels/:id/messages/:messageId/alert-status` (acquitter / résoudre une alerte), `POST /api/presence` (présence et frappe, en mémoire), `GET /api/npcs`, et pour l'animateur `GET|POST /api/admin/npcs`, `POST /api/admin/announcements`, `POST /api/admin/alerts`, `POST /api/admin/reset` et les scénarios `GET /api/admin/scenarios`, `POST /api/admin/scenarios/:id/start`, `POST /api/admin/scenarios/stop`)
 - `server/utils/` : logique serveur (store en mémoire des canaux et messages, persistance de l'instantané, exécuteur de scénarios)
 - `server/plugins/`, `server/middleware/` : branchement de la persistance (réhydratation au démarrage, attente avant les routes `/api/`)
 - `server/scenarios/` : scénarios d'incident pré-écrits (un fichier TypeScript par scénario, déclaré dans `index.ts`)
+- `server/npc/` : personnages non joueurs (fiches Markdown dans `personas/<scénario>/`, retriever, moteurs de réponse, orchestrateur)
 - `shared/types/` : types partagés front / API
 - `tests/` : tests unitaires Vitest ; `tests/http/` : tests HTTP contre le build (`npm run test:http`)
 - `public/` : fichiers statiques
@@ -65,6 +66,35 @@ Plafonds fixes, regroupés dans `shared/utils/limits.ts` :
 | canaux | 30 | 409 |
 | participants présents (noms actifs) | 200 | 429 |
 | auteurs par réaction | 100 | 409 |
+| réponse d'un PNJ | 600 caractères | tronquée |
+| PNJ qui répondent à un même message | 3 | mentions suivantes ignorées |
+| réponses de PNJ par minute glissante | 6 par PNJ, 20 au total | le PNJ se tait, sans erreur |
+
+## Personnages non joueurs (PNJ)
+
+Le scénario `panne-checkout` est accompagné de 4 PNJ, qui détiennent chacun une part de l'information :
+Sarah Benali (support client N1), Claire Dumont (CEO), Marc Lefort (CFO) et Julien Moreau (Release
+Manager de l'équipe Paiements, seul à connaître le déploiement récent). Un participant les interroge
+en les mentionnant (`@Julien Moreau quel déploiement récent ?`) : chaque PNJ mentionné répond dans le
+fil du message après 1 à 2 s, avec le badge « PNJ ». Leurs noms sont réservés (un message signé d'un
+nom de PNJ est refusé en 400), et ils ne répondent jamais à un autre PNJ, à une annonce ni à une alerte.
+
+- **Activation** : lancer `panne-checkout` depuis `/admin` active ses PNJ ; l'interrupteur « PNJ actifs »
+  de `/admin` (`POST /api/admin/npcs {enabled}`, code animateur) les coupe ou les rallume ; « Tout
+  réinitialiser » les coupe. L'état est en mémoire seulement (PNJ coupés au redémarrage).
+  `GET /api/npcs` (public) renvoie `{ enabled, npcs: [{ id, name, role }] }`.
+- **Fiches** : un fichier Markdown par PNJ dans `server/npc/personas/<scénario>/<id>.md`, modifiable dans
+  n'importe quel éditeur ; front-matter `clé: valeur` (`id`, `name`, `role`, `scenario`, `tone` = phrase
+  d'ouverture, `deflection` = réponse quand il n'a rien d'utile), puis les sections `## Sait`, `## Ignore`
+  et `## Sur question précise` (puces `- [mots: rollback, v2.40.3] texte`, livrées seulement si la
+  question contient l'un de ces mots). Les fiches sont embarquées au build : relancer `npm run build`
+  après une modification. Une fiche invalide est écartée avec une erreur dans les logs.
+- **Moteur** (`NPC_ENGINE`, défaut `keywords`) : `keywords` répond sans modèle, de façon déterministe, par
+  la phrase de ton suivie des 2 extraits de la fiche les plus proches de la question (recouvrement de
+  mots). Une valeur inconnue retombe sur `keywords` avec un avertissement. Un autre fournisseur
+  s'ajoute par un fichier d'adaptateur dans `server/npc/engines/` et une ligne dans `NPC_ENGINES`.
+  `GET /api/health` indique le moteur en service (`npcEngine`).
+- **Délai** : `NPC_REPLY_DELAY_MS` fixe le délai avant réponse en millisecondes (défaut : tiré entre 1 et 2 s).
 
 ## Persistance des conversations
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { isMe, splitMentions } from '~/utils/mentions'
+import { isMe, splitMentions } from '~~/shared/utils/mentions'
 
 const props = defineProps<{
   text: string

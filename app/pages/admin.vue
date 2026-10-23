@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Outils d'animateur (page non liée dans la navigation) : annonce et carte d'alerte dans un canal,
-// scénario d'incident pré-écrit, chronologie pour le post-mortem, réinitialisation des conversations. Le code animateur est gardé dans le sessionStorage, envoyé en x-facilitator-code.
+// scénario d'incident pré-écrit, PNJ, chronologie pour le post-mortem, réinitialisation des conversations. Le code animateur est gardé dans le sessionStorage, envoyé en x-facilitator-code.
 import type { Message } from '~~/shared/types/chat'
+import type { NpcAdminState } from '~~/shared/types/npc'
 import type { ScenarioRun, ScenarioSummary, ScenariosResponse } from '~~/shared/types/scenario'
 import type { AlertSeverity } from '~~/shared/utils/alerts'
 import {
@@ -41,6 +42,9 @@ const scenarioRun = ref<ScenarioRun | null>(null)
 let scenarioPollTimer: ReturnType<typeof setTimeout> | undefined
 let unmounted = false
 
+// PNJ : état chargé avec le code animateur, comme les scénarios
+const npcState = ref<NpcAdminState | null>(null)
+
 // Chronologie : '' = tous les canaux
 const timelineChannelId = ref('')
 const timelinePreview = ref<string | null>(null)
@@ -57,7 +61,7 @@ function onVisibilityChange() {
 onMounted(() => {
   code.value = sessionStorage.getItem(FACILITATOR_CODE_STORAGE_KEY) ?? ''
   // Scénarios chargés seulement si un code était mémorisé, pas à chaque frappe
-  if (code.value !== '') loadScenarios()
+  if (code.value !== '') validateCode()
   window.addEventListener('focus', onWindowFocus)
   document.addEventListener('visibilitychange', onVisibilityChange)
 })
@@ -73,9 +77,9 @@ watch(code, (value) => {
   sessionStorage.setItem(FACILITATOR_CODE_STORAGE_KEY, value)
 })
 
-/** Bouton « Valider le code » ou Entrée dans le champ : (re)charge les scénarios avec le code saisi. */
+/** Bouton « Valider le code » ou Entrée dans le champ : (re)charge les scénarios et les PNJ avec le code saisi. */
 function validateCode() {
-  return loadScenarios()
+  return Promise.all([loadScenarios(), loadNpcs()])
 }
 
 const canPublish = computed(() => !busy.value && code.value !== '' && channelId.value !== '' && text.value.trim() !== '')
@@ -174,6 +178,43 @@ async function loadScenarios() {
   }
 }
 
+async function loadNpcs() {
+  const requestCode = code.value
+  if (requestCode === '') {
+    npcState.value = null
+    return
+  }
+  try {
+    const state = await $fetch<NpcAdminState>('/api/admin/npcs', { headers: { 'x-facilitator-code': requestCode } })
+    if (requestCode === code.value && !unmounted) npcState.value = state
+  }
+  catch {
+    if (requestCode === code.value && !unmounted) npcState.value = null
+  }
+}
+
+/** Interrupteur « PNJ actifs » : l'état affiché est celui renvoyé par le serveur */
+function setNpcsEnabled(event: Event) {
+  const input = event.target as HTMLInputElement
+  const enabled = input.checked
+  return run(async () => {
+    try {
+      npcState.value = await $fetch<NpcAdminState>('/api/admin/npcs', {
+        method: 'POST',
+        headers: { 'x-facilitator-code': code.value },
+        body: { enabled },
+      })
+    }
+    catch (error) {
+      // Case remise dans l'état réel du serveur (Vue ne repatche pas checked si l'état n'a pas changé)
+      await loadNpcs()
+      input.checked = npcState.value?.enabled ?? !enabled
+      throw error
+    }
+    return enabled ? 'PNJ activés : ils répondent quand on les mentionne.' : 'PNJ coupés : ils ne répondent plus.'
+  })
+}
+
 function startScenario(scenario: ScenarioSummary) {
   if (!canStartScenario.value) return
   return run(async () => {
@@ -182,6 +223,8 @@ function startScenario(scenario: ScenarioSummary) {
       headers: { 'x-facilitator-code': code.value },
     })
     setScenarioRun(state)
+    // Le lancement active les PNJ du scénario
+    await loadNpcs()
     return `Scénario « ${scenario.title} » lancé.`
   })
 }
@@ -265,8 +308,8 @@ function reset(scope: ResetScope) {
   if (!confirm(RESET_CONFIRMATIONS[scope])) return
   return run(async () => {
     await $fetch('/api/admin/reset', { method: 'POST', headers: { 'x-facilitator-code': code.value }, body: { scope } })
-    // La réinitialisation arrête aussi le scénario en cours
-    await loadScenarios()
+    // La réinitialisation arrête aussi le scénario en cours (et coupe les PNJ si scope all)
+    await Promise.all([loadScenarios(), loadNpcs()])
     if (scope === 'all') {
       // Canaux des participants supprimés : les sélections qui les visaient reviennent au canal d'incident
       await refreshChannels()
@@ -431,6 +474,27 @@ function reset(scope: ResetScope) {
             </button>
           </div>
         </div>
+      </section>
+
+      <section class="card" data-testid="npc-panel">
+        <h2>Personnages (PNJ)</h2>
+        <p v-if="!npcState">Saisissez et validez le code animateur pour afficher les PNJ.</p>
+        <template v-else>
+          <p>Mentionnés par <strong>@Nom</strong>, ils répondent dans le fil après quelques secondes (moteur {{ npcState.engine }}). Lancer le scénario les active, « Tout réinitialiser » les coupe.</p>
+          <label class="switch">
+            <input
+              type="checkbox"
+              data-testid="npc-toggle"
+              :checked="npcState.enabled"
+              :disabled="busy || code === '' || npcState.npcs.length === 0"
+              @change="setNpcsEnabled"
+            >
+            PNJ actifs
+          </label>
+          <ul class="npcs" data-testid="npc-list">
+            <li v-for="npc in npcState.npcs" :key="npc.id"><strong>{{ npc.name }}</strong> · {{ npc.role }}</li>
+          </ul>
+        </template>
       </section>
 
       <section class="card" data-testid="timeline-panel">
@@ -608,6 +672,25 @@ function reset(scope: ResetScope) {
   background: #f0f0f0;
   color: #bdbdbd;
   cursor: default;
+}
+
+.card .switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  cursor: pointer;
+}
+
+.card .switch input {
+  width: auto;
+  accent-color: var(--teams-purple);
+}
+
+.npcs {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--teams-text-muted);
 }
 
 .scenarios,

@@ -1,0 +1,30 @@
+---
+id: support-n1
+name: Sarah Benali
+role: Support client N1
+scenario: panne-checkout
+tone: Sarah, support N1. Voilà ce qui remonte des clients :
+deflection: Je n'ai pas cette info : moi, je n'ai que ce que les clients nous racontent. Demandez-moi les symptômes ou les tickets, je vous dis tout.
+---
+
+# Sarah Benali — Support client N1
+
+Première à voir l'incident, au contact des clients. Inquiète, concrète, elle veut surtout savoir
+quoi leur répondre.
+
+## Sait
+- Les clients restent bloqués à l'étape paiement : le bouton « Payer » tourne longtemps, puis affiche « erreur technique, réessayez plus tard ».
+- On a reçu 40 tickets en 10 minutes et le rythme augmente. Le chat en ligne a 25 clients en attente.
+- Les clients qui arrivent à payer ne reçoivent pas leur e-mail de confirmation tout de suite et nous demandent si leur commande est bien passée.
+- Les plaintes viennent de partout, ordinateur comme mobile : ce n'est pas lié à un navigateur ou à une application.
+
+## Ignore
+- La cause technique : je vois les symptômes, pas les serveurs.
+- Les mises en production ou changements récents : le support n'est jamais prévenu.
+- Ce qu'on a le droit de promettre aux clients tant qu'on n'a pas de message validé.
+
+## Sur question précise
+- [mots: début, depuis quand, commencé, premier ticket, heure] Le premier ticket « paiement impossible » est arrivé à peu près en même temps que votre première alerte de latence. Avant, rien d'anormal de la journée.
+- [mots: double, deux fois, débit, débité, débités, remboursement, prélevé, prélèvement] Trois clients disent avoir été débités deux fois pour la même commande. Je n'ai pas pu vérifier, mais leurs captures montrent deux lignes à quelques secondes d'écart.
+- [mots: moyen de paiement, carte, cadeau, paypal, mode de paiement] Les paiements par carte cadeau passent normalement. Ce sont les paiements par carte bancaire qui échouent ou tournent dans le vide.
+- [mots: répondre, réponse, macro, message, communication, quoi dire] Pour l'instant, on répond avec une macro générique « incident en cours, réessayez plus tard ». Il me faut un message validé et une heure de retour estimée pour les clients qui relancent.
