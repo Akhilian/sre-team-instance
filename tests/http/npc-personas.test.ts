@@ -72,7 +72,7 @@ describe('NPC_PERSONAS_DIR (025 CA3, CA4)', () => {
     const state = await response.json() as NpcPersonasAdminState
     expect(state.source).toBe('dir')
     expect(state.personas).toHaveLength(6)
-    expect(Object.keys(state.personas[0]!).sort()).toEqual(['id', 'markdown', 'name', 'path', 'role', 'scenarioId'])
+    expect(Object.keys(state.personas[0]!).sort()).toEqual(['id', 'markdown', 'modified', 'name', 'path', 'role', 'scenarioId'])
     const julien = state.personas.find(entry => entry.id === 'release-manager')
     expect(julien).toMatchObject({ path: 'panne-checkout/release-manager.md', name: 'Julien Moreau', scenarioId: 'panne-checkout' })
     expect(julien!.markdown).toContain('MARQUEUR-A')

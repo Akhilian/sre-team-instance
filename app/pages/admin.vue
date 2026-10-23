@@ -2,7 +2,14 @@
 // Outils d'animateur (page non liée dans la navigation) : annonce et carte d'alerte dans un canal,
 // scénario d'incident pré-écrit, PNJ, chronologie pour le post-mortem, réinitialisation des conversations. Le code animateur est gardé dans le sessionStorage, envoyé en x-facilitator-code.
 import type { Message } from '~~/shared/types/chat'
-import type { NpcAdminState, NpcPersonaReloadReport, NpcPersonasAdminState } from '~~/shared/types/npc'
+import type {
+  NpcAdminState,
+  NpcPersonaEditError,
+  NpcPersonaEditErrorResponse,
+  NpcPersonaFileSummary,
+  NpcPersonaReloadReport,
+  NpcPersonasAdminState,
+} from '~~/shared/types/npc'
 import type { ScenarioRun, ScenarioSummary, ScenariosResponse } from '~~/shared/types/scenario'
 import type { AlertSeverity } from '~~/shared/utils/alerts'
 import {
@@ -52,6 +59,10 @@ const PERSONA_SOURCE_LABELS = {
   dir: 'dossier NPC_PERSONAS_DIR',
   embedded: 'fiches embarquées au build',
 } as const
+// Édition en ligne d'une fiche (une à la fois) : chemin, saisie en cours et erreurs de la dernière validation
+const editingPath = ref<string | null>(null)
+const personaDraft = ref('')
+const personaErrors = ref<NpcPersonaEditError[]>([])
 
 // Chronologie : '' = tous les canaux
 const timelineChannelId = ref('')
@@ -236,6 +247,70 @@ function reloadPersonas() {
     if (!replaced) return 'Aucune fiche valide : les fiches en cours sont conservées.'
     return `${report.loaded.length} fiche(s) rechargée(s), ${report.errors.length} en erreur.`
   })
+}
+
+/** « Modifier » : ouvre l'éditeur pré-rempli avec le Markdown en service (ferme l'éditeur précédent) */
+function startPersonaEdit(persona: NpcPersonaFileSummary) {
+  editingPath.value = persona.path
+  personaDraft.value = persona.markdown
+  personaErrors.value = []
+}
+
+function cancelPersonaEdit() {
+  editingPath.value = null
+  personaDraft.value = ''
+  personaErrors.value = []
+}
+
+/** « Valider et appliquer » : 422 = fiche refusée, erreurs affichées une par ligne, rien n'a changé */
+function savePersonaEdit(persona: NpcPersonaFileSummary) {
+  if (busy.value || code.value === '' || editingPath.value !== persona.path) return
+  return run(async () => {
+    personaErrors.value = []
+    try {
+      await $fetch<NpcPersonaFileSummary>('/api/admin/npc-personas/edit', {
+        method: 'PUT',
+        headers: { 'x-facilitator-code': code.value },
+        body: { path: persona.path, markdown: personaDraft.value },
+      })
+    }
+    catch (error) {
+      const { statusCode, data } = error as { statusCode?: number, data?: NpcPersonaEditErrorResponse }
+      if (statusCode !== 422 || !data?.errors) throw error
+      personaErrors.value = data.errors
+      throw Object.assign(new Error('Fiche refusée'), { data: { message: `Fiche ${persona.path} refusée : rien n'a changé.` } })
+    }
+    cancelPersonaEdit()
+    await loadNpcs()
+    return `Fiche ${persona.path} modifiée et appliquée (en mémoire).`
+  })
+}
+
+/** « Revenir à l'original » : supprime la version modifiée, la fiche de la source reprend sa place */
+function revertPersona(persona: NpcPersonaFileSummary) {
+  if (busy.value || code.value === '') return
+  return run(async () => {
+    await $fetch<NpcPersonaFileSummary>('/api/admin/npc-personas/revert', {
+      method: 'POST',
+      headers: { 'x-facilitator-code': code.value },
+      body: { path: persona.path },
+    })
+    if (editingPath.value === persona.path) cancelPersonaEdit()
+    await loadNpcs()
+    return `Fiche ${persona.path} revenue à l'original.`
+  })
+}
+
+/** « Télécharger .md » : la saisie en cours, via un Blob (aucun script inline, compatible CSP) */
+function downloadPersonaDraft(persona: NpcPersonaFileSummary) {
+  const url = URL.createObjectURL(new Blob([personaDraft.value], { type: 'text/markdown;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${persona.id}.md`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 /** Interrupteur « PNJ actifs » : l'état affiché est celui renvoyé par le serveur */
@@ -542,10 +617,49 @@ function reset(scope: ResetScope) {
           <template v-if="personasState">
             <h3 class="personas__title">Fiches</h3>
             <p data-testid="npc-personas-source">Source : {{ PERSONA_SOURCE_LABELS[personasState.source] }} ({{ personasState.personas.length }} fiche(s)).</p>
-            <!-- Texte source affiché tel quel par interpolation (HTML échappé, jamais interprété) -->
-            <details v-for="persona in personasState.personas" :key="persona.path" class="persona" data-testid="npc-persona">
-              <summary><strong>{{ persona.name }}</strong> · {{ persona.role }} <code>{{ persona.path }}</code></summary>
-              <pre class="persona__markdown" data-testid="npc-persona-markdown">{{ persona.markdown }}</pre>
+            <p class="personas__note" data-testid="npc-personas-memory">Modifications en mémoire : perdues au redémarrage du serveur, téléchargez le .md pour les garder.</p>
+            <!-- Texte source affiché tel quel par interpolation ou v-model (HTML échappé, jamais interprété) -->
+            <details v-for="persona in personasState.personas" :key="persona.path" class="persona" data-testid="npc-persona" :open="editingPath === persona.path || undefined">
+              <summary>
+                <strong>{{ persona.name }}</strong> · {{ persona.role }} <code>{{ persona.path }}</code>
+                <span v-if="persona.modified" class="persona__badge" data-testid="npc-persona-modified">Modifiée</span>
+              </summary>
+              <template v-if="editingPath === persona.path">
+                <label class="persona__label" :for="`persona-editor-${persona.id}`">Markdown de la fiche</label>
+                <textarea
+                  :id="`persona-editor-${persona.id}`"
+                  v-model="personaDraft"
+                  class="persona__editor"
+                  data-testid="npc-persona-editor"
+                  rows="20"
+                  spellcheck="false"
+                />
+                <ul v-if="personaErrors.length > 0" class="reload-report__errors" data-testid="npc-persona-errors">
+                  <li v-for="(error, index) in personaErrors" :key="index" data-testid="npc-persona-error">{{ error.message }}</li>
+                </ul>
+                <div class="card__actions">
+                  <button type="button" class="button button--primary" data-testid="npc-persona-save" :disabled="busy || code === ''" @click="savePersonaEdit(persona)">
+                    Valider et appliquer
+                  </button>
+                  <button type="button" class="button" data-testid="npc-persona-download" @click="downloadPersonaDraft(persona)">
+                    Télécharger .md
+                  </button>
+                  <button type="button" class="button" data-testid="npc-persona-cancel" :disabled="busy" @click="cancelPersonaEdit">
+                    Annuler
+                  </button>
+                </div>
+              </template>
+              <template v-else>
+                <pre class="persona__markdown" data-testid="npc-persona-markdown">{{ persona.markdown }}</pre>
+                <div class="card__actions">
+                  <button type="button" class="button" data-testid="npc-persona-edit" :disabled="busy || code === ''" @click="startPersonaEdit(persona)">
+                    Modifier
+                  </button>
+                  <button v-if="persona.modified" type="button" class="button" data-testid="npc-persona-revert" :disabled="busy || code === ''" @click="revertPersona(persona)">
+                    Revenir à l'original
+                  </button>
+                </div>
+              </template>
             </details>
           </template>
           <div class="card__actions">
@@ -793,6 +907,33 @@ function reset(scope: ResetScope) {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 12px;
+}
+
+.personas__note {
+  color: var(--teams-text-muted);
+  font-size: 13px;
+}
+
+.persona__badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #fff4ce;
+  color: #8a5300;
+  font-size: 12px;
+}
+
+.persona__label {
+  display: block;
+  margin-top: 8px;
+}
+
+.persona__editor {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  white-space: pre;
 }
 
 .reload-report__errors {

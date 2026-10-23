@@ -74,7 +74,7 @@ function byteLength(text: string): number {
 }
 
 /** Tri par chemin, en ordre des unités de code (indépendant de la locale) */
-function byPath(a: { path: string }, b: { path: string }): number {
+export function byPath(a: { path: string }, b: { path: string }): number {
   return a.path < b.path ? -1 : a.path > b.path ? 1 : 0
 }
 
@@ -84,8 +84,32 @@ function isInside(root: string, real: string): boolean {
 }
 
 /**
- * Lit, parse et valide les candidats dans l'ordre (triés par chemin) : taille, parseur, id et scénario
- * égaux au chemin, nom libre (casse ignorée). Au plus PERSONA_FILES_MAX fiches lues.
+ * Valide une fiche de chemin path : taille, parseur, id et scénario égaux au chemin, nom libre parmi others
+ * (casse ignorée). Lève PersonaParseError (avec sa ligne éventuelle) ou une erreur de message explicite.
+ * Commune à la lecture des sources et à l'édition en ligne (026).
+ */
+export function checkPersonaFile(path: string, markdown: string, others: readonly PersonaFile[]): PersonaFile {
+  if (byteLength(markdown) > PERSONA_FILE_MAX_BYTES) {
+    throw new PersonaSourceError(`fiche de plus de ${PERSONA_FILE_MAX_BYTES / 1024} Ko`)
+  }
+  const persona = parsePersona(markdown, path)
+  if (`${persona.scenarioId}/${persona.id}.md` !== path) {
+    throw new PersonaSourceError(`id « ${persona.id} » ou scénario « ${persona.scenarioId} » différent du chemin`)
+  }
+  const taken = others.find(other => other.path !== path && other.persona.name.toLowerCase() === persona.name.toLowerCase())
+  if (taken) throw new PersonaSourceError(`nom « ${persona.name} » déjà pris par ${taken.path}`)
+  return { path, markdown, persona }
+}
+
+/** Message d'erreur d'une fiche, préfixé « Fiche PNJ <chemin> : » (déjà fait par le parseur) */
+export function personaErrorMessage(path: string, error: unknown): string {
+  const message = errorMessage(error)
+  return message.startsWith('Fiche PNJ ') ? message : `Fiche PNJ ${path} : ${message}`
+}
+
+/**
+ * Lit, parse et valide les candidats dans l'ordre (triés par chemin) avec checkPersonaFile. Au plus
+ * PERSONA_FILES_MAX fiches lues.
  */
 async function validateCandidates(candidates: PersonaCandidate[], errors: PersonaLoadError[]): Promise<PersonaLoadResult> {
   const files: PersonaFile[] = []
@@ -97,22 +121,10 @@ async function validateCandidates(candidates: PersonaCandidate[], errors: Person
   })
   for (const { path, read } of sorted.slice(0, PERSONA_FILES_MAX)) {
     try {
-      const markdown = await read()
-      if (byteLength(markdown) > PERSONA_FILE_MAX_BYTES) {
-        throw new PersonaSourceError(`fiche de plus de ${PERSONA_FILE_MAX_BYTES / 1024} Ko`)
-      }
-      const persona = parsePersona(markdown, path)
-      if (`${persona.scenarioId}/${persona.id}.md` !== path) {
-        throw new PersonaSourceError(`id « ${persona.id} » ou scénario « ${persona.scenarioId} » différent du chemin`)
-      }
-      const taken = files.find(other => other.persona.name.toLowerCase() === persona.name.toLowerCase())
-      if (taken) throw new PersonaSourceError(`nom « ${persona.name} » déjà pris par ${taken.path}`)
-      files.push({ path, markdown, persona })
+      files.push(checkPersonaFile(path, await read(), files))
     }
     catch (error) {
-      // Les erreurs du parseur sont déjà préfixées « Fiche PNJ <chemin> : »
-      const message = errorMessage(error)
-      errors.push({ path, message: message.startsWith('Fiche PNJ ') ? message : `Fiche PNJ ${path} : ${message}` })
+      errors.push({ path, message: personaErrorMessage(path, error) })
     }
   }
   return { files, errors }

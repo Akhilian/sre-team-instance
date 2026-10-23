@@ -103,8 +103,22 @@ export interface NpcPersonaFileSummary {
   name: string
   role: string
   scenarioId: string
-  /** Texte source de la fiche chargée */
+  /** Texte source de la fiche en service */
   markdown: string
+  /** Vrai si la fiche en service est une version modifiée depuis /admin (en mémoire seulement) */
+  modified: boolean
+}
+
+/** Erreur d'une édition ou d'un retour à l'original de fiche */
+export interface NpcPersonaEditError {
+  message: string
+  /** Ligne fautive (à partir de 1), si l'erreur porte sur une ligne précise */
+  line?: number
+}
+
+/** Réponse 422 de PUT /api/admin/npc-personas/edit : rien n'a changé */
+export interface NpcPersonaEditErrorResponse {
+  errors: NpcPersonaEditError[]
 }
 
 export interface NpcPersonasAdminState {

@@ -8,8 +8,29 @@ export const TEXT_MAX_LENGTH = 2000
 /** Longueur maximale du nom d'un canal */
 export const CHANNEL_NAME_MAX_LENGTH = 50
 
-/** Taille maximale (octets, content-length) du corps d'un POST /api/* : 413 au-delà */
+/** Taille maximale (octets, content-length) du corps d'une écriture /api/* (POST, PUT, PATCH, DELETE) : 413 au-delà */
 export const BODY_MAX_BYTES = 16_384
+/**
+ * Dérogation pour la seule route PUT /api/admin/npc-personas/edit : une fiche de PNJ fait jusqu'à 32 Ko,
+ * plus l'échappement JSON et le chemin
+ */
+export const PERSONA_EDIT_BODY_MAX_BYTES = 40_960
+/** Route qui bénéficie de PERSONA_EDIT_BODY_MAX_BYTES */
+export const PERSONA_EDIT_PATH = '/api/admin/npc-personas/edit'
+/** Méthodes dont le corps est plafonné */
+export const BODY_LIMITED_METHODS: readonly string[] = ['POST', 'PUT', 'PATCH', 'DELETE']
+
+/**
+ * Taille maximale du corps d'une requête (méthode, chemin avec ou sans query), ou undefined si elle
+ * n'est pas plafonnée (lecture, hors /api/). Seul PUT PERSONA_EDIT_PATH a droit à la dérogation.
+ */
+export function bodyMaxBytesFor(method: string, path: string): number | undefined {
+  const upper = method.toUpperCase()
+  if (!BODY_LIMITED_METHODS.includes(upper)) return undefined
+  const pathname = path.split('?')[0]!
+  if (!pathname.startsWith('/api/')) return undefined
+  return upper === 'PUT' && pathname === PERSONA_EDIT_PATH ? PERSONA_EDIT_BODY_MAX_BYTES : BODY_MAX_BYTES
+}
 /** Messages conservés par canal : au-delà, les plus anciens sont retirés (FIFO) */
 export const CHANNEL_MESSAGES_MAX = 2000
 /** Nombre maximal de canaux d'équipe, canaux pré-créés compris (conversations directes exclues) : 409 au-delà */

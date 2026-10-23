@@ -21,9 +21,13 @@
 import type { NpcPersona, NpcPreciseEntry } from '../../shared/types/npc'
 
 export class PersonaParseError extends Error {
-  constructor(source: string, message: string) {
-    super(`Fiche PNJ ${source} : ${message}`)
+  /** Ligne fautive (à partir de 1, dans le texte d'origine), si l'erreur porte sur une ligne précise */
+  readonly line: number | undefined
+
+  constructor(source: string, message: string, line?: number) {
+    super(`Fiche PNJ ${source} : ${line === undefined ? '' : `ligne ${line} : `}${message}`)
     this.name = 'PersonaParseError'
+    this.line = line
   }
 }
 
@@ -50,25 +54,26 @@ function parseFrontMatter(lines: string[], source: string): { fields: Map<string
     if (line === '---') return { fields, bodyStart: index + 1 }
     if (line === '' || line.startsWith('#')) continue
     const colon = line.indexOf(':')
-    if (colon <= 0) throw new PersonaParseError(source, `ligne de front-matter invalide « ${line} » (attendu clé: valeur)`)
+    if (colon <= 0) throw new PersonaParseError(source, `ligne de front-matter invalide « ${line} » (attendu clé: valeur)`, index + 1)
     fields.set(line.slice(0, colon).trim().toLowerCase(), line.slice(colon + 1).trim())
   }
   throw new PersonaParseError(source, 'front-matter non fermé (--- manquant)')
 }
 
-function parsePrecise(text: string, source: string): NpcPreciseEntry {
+/** line : ligne de début de la puce (à partir de 1), reprise dans les erreurs */
+function parsePrecise(text: string, source: string, line: number): NpcPreciseEntry {
   const match = PRECISE_RE.exec(text)
-  if (!match) throw new PersonaParseError(source, `puce « Sur question précise » sans [mots: …] : « ${text} »`)
+  if (!match) throw new PersonaParseError(source, `puce « Sur question précise » sans [mots: …] : « ${text} »`, line)
   const triggers = match[1]!.split(',')
     .map(word => word.trim())
     .map(word => word.startsWith('!') ? { text: word.slice(1).trim(), specific: true } : { text: word, specific: false })
     .filter(trigger => trigger.text !== '')
   const entry = match[2]!.trim()
-  if (triggers.length === 0) throw new PersonaParseError(source, `puce « Sur question précise » sans mot déclencheur : « ${text} »`)
-  if (entry === '') throw new PersonaParseError(source, `puce « Sur question précise » sans texte : « ${text} »`)
+  if (triggers.length === 0) throw new PersonaParseError(source, `puce « Sur question précise » sans mot déclencheur : « ${text} »`, line)
+  if (entry === '') throw new PersonaParseError(source, `puce « Sur question précise » sans texte : « ${text} »`, line)
   // Un seul mot courant ne doit pas suffire à livrer une information précise
   if (triggers.length < 2 && !triggers.some(trigger => trigger.specific)) {
-    throw new PersonaParseError(source, `puce « Sur question précise » avec un seul déclencheur, non spécifique (au moins 2, ou un préfixé de !) : « ${text} »`)
+    throw new PersonaParseError(source, `puce « Sur question précise » avec un seul déclencheur, non spécifique (au moins 2, ou un préfixé de !) : « ${text} »`, line)
   }
   return { triggers, text: entry }
 }
@@ -88,8 +93,11 @@ export function parsePersona(markdown: string, source = 'sans nom'): NpcPersona 
   const head = Object.fromEntries(REQUIRED_FIELDS.map(field => [field, value(field)])) as Record<RequiredField, string>
 
   const bullets: Record<SectionKey, string[]> = { knows: [], ignores: [], precise: [] }
+  /** Ligne de début (à partir de 1) de chaque puce « Sur question précise » */
+  const preciseLines: number[] = []
   let section: SectionKey | null = null
-  for (const line of lines.slice(bodyStart)) {
+  for (let index = bodyStart; index < lines.length; index++) {
+    const line = lines[index]!
     const heading = /^##\s+(.+?)\s*$/.exec(line)
     if (heading) {
       section = SECTIONS[heading[1]!.toLowerCase() as keyof typeof SECTIONS] ?? null
@@ -98,7 +106,10 @@ export function parsePersona(markdown: string, source = 'sans nom'): NpcPersona 
     if (section === null || line.trim() === '') continue
     const bullet = /^[-*]\s+(.*)$/.exec(line)
     const list = bullets[section]
-    if (bullet) list.push(bullet[1]!.trim())
+    if (bullet) {
+      list.push(bullet[1]!.trim())
+      if (section === 'precise') preciseLines.push(index + 1)
+    }
     // Ligne indentée : suite de la puce précédente
     else if (/^\s+\S/.test(line) && list.length > 0) list[list.length - 1] += ` ${line.trim()}`
   }
@@ -117,6 +128,6 @@ export function parsePersona(markdown: string, source = 'sans nom'): NpcPersona 
     deflection: head.deflection,
     knows: bullets.knows,
     ignores: bullets.ignores,
-    onPreciseQuestion: bullets.precise.map(text => parsePrecise(text, source)),
+    onPreciseQuestion: bullets.precise.map((text, index) => parsePrecise(text, source, preciseLines[index]!)),
   }
 }

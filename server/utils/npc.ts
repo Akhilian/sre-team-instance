@@ -1,12 +1,13 @@
 // Branchement des PNJ sur l'application : fiches lues dans NPC_PERSONAS_DIR ou embarquées (nitro.serverAssets,
-// base assets:npc), rechargeables à chaud depuis /admin,
+// base assets:npc), rechargeables à chaud et modifiables en ligne (en mémoire) depuis /admin,
 // moteur choisi par NPC_ENGINE, orchestrateur unique du processus (état activé en mémoire seulement)
 // et publication dans le store des canaux. La logique pure vit dans server/npc/.
 import type { Message } from '../../shared/types/chat'
-import type { NpcAdminState, NpcPersona, NpcPersonasAdminState } from '../../shared/types/npc'
+import type { NpcAdminState, NpcPersona, NpcPersonaFileSummary, NpcPersonasAdminState } from '../../shared/types/npc'
 import { createNpcDispatcher, type NpcDispatcher } from '../npc/dispatcher'
 import { type ResolvedNpcEngine, resolveNpcEngine } from '../npc/engines'
 import { createLexicalRetriever } from '../npc/lexical-retriever'
+import { createPersonaLayer, type PersonaLayerResult } from '../npc/persona-overrides'
 import {
   mergePersonaReload,
   type PersonaFile,
@@ -32,9 +33,17 @@ let engine: ResolvedNpcEngine | undefined
 let dispatcher: Promise<NpcDispatcher> | undefined
 /** Fiches chargées par useNpcDispatcher(), pour les recherches synchrones (étapes de scénario) */
 let loadedPersonas: readonly NpcPersona[] = []
-/** Les mêmes, avec leur chemin et leur texte source (/admin), et la source en service */
+/** Fiches lues à la source et fiches modifiées depuis /admin (en mémoire), gardées séparées */
+const personaLayer = createPersonaLayer()
+/** Fiches en service (source + modifiées), avec leur chemin et leur texte source (/admin), et la source en service */
 let loadedFiles: readonly PersonaFile[] = []
 let personaSource: PersonaSourceKind = 'embedded'
+
+/** Recalcule les fiches en service depuis la couche ; sans effet sur le dispatcher */
+function refreshLoadedPersonas() {
+  loadedFiles = personaLayer.served()
+  loadedPersonas = loadedFiles.map(file => file.persona)
+}
 
 /** Moteur du processus, résolu une fois (avertissement unique si NPC_ENGINE est inconnu) */
 function npcEngine(): ResolvedNpcEngine {
@@ -111,9 +120,9 @@ function recentHistory(message: Message): Message[] {
 export function useNpcDispatcher(): Promise<NpcDispatcher> {
   dispatcher ??= loadInitialPersonas().then(({ source, files }) => {
     personaSource = source
-    loadedFiles = files
-    const personas = files.map(file => file.persona)
-    loadedPersonas = personas
+    personaLayer.setSource(files)
+    refreshLoadedPersonas()
+    const personas = loadedPersonas
     return createNpcDispatcher({
       schedule: (fn, delayMs) => setTimeout(fn, delayMs),
       cancel: handle => clearTimeout(handle),
@@ -196,30 +205,64 @@ export async function npcPersonaFiles(): Promise<NpcPersonasAdminState> {
   await useNpcDispatcher()
   return {
     source: personaSource,
-    personas: loadedFiles.map(({ path, markdown, persona }) => ({
-      path,
-      id: persona.id,
-      name: persona.name,
-      role: persona.role,
-      scenarioId: persona.scenarioId,
-      markdown,
-    })),
+    personas: loadedFiles.map(personaFileSummary),
   }
+}
+
+function personaFileSummary({ path, markdown, persona }: PersonaFile): NpcPersonaFileSummary {
+  return {
+    path,
+    id: persona.id,
+    name: persona.name,
+    role: persona.role,
+    scenarioId: persona.scenarioId,
+    markdown,
+    modified: personaLayer.isModified(path),
+  }
+}
+
+export type NpcPersonaEditOutcome =
+  | { ok: true, persona: NpcPersonaFileSummary }
+  | Extract<PersonaLayerResult, { ok: false }>
+
+/** Applique le résultat d'une édition ou d'un retour : fiches en service recalculées et remplacées à chaud */
+async function applyLayerResult(result: PersonaLayerResult): Promise<NpcPersonaEditOutcome> {
+  if (!result.ok) return result
+  const current = await useNpcDispatcher()
+  refreshLoadedPersonas()
+  current.replacePersonas(loadedPersonas)
+  return { ok: true, persona: personaFileSummary(result.file) }
+}
+
+/**
+ * Remplace en mémoire la fiche en service path par markdown (026), si elle passe la validation ; rien
+ * ne change sinon. path n'est qu'une clé comparée aux fiches en service, jamais un chemin de fichier.
+ */
+export async function editNpcPersona(path: string, markdown: string): Promise<NpcPersonaEditOutcome> {
+  await useNpcDispatcher()
+  return applyLayerResult(personaLayer.edit(path, markdown))
+}
+
+/** Supprime la version modifiée de path et remet la fiche de la source */
+export async function revertNpcPersona(path: string): Promise<NpcPersonaEditOutcome> {
+  await useNpcDispatcher()
+  return applyLayerResult(personaLayer.revert(path))
 }
 
 /**
  * Relit la source en service (jamais changée à chaud) et remplace les fiches du dispatcher ; une fiche
  * en erreur garde sa version précédente. Sans aucune fiche valide, rien n'est remplacé (replaced faux).
+ * Les fiches modifiées depuis /admin restent prioritaires sur la source relue.
  */
 export async function reloadNpcPersonas(): Promise<{ replaced: boolean, report: PersonaReloadReport }> {
   const current = await useNpcDispatcher()
   const source = personaSource
   const result = await readPersonaSource(source)
   logPersonaErrors(result.errors)
-  const outcome = mergePersonaReload(loadedFiles, result, source)
+  const outcome = mergePersonaReload(personaLayer.source(), result, source)
   if (outcome.replaced) {
-    loadedFiles = outcome.files
-    loadedPersonas = outcome.files.map(file => file.persona)
+    personaLayer.setSource(outcome.files)
+    refreshLoadedPersonas()
     current.replacePersonas(loadedPersonas)
   }
   return { replaced: outcome.replaced, report: outcome.report }
