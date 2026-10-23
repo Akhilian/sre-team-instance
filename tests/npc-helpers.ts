@@ -23,3 +23,42 @@ export function personaById(id: string): NpcPersona {
   if (!persona) throw new Error(`fiche ${id} introuvable`)
   return persona
 }
+
+/** Instant de départ des horloges simulées */
+export const T0 = Date.UTC(2026, 9, 23, 14, 0, 0)
+
+/** Planificateur simulé : advance() exécute les tâches échues, puis laisse les promesses se régler */
+export function fakeClock() {
+  let time = T0
+  let nextId = 1
+  const tasks = new Map<number, { due: number, fn: () => void }>()
+  return {
+    now: () => time,
+    schedule: (fn: () => void, delayMs: number) => {
+      const id = nextId++
+      tasks.set(id, { due: time + delayMs, fn })
+      return id
+    },
+    cancel: (id: number) => {
+      tasks.delete(id)
+    },
+    async advance(ms: number) {
+      const target = time + ms
+      for (;;) {
+        const next = [...tasks.entries()].filter(([, task]) => task.due <= target).sort((a, b) => a[1].due - b[1].due)[0]
+        if (!next) break
+        tasks.delete(next[0])
+        time = next[1].due
+        next[1].fn()
+        await flush()
+      }
+      time = target
+      await flush()
+    },
+  }
+}
+
+export async function flush() {
+  for (let index = 0; index < 5; index++) await Promise.resolve()
+}
+

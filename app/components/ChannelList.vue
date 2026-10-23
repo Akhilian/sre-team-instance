@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import type { Channel } from '~~/shared/types/chat'
+import type { NpcSummary } from '~~/shared/types/npc'
 import { CHANNEL_NAME_MAX_LENGTH } from '~~/shared/utils/limits'
 
 const props = defineProps<{
+  /** Canaux d'équipe, suivis des conversations directes du participant (champ direct) */
   channels: Channel[]
   currentId: string
+  /** Nom d'affichage ; vide tant qu'il n'est pas choisi (conversations indisponibles) */
+  participant?: string
+  /** PNJ du scénario courant (/api/npcs) */
+  npcs?: readonly NpcSummary[]
+  npcsEnabled?: boolean
   /** Non-lus par id de canal ; vide au SSR et avant montage */
   unread?: Record<string, number>
   /** Tiroir ouvert (écran étroit uniquement ; sans effet en mode large) */
@@ -14,6 +21,68 @@ const props = defineProps<{
 function unreadCount(channelId: string): number {
   if (channelId === props.currentId) return 0
   return props.unread?.[channelId] ?? 0
+}
+
+const teamChannels = computed(() => props.channels.filter(channel => !channel.direct))
+const directChannels = computed(() => props.channels.filter(channel => channel.direct))
+
+interface ConversationEntry {
+  key: string
+  name: string
+  role: string
+  npcId: string
+  /** Conversation existante ; absente tant qu'elle n'a pas été ouverte */
+  channel?: Channel
+}
+
+// PNJ actifs : un lien par PNJ (conversation existante ou à ouvrir). PNJ coupés : les conversations
+// existantes seulement ; la section disparaît s'il n'y en a aucune.
+const conversations = computed<ConversationEntry[]>(() => {
+  const npcs = props.npcs ?? []
+  if (props.npcsEnabled) {
+    return npcs.map(npc => ({
+      key: npc.id,
+      name: npc.name,
+      role: npc.role,
+      npcId: npc.id,
+      channel: directChannels.value.find(channel => channel.direct!.npcId === npc.id),
+    }))
+  }
+  return directChannels.value.map((channel) => {
+    const npc = npcs.find(candidate => candidate.id === channel.direct!.npcId)
+    return {
+      key: channel.id,
+      name: npc?.name ?? channel.name.split(' ↔ ').at(-1) ?? channel.name,
+      role: npc?.role ?? '',
+      npcId: channel.direct!.npcId,
+      channel,
+    }
+  })
+})
+
+const opening = ref('')
+const directError = ref('')
+
+/** Ouvre (ou retrouve) la conversation avec le PNJ, puis la page parente y navigue */
+async function openConversation(npcId: string) {
+  if (!props.participant || opening.value) return
+  opening.value = npcId
+  directError.value = ''
+  try {
+    const channel = await $fetch<Channel>('/api/direct', {
+      method: 'POST',
+      body: { participant: props.participant, npcId },
+    })
+    emit('close')
+    emit('created', channel)
+  }
+  catch (err) {
+    const data = (err as { data?: { message?: string } }).data
+    directError.value = data?.message ?? 'Impossible d\'ouvrir la conversation'
+  }
+  finally {
+    opening.value = ''
+  }
 }
 
 const emit = defineEmits<{
@@ -115,7 +184,7 @@ async function submit() {
         </div>
       </form>
       <ul class="channel-list" data-testid="channel-list">
-        <li v-for="channel in channels" :key="channel.id">
+        <li v-for="channel in teamChannels" :key="channel.id">
           <NuxtLink
             :to="`/channels/${channel.id}`"
             class="channel-list__link"
@@ -136,6 +205,53 @@ async function submit() {
         </li>
       </ul>
     </div>
+
+    <section v-if="conversations.length > 0" class="conversations" data-testid="conversations" aria-labelledby="conversations-title">
+      <h2 id="conversations-title" class="conversations__title">Conversations</h2>
+      <ul class="conversation-list">
+        <li v-for="entry in conversations" :key="entry.key">
+          <NuxtLink
+            v-if="entry.channel"
+            :to="`/channels/${entry.channel.id}`"
+            class="conversation"
+            :class="{
+              'conversation--active': entry.channel.id === currentId,
+              'conversation--unread': unreadCount(entry.channel.id) > 0,
+            }"
+            data-testid="conversation-link"
+            @click="emit('close')"
+          >
+            <span class="avatar conversation__avatar" aria-hidden="true" :style="{ background: avatarColor(entry.name) }">{{ initials(entry.name) }}</span>
+            <span class="conversation__text">
+              <span class="conversation__name">{{ entry.name }}</span>
+              <span v-if="entry.role" class="conversation__role">{{ entry.role }}</span>
+            </span>
+            <span
+              v-if="unreadCount(entry.channel.id) > 0"
+              class="channel-list__badge"
+              data-testid="unread-badge"
+              :aria-label="`${unreadCount(entry.channel.id)} message(s) non lu(s)`"
+            >{{ unreadBadgeLabel(unreadCount(entry.channel.id)) }}</span>
+          </NuxtLink>
+          <button
+            v-else
+            type="button"
+            class="conversation"
+            data-testid="conversation-link"
+            :disabled="!participant || opening !== ''"
+            :title="participant ? `Écrire à ${entry.name}` : 'Choisissez un nom d\'affichage pour écrire'"
+            @click="openConversation(entry.npcId)"
+          >
+            <span class="avatar conversation__avatar" aria-hidden="true" :style="{ background: avatarColor(entry.name) }">{{ initials(entry.name) }}</span>
+            <span class="conversation__text">
+              <span class="conversation__name">{{ entry.name }}</span>
+              <span v-if="entry.role" class="conversation__role">{{ entry.role }}</span>
+            </span>
+          </button>
+        </li>
+      </ul>
+      <p v-if="directError" class="channel-form__error conversations__error" role="alert">{{ directError }}</p>
+    </section>
   </aside>
 </template>
 
@@ -147,6 +263,7 @@ async function submit() {
   flex: none;
   background: var(--teams-panel);
   border-right: 1px solid var(--teams-border);
+  overflow-y: auto;
 }
 
 .channel-panel__header {
@@ -316,6 +433,94 @@ async function submit() {
   font-weight: 700;
   line-height: 20px;
   text-align: center;
+}
+
+/* Conversations directes avec les PNJ, comme la liste « Conversation » de Teams */
+.conversations {
+  padding: 8px 8px 16px;
+}
+
+.conversations__title {
+  margin: 0;
+  padding: 8px 12px 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--teams-text-muted);
+}
+
+.conversation-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.conversation {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--teams-text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.conversation:hover:not(:disabled) {
+  background: #f5f5f5;
+}
+
+.conversation:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.conversation--active {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.conversation--active .conversation__name {
+  color: var(--teams-purple);
+  font-weight: 600;
+}
+
+.conversation--unread .conversation__name {
+  font-weight: 700;
+}
+
+.conversation__avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+
+.conversation__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.conversation__name,
+.conversation__role {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation__role {
+  font-size: 12px;
+  color: var(--teams-text-muted);
+}
+
+.conversations__error {
+  padding: 0 12px;
 }
 
 /* Écran étroit : tiroir fixe à gauche, au-dessus du fil et du voile, fermé par défaut */

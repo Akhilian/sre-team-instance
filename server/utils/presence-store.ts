@@ -6,6 +6,8 @@ import { AUTHOR_MAX_LENGTH, PRESENCE_ENTRIES_MAX } from '../../shared/utils/limi
 export const PRESENCE_TTL_MS = 15_000
 /** En train d'écrire si le dernier `typing: true` date de moins de 5 s */
 export const TYPING_TTL_MS = 5_000
+/** Filet de la frappe d'un PNJ : effacée au bout de 20 s même si la fin n'a jamais été signalée */
+export const NPC_TYPING_TTL_MS = 20_000
 
 export class PresenceValidationError extends Error {
   constructor(message: string) {
@@ -37,8 +39,41 @@ export interface ChannelPresence {
 // Une entrée par nom : un nom n'est présent que dans le dernier canal signalé
 let entries = new Map<string, PresenceEntry>()
 
+interface NpcTypingEntry {
+  /** Réponses en préparation de ce PNJ dans ce canal (plusieurs messages peuvent le solliciter) */
+  count: number
+  /** Expiration (ms) : repoussée à chaque début de réponse */
+  until: number
+}
+// Frappe des PNJ, à part des participants : hors PRESENCE_ENTRIES_MAX, jamais dans present.
+// Par canal, puis par nom de PNJ.
+let npcTyping = new Map<string, Map<string, NpcTypingEntry>>()
+
 export function resetPresenceStore(): void {
   entries = new Map()
+  npcTyping = new Map()
+}
+
+/**
+ * Début (typing: true) ou fin (typing: false) d'une réponse du PNJ name dans channelId, signalés par
+ * l'orchestrateur. Le PNJ reste « en train d'écrire » tant qu'une de ses réponses y est en préparation,
+ * au plus NPC_TYPING_TTL_MS après le dernier début.
+ */
+export function setNpcTyping(input: { channelId: string, name: string, typing: boolean }, now: number): void {
+  const byName = npcTyping.get(input.channelId) ?? new Map<string, NpcTypingEntry>()
+  const current = byName.get(input.name)
+  const live = current && now < current.until ? current : undefined
+  if (input.typing) {
+    byName.set(input.name, { count: (live?.count ?? 0) + 1, until: now + NPC_TYPING_TTL_MS })
+  }
+  else if (live && live.count > 1) {
+    live.count -= 1
+  }
+  else {
+    byName.delete(input.name)
+  }
+  if (byName.size > 0) npcTyping.set(input.channelId, byName)
+  else npcTyping.delete(input.channelId)
 }
 
 /** Valide `name` (même règle que `author`) et `typing` (booléen ou absent) ; renvoie le nom rogné. */
@@ -93,6 +128,9 @@ export function channelPresence(channelId: string, now: number): ChannelPresence
     if (entry.channelId !== channelId || now - entry.lastSeen >= PRESENCE_TTL_MS) continue
     present.push(name)
     if (now < entry.typingUntil) typing.push(name)
+  }
+  for (const [name, entry] of npcTyping.get(channelId) ?? []) {
+    if (now < entry.until && !typing.includes(name)) typing.push(name)
   }
   return { present: present.sort(byName), typing: typing.sort(byName) }
 }

@@ -1,7 +1,7 @@
 // Store en mémoire des canaux et messages : une seule instance Render. La persistance éventuelle
 // (instantané exportSnapshot / importSnapshot) est branchée par server/utils/chat-persistence.ts.
 // Module pur (sans auto-import Nuxt) pour être testable directement avec Vitest.
-import type { Channel, ChannelSummary, Message, MessagesDelta } from '../../shared/types/chat'
+import type { Channel, ChannelSummary, DirectChannel, Message, MessagesDelta } from '../../shared/types/chat'
 import { isReactionEmoji } from '../../shared/utils/reactions'
 import {
   ALERT_SERVICE_MAX_LENGTH,
@@ -15,6 +15,7 @@ import {
   CHANNELS_MAX,
   CHANNEL_MESSAGES_MAX,
   CHANNEL_NAME_MAX_LENGTH,
+  DIRECT_CHANNELS_MAX,
   NPC_REPLY_MAX_LENGTH,
   REACTION_AUTHORS_MAX,
   TEXT_MAX_LENGTH,
@@ -113,6 +114,14 @@ export class ChannelLimitError extends Error {
   }
 }
 
+/** Plafond DIRECT_CHANNELS_MAX atteint : 409 */
+export class DirectChannelLimitError extends Error {
+  constructor() {
+    super(`Nombre maximal de conversations directes atteint (${DIRECT_CHANNELS_MAX})`)
+    this.name = 'DirectChannelLimitError'
+  }
+}
+
 /** Plafond REACTION_AUTHORS_MAX atteint pour un nouvel auteur : 409 */
 export class ReactionLimitError extends Error {
   constructor() {
@@ -149,19 +158,45 @@ function markReset(channelIds: Iterable<string>): void {
 
 resetChatStore()
 
-export function listChannels(): Channel[] {
-  return channels.map(channel => ({ ...channel }))
+function copyChannel(channel: Channel): Channel {
+  const copy: Channel = { id: channel.id, name: channel.name }
+  if (channel.direct) copy.direct = { ...channel.direct }
+  return copy
 }
 
-/** Même ordre que listChannels, avec le nombre de messages et la date du plus récent. */
-export function listChannelSummaries(): ChannelSummary[] {
-  return channels.map((channel) => {
+/** Tous les canaux, conversations directes comprises (chronologie, instantané). */
+export function listChannels(): Channel[] {
+  return channels.map(copyChannel)
+}
+
+/** Canal d'id channelId (copie), ou undefined */
+export function getChannel(channelId: string): Channel | undefined {
+  const channel = channels.find(candidate => candidate.id === channelId)
+  return channel ? copyChannel(channel) : undefined
+}
+
+/** Vrai si participant (comparé par slug : casse et accents ignorés) possède la conversation directe */
+export function isDirectOwner(direct: DirectChannel, participant: string): boolean {
+  const slug = slugifyChannelName(participant)
+  return slug !== '' && slug === slugifyChannelName(direct.participant)
+}
+
+/**
+ * Canaux d'équipe dans l'ordre de listChannels, avec le nombre de messages et la date du plus récent ;
+ * avec participant, suivis de ses conversations directes (comparées par slug). Les conversations des
+ * autres ne sont jamais listées.
+ */
+export function listChannelSummaries(participant?: string): ChannelSummary[] {
+  const visible = channels.filter(channel => !channel.direct
+    || (participant !== undefined && isDirectOwner(channel.direct, participant)))
+  return visible.map((channel) => {
     const messages = messagesByChannel.get(channel.id) ?? []
     const last = messages[messages.length - 1]
-    // Ordre des clés fixe (id, name, messageCount, totalCount, lastMessageAt) : il se retrouve dans le JSON
+    // Ordre des clés fixe (id, name, direct?, messageCount, totalCount, lastMessageAt) : il se retrouve dans le JSON
     return {
       id: channel.id,
       name: channel.name,
+      ...(channel.direct ? { direct: { ...channel.direct } } : {}),
       messageCount: messages.length,
       totalCount: totalCounts.get(channel.id) ?? 0,
       lastMessageAt: last ? last.createdAt : null,
@@ -421,7 +456,8 @@ export function clearMessages(): void {
 }
 
 /**
- * Reset complet : canaux ramenés à DEFAULT_CHANNELS (ceux des participants sont supprimés), messages
+ * Reset complet : canaux ramenés à DEFAULT_CHANNELS (ceux des participants et les conversations directes
+ * sont supprimés), messages
  * effacés. Contrairement à resetChatStore, rev et totalCount ne reculent jamais.
  */
 export function resetAll(): void {
@@ -498,13 +534,61 @@ export function addChannel(input: { name?: unknown }): Channel {
     throw new ChannelValidationError('name doit contenir au moins une lettre ou un chiffre')
   }
   if (messagesByChannel.has(id)) throw new ChannelConflictError(id)
-  if (channels.length >= CHANNELS_MAX) throw new ChannelLimitError()
+  // Les conversations directes ne comptent pas dans CHANNELS_MAX
+  if (channels.filter(channel => !channel.direct).length >= CHANNELS_MAX) throw new ChannelLimitError()
 
   const channel: Channel = { id, name }
   channels.push(channel)
   messagesByChannel.set(id, [])
   notifyChange()
   return { ...channel }
+}
+
+/** Id d'une conversation directe : dm-<slug(participant)>--<npcId> (un slug ne contient jamais « -- ») */
+export function directChannelId(participant: string, npcId: string): string {
+  return `dm-${slugifyChannelName(participant)}--${npcId}`
+}
+
+/** Participant d'une conversation directe : règles de author, slug non vide ; renvoie le nom rogné. */
+export function validateDirectParticipant(value: unknown): string {
+  const participant = typeof value === 'string' ? value.trim() : ''
+  if (participant.length === 0) {
+    throw new ChannelValidationError('participant est obligatoire')
+  }
+  if (participant.length > AUTHOR_MAX_LENGTH) {
+    throw new ChannelValidationError(`participant dépasse ${AUTHOR_MAX_LENGTH} caractères`)
+  }
+  if (slugifyChannelName(participant) === '') {
+    throw new ChannelValidationError('participant doit contenir au moins une lettre ou un chiffre')
+  }
+  return participant
+}
+
+/**
+ * Crée la conversation directe de participant avec le PNJ npc, ou renvoie celle qui existe déjà (même
+ * slug de participant) avec created: false. Le participant suit les règles de author ; les règles propres
+ * aux PNJ (nom réservé, PNJ du scénario, PNJ coupés) sont vérifiées par la route.
+ */
+export function addDirectChannel(input: {
+  participant?: unknown
+  npc: { id: string, name: string }
+}): { channel: Channel, created: boolean } {
+  const participant = validateDirectParticipant(input?.participant)
+
+  const id = directChannelId(participant, input.npc.id)
+  const existing = channels.find(channel => channel.id === id)
+  if (existing) return { channel: copyChannel(existing), created: false }
+  if (channels.filter(channel => channel.direct).length >= DIRECT_CHANNELS_MAX) throw new DirectChannelLimitError()
+
+  const channel: Channel = {
+    id,
+    name: `${participant} ↔ ${input.npc.name}`,
+    direct: { participant, npcId: input.npc.id },
+  }
+  channels.push(channel)
+  messagesByChannel.set(id, [])
+  notifyChange()
+  return { channel: copyChannel(channel), created: true }
 }
 
 export const SNAPSHOT_VERSION = 2
@@ -544,8 +628,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/** Conversation directe : participant et npcId en chaînes non vides */
+function isValidDirect(value: unknown): value is DirectChannel {
+  return isRecord(value) && typeof value.participant === 'string' && value.participant !== ''
+    && typeof value.npcId === 'string' && value.npcId !== ''
+}
+
 function isValidChannel(value: unknown): value is Channel {
   return isRecord(value) && typeof value.id === 'string' && value.id !== '' && typeof value.name === 'string'
+    && (value.direct === undefined || isValidDirect(value.direct))
 }
 
 /** Réaction : emoji du jeu fixe, auteurs en tableau de chaînes */
@@ -639,7 +730,8 @@ function importValidSnapshot(data: unknown): boolean {
     nextTotals.set(channelId, Math.max(nextTotals.get(channelId) ?? 0, list.length))
   }
 
-  channels = rawChannels.map(channel => ({ id: channel.id, name: channel.name }))
+  // direct conservé (conversations directes) ; tout autre champ inconnu est ignoré
+  channels = rawChannels.map(channel => copyChannel(channel))
   messagesByChannel = nextMessages
   // rev ne recule jamais dans un même processus (import après un reset, par exemple)
   rev = Math.max(rev, nextRev)

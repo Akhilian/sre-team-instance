@@ -11,6 +11,12 @@ export default defineEventHandler(async (event) => {
   if (await isNpcName((input as { author?: unknown }).author)) {
     throw createError({ statusCode: 400, message: 'Ce nom est réservé à un personnage du scénario' })
   }
+  // Conversation directe : seul son propriétaire (même slug) y écrit ; la lecture reste ouverte
+  const direct = getChannel(channelId)?.direct
+  const author = (input as { author?: unknown }).author
+  if (direct && typeof author === 'string' && author.trim() !== '' && !isDirectOwner(direct, author)) {
+    throw createError({ statusCode: 403, message: 'Seul le participant de cette conversation peut y écrire' })
+  }
 
   try {
     const message = addMessage(channelId, input)

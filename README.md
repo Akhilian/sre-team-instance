@@ -5,7 +5,7 @@ Application full-stack [Nuxt 4](https://nuxt.com/docs) : front Vue et API dans l
 ## Structure
 
 - `app/` : front façon Teams (pages dans `app/pages/` : `/` redirige vers le canal d'incident, `/channels/:id` affiche le fil avec rafraîchissement toutes les 3 s ; composants dans `app/components/`, nom d'affichage mémorisé dans le `localStorage`)
-- `server/api/` : back-end (routes API Nitro, ex. `GET /api/health`, `GET /api/channels`, `GET|POST /api/channels/:id/messages`, `POST /api/channels/:id/messages/:messageId/reactions`, `POST /api/channels/:id/messages/:messageId/alert-status` (acquitter / résoudre une alerte), `POST /api/presence` (présence et frappe, en mémoire), `GET /api/npcs`, et pour l'animateur `GET|POST /api/admin/npcs`, `POST /api/admin/announcements`, `POST /api/admin/alerts`, `POST /api/admin/reset` et les scénarios `GET /api/admin/scenarios`, `POST /api/admin/scenarios/:id/start`, `POST /api/admin/scenarios/stop`)
+- `server/api/` : back-end (routes API Nitro, ex. `GET /api/health`, `GET /api/channels`, `GET|POST /api/channels/:id/messages`, `POST /api/channels/:id/messages/:messageId/reactions`, `POST /api/channels/:id/messages/:messageId/alert-status` (acquitter / résoudre une alerte), `POST /api/presence` (présence et frappe, en mémoire), `GET /api/npcs`, `POST /api/direct` (conversation directe avec un PNJ), et pour l'animateur `GET|POST /api/admin/npcs`, `POST /api/admin/announcements`, `POST /api/admin/alerts`, `POST /api/admin/reset` et les scénarios `GET /api/admin/scenarios`, `POST /api/admin/scenarios/:id/start`, `POST /api/admin/scenarios/stop`)
 - `server/utils/` : logique serveur (store en mémoire des canaux et messages, persistance de l'instantané, exécuteur de scénarios)
 - `server/plugins/`, `server/middleware/` : branchement de la persistance (réhydratation au démarrage, attente avant les routes `/api/`)
 - `server/scenarios/` : scénarios d'incident pré-écrits (un fichier TypeScript par scénario, déclaré dans `index.ts`)
@@ -64,12 +64,13 @@ Plafonds fixes, regroupés dans `shared/utils/limits.ts` :
 | corps d'un `POST /api/*` | 16 Ko (`content-length`) ; chunked sans `content-length` refusé | 413 |
 | écritures (`POST /api/*` hors `/api/presence` et `/api/admin/*`) | par fenêtre de 10 s : 120 par IP et auteur, 600 par IP (40 participants derrière un même NAT) ; IP = dernière entrée de `x-forwarded-for` | 429 + `Retry-After` |
 | messages par canal | 2000 | les plus anciens sont retirés |
-| canaux | 30 | 409 |
+| canaux d'équipe (conversations directes exclues) | 30 | 409 |
+| conversations directes participant ↔ PNJ | 300 | 409 |
 | participants présents (noms actifs) | 200 | 429 |
 | auteurs par réaction | 100 | 409 |
 | réponse d'un PNJ | 600 caractères | tronquée |
 | PNJ qui répondent à un même message | 3 | mentions suivantes ignorées |
-| réponses de PNJ par minute glissante | par canal : 6 par PNJ, 20 tous PNJ confondus ; 60 au total (appels au modèle) | le PNJ se tait, sans erreur |
+| réponses de PNJ par minute glissante | par canal ou conversation : 6 par PNJ, 20 tous PNJ confondus ; 60 au total dans les canaux d'équipe, et un budget séparé de 120 pour les conversations directes (au plus 180 appels au modèle par minute) | le PNJ se tait, sans erreur |
 
 ## Personnages non joueurs (PNJ)
 
@@ -100,6 +101,19 @@ nom de PNJ est refusé en 400), et ils ne répondent jamais à un autre PNJ, à 
   retombe sur `keywords` avec un avertissement. Un autre fournisseur s'ajoute par un fichier d'adaptateur
   dans `server/npc/engines/` et une ligne dans `NPC_ENGINES`. `GET /api/health` indique le moteur
   effectivement en service (`npcEngine`), sans URL, modèle ni clé.
+- **Conversations directes** : la section « Conversations » de la barre latérale liste les PNJ actifs ;
+  un clic ouvre une conversation 1:1 (`POST /api/direct {participant, npcId}` : 201 à la création, 200 si
+  elle existe ; 400 nom invalide ou réservé, 404 PNJ hors du scénario courant, 409 PNJ coupés ou plafond).
+  Id `dm-<slug du participant>--<npcId>` ; « Zoé » et « zoe » partagent la conversation. Le PNJ y répond à
+  chaque message, sans mention. Pendant qu'un PNJ prépare une réponse (canal ou conversation), il apparaît
+  « en train d'écrire » (`typing` de `POST /api/presence`). `GET /api/channels` ne liste que les canaux
+  d'équipe ; `?participant=<nom>` y ajoute les conversations de ce participant. **Pas d'authentification
+  réelle** : « privé » signifie seulement « non listé pour les autres » ; quiconque connaît l'URL peut lire
+  la conversation. Seule l'écriture est gardée : un message signé d'un autre nom que son propriétaire
+  est refusé en 403. La chronologie de l'animateur les inclut ; « Tout réinitialiser » les supprime,
+  « Effacer les messages » les vide. Le budget de réponses des conversations directes est séparé de celui
+  des canaux d'équipe : une salle (une quinzaine de participants) qui interroge les PNJ en direct n'empêche
+  pas les réponses dans `#incident-en-cours`.
 - **Délai** : `NPC_REPLY_DELAY_MS` fixe le délai avant réponse en millisecondes (défaut : tiré entre 1 et 2 s).
 - **Reset** : « Effacer les messages » (`reset {scope:"messages"}`) annule les réponses de PNJ en attente, sans couper les PNJ.
 

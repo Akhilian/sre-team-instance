@@ -4,6 +4,15 @@ import type { AlertSeverity, AlertStatus } from '../utils/alerts'
 export interface Channel {
   id: string
   name: string
+  /** Présent seulement sur une conversation directe entre un participant et un PNJ */
+  direct?: DirectChannel
+}
+
+/** Propriétaire et interlocuteur d'une conversation directe (id dm-<slug(participant)>--<npcId>) */
+export interface DirectChannel {
+  /** Nom du participant tel qu'à la création ; comparé par slug (casse et accents ignorés) */
+  participant: string
+  npcId: string
 }
 
 /** Canal avec de quoi calculer les non-lus côté client (GET /api/channels) */

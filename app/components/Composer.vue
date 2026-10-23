@@ -4,6 +4,8 @@ import { TEXT_MAX_LENGTH } from '~~/shared/utils/limits'
 const props = defineProps<{
   disabled: boolean
   channelName: string
+  /** Remplace « Écrire dans <canal> » (conversation directe : « Écrire à <PNJ> ») */
+  placeholder?: string
   send: (text: string) => Promise<void>
 }>()
 
@@ -52,7 +54,7 @@ function onKeydown(event: KeyboardEvent) {
         rows="1"
         :maxlength="TEXT_MAX_LENGTH"
         :disabled="disabled"
-        :placeholder="disabled ? 'Choisissez un nom d\'affichage pour écrire' : `Écrire dans ${channelName}`"
+        :placeholder="disabled ? 'Choisissez un nom d\'affichage pour écrire' : placeholder ?? `Écrire dans ${channelName}`"
         aria-label="Message"
         @keydown="onKeydown"
         @input="emit('typing')"

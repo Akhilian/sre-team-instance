@@ -77,5 +77,7 @@ L'information utile à la résolution est **répartie** : aucun PNJ ne sait tout
 - Mêmes contraintes que la phase 1 (Nuxt existant, mémoire ou stockage léger, typecheck et build verts).
 - Aucune dépendance obligatoire à un fournisseur de modèle : l'application fonctionne sans modèle (repli `keywords`). Les secrets et URL éventuels (`ANTHROPIC_API_KEY`, `NPC_LLM_BASE_URL`…) sont déclarés en `sync: false` dans `render.yaml`, jamais commités. Réponses courtes, délai maximal et limitation du nombre d'appels par minute.
 
+- Échelle : **15 participants au maximum**, qui ne parlent pas en permanence (précision de l'utilisateur, 2026-10-23). La performance n'est pas un enjeu : plafonds simples et généreux, pas de mécanisme sophistiqué.
+
 ## Définition de « terminé » (phase 2)
 Lors d'un scénario lancé par l'animateur, le lanceur d'alerte ouvre l'incident. L'équipe peut interroger au moins 4 PNJ, qui répondent en quelques secondes dans le canal, chacun avec sa part d'information et sa personnalité. Il faut combiner les informations de plusieurs PNJ pour identifier la cause et la bonne communication.

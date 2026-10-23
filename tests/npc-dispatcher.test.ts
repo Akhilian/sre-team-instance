@@ -18,47 +18,11 @@ import {
   resetChatStore,
 } from '../server/utils/chat-store'
 import { NPC_REPLY_MAX_LENGTH } from '../shared/utils/limits'
-import { loadPersonas, personaById } from './npc-helpers'
+import { fakeClock, loadPersonas, personaById } from './npc-helpers'
 
-const T0 = Date.UTC(2026, 9, 23, 14, 0, 0)
 const CHANNEL = 'incident-en-cours'
 const RELEASE = personaById('release-manager')
 const CFO = personaById('cfo')
-
-/** Planificateur simulé : advance() exécute les tâches échues, puis laisse les promesses se régler */
-function fakeClock() {
-  let time = T0
-  let nextId = 1
-  const tasks = new Map<number, { due: number, fn: () => void }>()
-  return {
-    now: () => time,
-    schedule: (fn: () => void, delayMs: number) => {
-      const id = nextId++
-      tasks.set(id, { due: time + delayMs, fn })
-      return id
-    },
-    cancel: (id: number) => {
-      tasks.delete(id)
-    },
-    async advance(ms: number) {
-      const target = time + ms
-      for (;;) {
-        const next = [...tasks.entries()].filter(([, task]) => task.due <= target).sort((a, b) => a[1].due - b[1].due)[0]
-        if (!next) break
-        tasks.delete(next[0])
-        time = next[1].due
-        next[1].fn()
-        await flush()
-      }
-      time = target
-      await flush()
-    },
-  }
-}
-
-async function flush() {
-  for (let index = 0; index < 5; index++) await Promise.resolve()
-}
 
 function setup(options: { responder?: NpcResponder, delayMs?: number } = {}) {
   const clock = fakeClock()

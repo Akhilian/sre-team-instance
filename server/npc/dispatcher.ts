@@ -1,11 +1,13 @@
 // Orchestrateur des PNJ : après chaque message publié, chaque PNJ actif mentionné (@Nom complet) répond
-// dans le fil du message, après un délai simulé. Activation, plafonds de débit et garde-fous ici ;
+// dans le fil du message, après un délai simulé ; dans une conversation directe, le PNJ de la conversation
+// répond à tout message, sans mention. Activation, plafonds de débit et garde-fous ici ;
 // la formulation revient au retriever et au moteur injectés. Module pur, sur le modèle de
 // scenario-runner.ts : planificateur, horloge et publication injectés.
 import type { Message } from '../../shared/types/chat'
 import type { KnowledgeRetriever, NpcPersona, NpcResponder, NpcSummary } from '../../shared/types/npc'
 import { splitMentions } from '../../shared/utils/mentions'
 import {
+  NPC_DIRECT_REPLIES_GLOBAL_PER_MINUTE,
   NPC_MENTIONS_PER_MESSAGE_MAX,
   NPC_REPLIES_GLOBAL_PER_MINUTE,
   NPC_REPLIES_PER_MINUTE,
@@ -24,8 +26,8 @@ const NPC_STAGGER_MS = 700
 export interface NpcReply {
   persona: NpcPersona
   channelId: string
-  /** Racine du fil où répondre */
-  parentId: string
+  /** Racine du fil où répondre ; absent pour une réponse racine (message racine d'une conversation directe) */
+  parentId?: string
   text: string
 }
 
@@ -49,6 +51,13 @@ export interface NpcDispatcherDeps<Handle = unknown> {
   onError?: (error: unknown) => void
   /** Délai maximal du moteur (défaut NPC_RESPOND_TIMEOUT_MS) */
   respondTimeoutMs?: number
+  /** Id du PNJ si channelId est une conversation directe, sinon undefined (défaut : aucune) */
+  directNpcId?: (channelId: string) => string | undefined
+  /**
+   * Début (true, à la planification : couvre le délai simulé) et fin (false : publication, échec ou
+   * annulation) de chaque réponse ; exactement une fin par début
+   */
+  onTyping?: (persona: NpcPersona, channelId: string, typing: boolean) => void
 }
 
 export interface NpcDispatcher {
@@ -88,10 +97,15 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
   let currentScenarioId = personas[0]?.scenarioId ?? ''
   let enabled = false
   // Horodatages des réponses planifiées (fenêtre glissante d'une minute), par clé : `channelId` (tous PNJ
-  // du canal) et `channelId:personaId` ; allReplies borne les appels au moteur, tous canaux confondus
+  // du canal) et `channelId:personaId` ; allReplies (canaux d'équipe) et directReplies (conversations
+  // directes, budget séparé) bornent les appels au moteur
   const repliesByKey = new Map<string, number[]>()
   let allReplies: number[] = []
+  let directReplies: number[] = []
   const pending = new Set<Handle>()
+  // Réponses en préparation dont la fin de frappe n'a pas encore été signalée, par jeton
+  const typing = new Map<number, { persona: NpcPersona, channelId: string }>()
+  let nextTypingToken = 1
   // Incrémentée à chaque coupure : une réponse planifiée avant ne publie plus rien
   let generation = 0
 
@@ -99,10 +113,26 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
     return enabled ? personas.filter(persona => persona.scenarioId === currentScenarioId) : []
   }
 
+  function startTyping(persona: NpcPersona, channelId: string): number {
+    const token = nextTypingToken++
+    typing.set(token, { persona, channelId })
+    deps.onTyping?.(persona, channelId, true)
+    return token
+  }
+
+  /** Fin de frappe du jeton, signalée une seule fois (publication, échec ou annulation) */
+  function stopTyping(token: number) {
+    const entry = typing.get(token)
+    if (!entry) return
+    typing.delete(token)
+    deps.onTyping?.(entry.persona, entry.channelId, false)
+  }
+
   function cancelPending() {
     generation += 1
     if (deps.cancel) for (const handle of pending) deps.cancel(handle)
     pending.clear()
+    for (const token of [...typing.keys()]) stopTyping(token)
   }
 
   /** Horodatages encore dans la fenêtre pour key (les clés vides sont retirées) */
@@ -113,11 +143,18 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
     return kept
   }
 
-  /** Vrai et compté si le PNJ peut encore répondre dans ce canal dans la minute */
-  function takeRateSlot(persona: NpcPersona, channelId: string): boolean {
+  /**
+   * Vrai et compté si le PNJ peut encore répondre dans ce canal dans la minute. Une conversation directe
+   * puise dans son propre budget global (NPC_DIRECT_REPLIES_GLOBAL_PER_MINUTE), pas dans celui des canaux
+   * d'équipe ; les plafonds par canal et par PNJ s'y appliquent de la même façon.
+   */
+  function takeRateSlot(persona: NpcPersona, channelId: string, direct: boolean): boolean {
     const now = deps.now()
     const since = now - RATE_WINDOW_MS
     allReplies = allReplies.filter(at => at > since)
+    directReplies = directReplies.filter(at => at > since)
+    const budget = direct ? directReplies : allReplies
+    const budgetMax = direct ? NPC_DIRECT_REPLIES_GLOBAL_PER_MINUTE : NPC_REPLIES_GLOBAL_PER_MINUTE
     const channelKey = channelId
     const npcKey = `${channelId}:${persona.id}`
     const inChannel = recent(channelKey, since)
@@ -125,11 +162,11 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
     if (
       own.length >= NPC_REPLIES_PER_NPC_PER_MINUTE
       || inChannel.length >= NPC_REPLIES_PER_MINUTE
-      || allReplies.length >= NPC_REPLIES_GLOBAL_PER_MINUTE
+      || budget.length >= budgetMax
     ) return false
     repliesByKey.set(channelKey, [...inChannel, now])
     repliesByKey.set(npcKey, [...own, now])
-    allReplies.push(now)
+    budget.push(now)
     return true
   }
 
@@ -156,14 +193,16 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
     })
   }
 
-  async function reply(persona: NpcPersona, message: Message, parentId: string, history: Message[]) {
+  async function reply(persona: NpcPersona, message: Message, parentId: string | undefined, history: Message[]): Promise<NpcReply> {
     // Récupération et formulation sous le même délai maximal (retriever ou moteur distants possibles)
     const text = await withTimeout(
       deps.retriever.retrieve(persona, message.text)
         .then(excerpts => deps.responder.respond({ persona, excerpts, history, question: message.text })),
       deps.respondTimeoutMs ?? NPC_RESPOND_TIMEOUT_MS,
     )
-    return { persona, channelId: message.channelId, parentId, text }
+    const result: NpcReply = { persona, channelId: message.channelId, text }
+    if (parentId !== undefined) result.parentId = parentId
+    return result
   }
 
   return {
@@ -193,32 +232,47 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
     handle(message) {
       // Jamais de réponse à un PNJ (pas de boucle), à une annonce ou à une alerte
       if (!enabled || message.npc || message.kind !== undefined) return []
-      const targets = mentioned(message.text, active())
+      // Conversation directe : son PNJ répond sans mention, les mentions d'autres PNJ y sont ignorées.
+      // Seul le propriétaire peut y écrire (vérifié par la route).
+      const directNpcId = deps.directNpcId?.(message.channelId)
+      const direct = directNpcId !== undefined
+      const targets = direct
+        ? active().filter(persona => persona.id === directNpcId)
+        : mentioned(message.text, active())
       if (targets.length === 0) return []
 
-      const parentId = message.parentId ?? message.id
+      // En canal d'équipe, toujours dans le fil ; en conversation directe, à la racine pour un message racine
+      const parentId = direct ? message.parentId : message.parentId ?? message.id
       const history = (deps.history?.(message) ?? [])
         .filter(candidate => candidate.id !== message.id)
         .slice(-NPC_HISTORY_MAX)
       const scheduled: string[] = []
       const startGeneration = generation
       targets.forEach((persona) => {
-        if (!takeRateSlot(persona, message.channelId)) return
+        if (!takeRateSlot(persona, message.channelId, direct)) return
         const delay = (deps.delayMs?.() ?? 1500) + scheduled.length * NPC_STAGGER_MS
+        // Frappe signalée dès la planification ; l'annulation (cancelPending) la termine aussi
+        const token = startTyping(persona, message.channelId)
         const handle: Handle = deps.schedule(() => {
           pending.delete(handle)
-          if (generation !== startGeneration || !enabled) return
+          if (generation !== startGeneration || !enabled) {
+            stopTyping(token)
+            return
+          }
           reply(persona, message, parentId, history)
             .then((result) => {
               // Coupés pendant que le moteur réfléchissait : rien n'est publié
               if (generation !== startGeneration || !enabled) return
+              stopTyping(token)
               deps.publish(result)
             })
             .catch((error: unknown) => {
+              stopTyping(token)
               // Annulée entre-temps : l'échec (fil effacé, moteur interrompu) est attendu, rien à signaler
               if (generation !== startGeneration || !enabled) return
               onError(error)
             })
+            .finally(() => stopTyping(token))
         }, delay)
         pending.add(handle)
         scheduled.push(persona.id)

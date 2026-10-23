@@ -7,8 +7,9 @@ import { createNpcDispatcher, type NpcDispatcher } from '../npc/dispatcher'
 import { type ResolvedNpcEngine, resolveNpcEngine } from '../npc/engines'
 import { createLexicalRetriever } from '../npc/lexical-retriever'
 import { PersonaParseError, parsePersona } from '../npc/persona-parser'
-import { addNpcMessage, listMessages } from './chat-store'
+import { addNpcMessage, getChannel, listMessages } from './chat-store'
 import { processEnv } from './env'
+import { setNpcTyping } from './presence-store'
 
 /** Base unstorage des fiches : server/npc/personas/<scénario>/<id>.md */
 const NPC_ASSETS_BASE = 'assets:npc'
@@ -96,6 +97,8 @@ export function useNpcDispatcher(): Promise<NpcDispatcher> {
       personas,
       delayMs: replyDelayMs,
       history: recentHistory,
+      directNpcId: channelId => getChannel(channelId)?.direct?.npcId,
+      onTyping: (persona, channelId, typing) => setNpcTyping({ channelId, name: persona.name, typing }, Date.now()),
       publish: reply => addNpcMessage(reply.channelId, {
         npc: reply.persona,
         text: reply.text,
@@ -112,6 +115,19 @@ export function useNpcDispatcher(): Promise<NpcDispatcher> {
  */
 export function findLoadedNpcPersona(npcId: string): NpcPersona | undefined {
   return loadedPersonas.find(persona => persona.id === npcId)
+}
+
+/**
+ * PNJ d'id npcId parmi ceux du scénario courant (activés ou non) ; undefined s'il n'en fait pas partie.
+ * Renvoie aussi l'état d'activation, pour POST /api/direct.
+ */
+export async function currentScenarioNpc(npcId: string): Promise<{ persona: NpcPersona | undefined, enabled: boolean }> {
+  const current = await useNpcDispatcher()
+  const known = current.list().some(npc => npc.id === npcId)
+  return {
+    persona: known ? loadedPersonas.find(persona => persona.id === npcId && persona.scenarioId === current.scenarioId()) : undefined,
+    enabled: current.isEnabled(),
+  }
 }
 
 /** Planifie les réponses des PNJ mentionnés dans message (sans effet s'ils sont coupés). */

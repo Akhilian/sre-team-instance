@@ -12,8 +12,10 @@ export const CHANNEL_NAME_MAX_LENGTH = 50
 export const BODY_MAX_BYTES = 16_384
 /** Messages conservés par canal : au-delà, les plus anciens sont retirés (FIFO) */
 export const CHANNEL_MESSAGES_MAX = 2000
-/** Nombre maximal de canaux, canaux pré-créés compris : 409 au-delà */
+/** Nombre maximal de canaux d'équipe, canaux pré-créés compris (conversations directes exclues) : 409 au-delà */
 export const CHANNELS_MAX = 30
+/** Nombre maximal de conversations directes participant ↔ PNJ (40 participants × 6 PNJ, avec marge) : 409 au-delà */
+export const DIRECT_CHANNELS_MAX = 300
 /** Entrées de présence actives (une par nom) : 429 pour un nouveau nom au-delà */
 export const PRESENCE_ENTRIES_MAX = 200
 /** Auteurs distincts par réaction (emoji d'un message) : 409 pour un nouvel auteur au-delà */
@@ -39,5 +41,13 @@ export const NPC_MENTIONS_PER_MESSAGE_MAX = 3
 export const NPC_REPLIES_PER_NPC_PER_MINUTE = 6
 /** Réponses de tous les PNJ dans un même canal par minute glissante : ils s'y taisent au-delà */
 export const NPC_REPLIES_PER_MINUTE = 20
-/** Réponses de tous les PNJ, tous canaux confondus, par minute glissante : borne les appels au modèle */
+/** Réponses de tous les PNJ dans les canaux d'équipe, par minute glissante : borne les appels au modèle */
 export const NPC_REPLIES_GLOBAL_PER_MINUTE = 60
+/**
+ * Réponses de tous les PNJ dans les conversations directes, par minute glissante : budget séparé de celui
+ * des canaux d'équipe, pour que des participants qui interrogent les PNJ en direct n'étouffent pas les
+ * réponses dans #incident-en-cours. Dimensionnement simple et généreux : un atelier compte au plus ~15
+ * participants, qui ne parlent pas en permanence. Chaque conversation reste bornée par
+ * NPC_REPLIES_PER_NPC_PER_MINUTE (un seul PNJ par conversation). Pire cas : 60 + 120 appels au modèle par minute.
+ */
+export const NPC_DIRECT_REPLIES_GLOBAL_PER_MINUTE = 120

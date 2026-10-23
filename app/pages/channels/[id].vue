@@ -17,8 +17,27 @@ const PRESENCE_MAX_AVATARS = 4
 const route = useRoute()
 const channelId = computed(() => String(route.params.id))
 
-const { data: channels, refresh: refreshChannels } = await useFetch('/api/channels')
-const channel = computed(() => channels.value?.find(c => c.id === channelId.value))
+const { displayName, loaded, setDisplayName } = useDisplayName()
+
+// Conversations directes listées pour le nom d'affichage ; au SSR (nom inconnu, lu dans le localStorage),
+// pour le propriétaire de la conversation ouverte, déduit de son id dm-<slug>--<npcId>
+const routeOwner = computed(() => {
+  const match = /^dm-(.+?)--/.exec(channelId.value)
+  return match ? match[1]! : ''
+})
+const listParticipant = computed(() => displayName.value || routeOwner.value)
+const channelsQuery = computed(() => listParticipant.value ? { participant: listParticipant.value } : {})
+
+const { data: channels, refresh: refreshChannels } = await useFetch<ChannelSummary[]>('/api/channels', { query: channelsQuery })
+// Dernier état connu du canal courant : une conversation ouverte par URL sous un autre nom reste affichée
+const knownChannel = ref<Channel | undefined>()
+const channel = computed(() => {
+  const found = channels.value?.find(c => c.id === channelId.value)
+  return found ?? (knownChannel.value?.id === channelId.value ? knownChannel.value : undefined)
+})
+watch(channel, (current) => {
+  if (current) knownChannel.value = current
+}, { immediate: true })
 if (!channel.value) {
   throw createError({ statusCode: 404, statusMessage: 'Canal introuvable', fatal: true })
 }
@@ -31,6 +50,15 @@ const { data: messages } = await useFetch<Message[]>(
 // PNJ du scénario : leurs noms sont surlignés comme mentions avant même leur première réponse
 const { data: npcState } = await useFetch<NpcsResponse>('/api/npcs')
 const npcNames = computed(() => npcState.value?.npcs.map(npc => npc.name) ?? [])
+
+// Conversation directe : en-tête et composeur au nom du PNJ (rôle repris de /api/npcs)
+const directNpc = computed(() => {
+  const direct = channel.value?.direct
+  if (!direct) return undefined
+  const npc = npcState.value?.npcs.find(candidate => candidate.id === direct.npcId)
+  // PNJ d'un autre scénario : nom tiré du nom de la conversation « participant ↔ PNJ »
+  return npc ?? { id: direct.npcId, name: channel.value!.name.split(' ↔ ').at(-1) ?? direct.npcId, role: '' }
+})
 
 // Non-lus : calculés côté client seulement (localStorage), vides au SSR et avant montage
 const unread = ref<Record<string, number>>({})
@@ -56,7 +84,6 @@ useHead({
   },
 })
 
-const { displayName, loaded, setDisplayName } = useDisplayName()
 const editingName = ref(false)
 const showNameDialog = computed(() => loaded.value && (displayName.value === '' || editingName.value))
 
@@ -204,8 +231,12 @@ async function pollRound(): Promise<void> {
   heartbeat()
   const [deltaResult, channelsResult] = await Promise.allSettled([
     $fetch<MessagesDelta>(`/api/channels/${targetChannel}/messages`, { query: { since } }),
-    $fetch<ChannelSummary[]>('/api/channels'),
+    $fetch<ChannelSummary[]>('/api/channels', { query: channelsQuery.value }),
   ])
+  // PNJ activés ou coupés par l'animateur : section « Conversations » et mentions à jour, sans autre boucle
+  $fetch<NpcsResponse>('/api/npcs').then((state) => {
+    if (!unmounted) npcState.value = state
+  }).catch(() => {})
   if (unmounted) return
 
   let failed = false
@@ -333,13 +364,29 @@ onBeforeUnmount(() => {
         :current-id="channelId"
         :unread="unread"
         :open="channelPanelOpen"
+        :participant="displayName"
+        :npcs="npcState?.npcs ?? []"
+        :npcs-enabled="npcState?.enabled ?? false"
         @created="onChannelCreated"
         @close="channelPanelOpen = false"
       />
       <div v-if="channelPanelOpen" class="channel-panel-veil" data-testid="channel-panel-veil" @click="channelPanelOpen = false" />
 
       <main class="channel">
-        <header class="channel__header">
+        <header v-if="directNpc" class="channel__header" data-testid="direct-header">
+          <span class="avatar" aria-hidden="true" :style="{ background: avatarColor(directNpc.name) }">{{ initials(directNpc.name) }}</span>
+          <div class="channel__title">
+            <h1 class="channel__name">
+              {{ directNpc.name }}
+              <span class="channel__npc" title="Personnage non joueur">PNJ</span>
+            </h1>
+            <span class="channel__team" data-testid="direct-role">{{ directNpc.role || 'Conversation' }}</span>
+          </div>
+          <nav class="channel__tabs" aria-hidden="true">
+            <span class="channel__tab channel__tab--active">Conversation</span>
+          </nav>
+        </header>
+        <header v-else class="channel__header">
           <span class="channel__logo" aria-hidden="true">SRE</span>
           <div class="channel__title">
             <h1 class="channel__name">{{ channel?.name }}</h1>
@@ -369,7 +416,13 @@ onBeforeUnmount(() => {
 
         <MessageList :messages="messages ?? []" :me="displayName" :npc-names="npcNames" :reply="reply" :react="react" :set-alert-status="setAlertStatus" @typing="onTyping" />
         <p class="typing-indicator" data-testid="typing-indicator" aria-live="polite">{{ typingText }}</p>
-        <Composer :disabled="!displayName" :channel-name="channel?.name ?? ''" :send="send" @typing="onTyping" />
+        <Composer
+          :disabled="!displayName"
+          :channel-name="channel?.name ?? ''"
+          :placeholder="directNpc ? `Écrire à ${directNpc.name}` : undefined"
+          :send="send"
+          @typing="onTyping"
+        />
       </main>
     </div>
 
@@ -506,6 +559,21 @@ onBeforeUnmount(() => {
 
 .channel__title {
   min-width: 0;
+}
+
+/* Même badge que sur les messages de PNJ */
+.channel__npc {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--teams-purple-tint);
+  color: var(--teams-purple);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 16px;
+  vertical-align: middle;
 }
 
 .channel__name {
