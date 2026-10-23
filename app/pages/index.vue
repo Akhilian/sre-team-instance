@@ -1,11 +1,14 @@
 <script setup lang="ts">
-const { data: health, error } = await useFetch('/api/health')
+// Accueil : redirige vers le canal d'incident (premier canal dont l'id commence par « incident- »)
+const { data: channels } = await useFetch('/api/channels')
+const target = channels.value?.find(channel => channel.id.startsWith('incident-')) ?? channels.value?.[0]
+
+if (!target) {
+  throw createError({ statusCode: 503, statusMessage: 'Aucun canal disponible', fatal: true })
+}
+await navigateTo(`/channels/${target.id}`, { redirectCode: 302, replace: true })
 </script>
 
 <template>
-  <main>
-    <h1>SRE Team Instance</h1>
-    <p v-if="health">API : {{ health.status }} ({{ health.timestamp }})</p>
-    <p v-else-if="error">API indisponible : {{ error.message }}</p>
-  </main>
+  <div />
 </template>

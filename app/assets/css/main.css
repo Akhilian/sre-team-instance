@@ -1,0 +1,59 @@
+/* Styles globaux façon Microsoft Teams */
+:root {
+  --teams-purple-dark: #464775;
+  --teams-purple: #5b5fc7;
+  --teams-purple-light: #6264a7;
+  --teams-purple-tint: #e8ebfa;
+  --teams-app-bar: #33344a;
+  --teams-bg: #f5f5f5;
+  --teams-panel: #ebebeb;
+  --teams-border: #e0e0e0;
+  --teams-text: #242424;
+  --teams-text-muted: #616161;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  color: var(--teams-text);
+  background: var(--teams-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+#__nuxt {
+  height: 100%;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
