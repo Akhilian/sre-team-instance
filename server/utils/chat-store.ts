@@ -76,13 +76,32 @@ function requireText(value: unknown, field: string, maxLength: number): string {
   return trimmed
 }
 
+/** Un parentId doit désigner un message racine du même canal : un seul niveau de fil. */
+function requireParentId(value: unknown, messages: readonly Message[]): string {
+  if (typeof value !== 'string') {
+    throw new MessageValidationError('parentId doit être une chaîne')
+  }
+  const parent = messages.find(message => message.id === value)
+  if (!parent) {
+    throw new MessageValidationError('parentId ne désigne aucun message de ce canal')
+  }
+  if (parent.parentId !== undefined) {
+    throw new MessageValidationError('parentId doit désigner un message racine, pas une réponse')
+  }
+  return value
+}
+
 /** Valide puis ajoute un message ; lève une erreur sans rien ajouter si l'entrée est invalide. */
-export function addMessage(channelId: string, input: { author?: unknown, text?: unknown }): Message {
+export function addMessage(
+  channelId: string,
+  input: { author?: unknown, text?: unknown, parentId?: unknown },
+): Message {
   const messages = messagesByChannel.get(channelId)
   if (!messages) throw new ChannelNotFoundError(channelId)
 
   const author = requireText(input?.author, 'author', AUTHOR_MAX_LENGTH)
   const text = requireText(input?.text, 'text', TEXT_MAX_LENGTH)
+  const parentId = input?.parentId === undefined ? undefined : requireParentId(input.parentId, messages)
 
   const message: Message = {
     id: crypto.randomUUID(),
@@ -91,6 +110,8 @@ export function addMessage(channelId: string, input: { author?: unknown, text?: 
     text,
     createdAt: new Date().toISOString(),
   }
+  // Les racines restent sans champ parentId
+  if (parentId !== undefined) message.parentId = parentId
   messages.push(message)
   return { ...message }
 }

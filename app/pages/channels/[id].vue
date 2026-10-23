@@ -36,6 +36,14 @@ async function send(text: string) {
   await refresh()
 }
 
+async function reply(parentId: string, text: string) {
+  await $fetch(`/api/channels/${channelId.value}/messages`, {
+    method: 'POST',
+    body: { author: displayName.value, text, parentId },
+  })
+  await refresh()
+}
+
 async function onChannelCreated(created: Channel) {
   await refreshChannels()
   await navigateTo(`/channels/${created.id}`)
@@ -104,7 +112,7 @@ onBeforeUnmount(() => {
           </nav>
         </header>
 
-        <MessageList :messages="messages ?? []" :me="displayName" />
+        <MessageList :messages="messages ?? []" :me="displayName" :reply="reply" />
         <Composer :disabled="!displayName" :channel-name="channel?.name ?? ''" :send="send" />
       </main>
     </div>

@@ -1,11 +1,23 @@
 <script setup lang="ts">
 import type { Message } from '~~/shared/types/chat'
+import { groupThreads } from '~/utils/threads'
 
 const props = defineProps<{
   messages: Message[]
   /** Nom du participant courant : ses messages sont alignés à droite */
   me: string
+  /** Poste une réponse dans le fil de la racine parentId */
+  reply: (parentId: string, text: string) => Promise<void>
 }>()
+
+const threads = computed(() => groupThreads(props.messages))
+
+// Un seul champ de réponse ouvert à la fois
+const replyingTo = ref<string | null>(null)
+
+function isMine(message: Message): boolean {
+  return props.me !== '' && message.author === props.me
+}
 
 const scroller = ref<HTMLElement | null>(null)
 
@@ -23,16 +35,17 @@ function scrollToBottom() {
 
 onMounted(scrollToBottom)
 
-// Fil ancré en bas façon Teams : à l'arrivée de messages (polling ou envoi), on suit le bas,
-// sauf si l'utilisateur a remonté le fil. La proximité est mesurée avant la mise à jour du DOM
-// (watch en flush 'pre'), le défilement après (nextTick). Son propre message ramène toujours en bas.
+// Fil ancré en bas façon Teams : seule l'arrivée d'une nouvelle racine (polling ou envoi) fait suivre
+// le bas, sauf si l'utilisateur a remonté le fil ; une réponse dans un fil ancien ne déplace pas la vue.
+// La proximité est mesurée avant la mise à jour du DOM (watch en flush 'pre'), le défilement après
+// (nextTick). Sa propre racine ramène toujours en bas.
 watch(
-  () => [props.messages.length, props.messages.at(-1)?.id],
-  (_, [, previousLastId]) => {
+  () => threads.value.at(-1)?.id,
+  (lastId, previousLastId) => {
     const el = scroller.value
-    if (!el) return
-    const last = props.messages.at(-1)
-    const sentByMe = props.me !== '' && last?.author === props.me && last.id !== previousLastId
+    if (!el || lastId === previousLastId) return
+    const last = threads.value.at(-1)
+    const sentByMe = last !== undefined && isMine(last)
     if (sentByMe || isNearBottom(el)) nextTick(scrollToBottom)
   },
 )
@@ -41,22 +54,59 @@ watch(
 <template>
   <div ref="scroller" class="message-scroller">
     <ol class="message-list" data-testid="message-list">
-      <li v-if="messages.length === 0" class="message-list__empty">
+      <li v-if="threads.length === 0" class="message-list__empty">
         Aucun message pour l'instant. Lancez la conversation !
       </li>
-      <li
-        v-for="message in messages"
-        :key="message.id"
-        class="message"
-        :class="{ 'message--mine': me !== '' && message.author === me }"
-      >
-        <span class="avatar" :style="{ background: avatarColor(message.author) }" :title="message.author">{{ initials(message.author) }}</span>
-        <div class="message__bubble">
-          <div class="message__meta">
-            <span class="message__author">{{ message.author }}</span>
-            <time class="message__time" :datetime="message.createdAt">{{ formatTime(message.createdAt) }}</time>
+      <li v-for="thread in threads" :key="thread.id" class="thread" data-testid="thread">
+        <div class="message" :class="{ 'message--mine': isMine(thread) }">
+          <span class="avatar" :style="{ background: avatarColor(thread.author) }" :title="thread.author">{{ initials(thread.author) }}</span>
+          <div class="message__bubble">
+            <div class="message__meta">
+              <span class="message__author">{{ thread.author }}</span>
+              <time class="message__time" :datetime="thread.createdAt">{{ formatTime(thread.createdAt) }}</time>
+            </div>
+            <p class="message__text">{{ thread.text }}</p>
           </div>
-          <p class="message__text">{{ message.text }}</p>
+        </div>
+
+        <div class="thread__footer">
+          <ol v-if="thread.replies.length > 0" class="thread__replies">
+            <li
+              v-for="message in thread.replies"
+              :key="message.id"
+              class="message message--reply"
+              :class="{ 'message--mine': isMine(message) }"
+              data-testid="reply"
+            >
+              <span class="avatar" :style="{ background: avatarColor(message.author) }" :title="message.author">{{ initials(message.author) }}</span>
+              <div class="message__bubble">
+                <div class="message__meta">
+                  <span class="message__author">{{ message.author }}</span>
+                  <time class="message__time" :datetime="message.createdAt">{{ formatTime(message.createdAt) }}</time>
+                </div>
+                <p class="message__text">{{ message.text }}</p>
+              </div>
+            </li>
+          </ol>
+
+          <ReplyComposer
+            v-if="replyingTo === thread.id"
+            :send="text => reply(thread.id, text)"
+            @close="replyingTo = null"
+          />
+          <button
+            v-else
+            type="button"
+            class="thread__reply-button"
+            data-testid="reply-button"
+            :disabled="me === ''"
+            @click="replyingTo = thread.id"
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path d="M9 7 4 12l5 5M4 12h10a6 6 0 0 1 6 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            Répondre
+          </button>
         </div>
       </li>
     </ol>
@@ -84,6 +134,54 @@ watch(
   margin-top: 40px;
   text-align: center;
   color: var(--teams-text-muted);
+}
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Réponses et lien « Répondre » : indentés sous la racine (largeur de l'avatar + écart) */
+.thread__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 42px;
+}
+
+.thread__replies {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--teams-border);
+  list-style: none;
+}
+
+.thread__reply-button {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--teams-purple);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.thread__reply-button:hover:not(:disabled) {
+  background: var(--teams-purple-tint);
+}
+
+.thread__reply-button:disabled {
+  color: #bdbdbd;
+  cursor: default;
 }
 
 .message {
@@ -122,6 +220,36 @@ watch(
   line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Réponses : plus compactes que la racine */
+.message--reply {
+  gap: 8px;
+}
+
+.message--reply .avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+
+.message--reply .message__bubble {
+  max-width: 70%;
+  padding: 5px 10px 6px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+}
+
+.message--reply .message__author {
+  font-size: 12px;
+}
+
+.message--reply .message__time {
+  font-size: 11px;
+}
+
+.message--reply .message__text {
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 /* Ses propres messages : à droite, bulle violette claire, sans avatar ni nom */

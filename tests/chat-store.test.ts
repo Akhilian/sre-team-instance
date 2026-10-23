@@ -84,6 +84,33 @@ describe('chat-store', () => {
   })
 })
 
+describe('addMessage avec parentId', () => {
+  beforeEach(() => resetChatStore())
+
+  it('ajoute une réponse à un message racine du même canal', () => {
+    const root = addMessage('general', { author: 'Alice', text: 'Latence API en hausse' })
+    expect(root).not.toHaveProperty('parentId')
+    const reply = addMessage('general', { author: 'Bob', text: 'Je regarde', parentId: root.id })
+    expect(reply).toMatchObject({ channelId: 'general', author: 'Bob', text: 'Je regarde', parentId: root.id })
+    expect(listMessages('general')).toEqual([root, reply])
+  })
+
+  it.each([
+    ['un parentId inconnu', () => 'inconnu'],
+    ['un parentId non-chaîne', () => 123],
+    ['le parentId d\'une réponse', (rootId: string) =>
+      addMessage('general', { author: 'Bob', text: 'Réponse', parentId: rootId }).id],
+    ['le parentId d\'une racine d\'un autre canal', () =>
+      addMessage('incident-en-cours', { author: 'Alice', text: 'Ailleurs' }).id],
+  ])('refuse %s sans rien ajouter', (_, makeParentId: (rootId: string) => unknown) => {
+    const root = addMessage('general', { author: 'Alice', text: 'Racine' })
+    const parentId = makeParentId(root.id)
+    const before = listMessages('general')
+    expect(() => addMessage('general', { author: 'Bob', text: 'x', parentId })).toThrow(MessageValidationError)
+    expect(listMessages('general')).toEqual(before)
+  })
+})
+
 describe('slugifyChannelName', () => {
   it.each([
     ['Incident Base de Données', 'incident-base-de-donnees'],

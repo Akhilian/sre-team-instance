@@ -11,4 +11,6 @@ export interface Message {
   text: string
   /** Date ISO 8601 */
   createdAt: string
+  /** Id du message racine du fil ; absent pour un message racine */
+  parentId?: string
 }
