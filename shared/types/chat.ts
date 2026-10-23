@@ -1,4 +1,6 @@
 // Types partagés entre l'API (server/) et le front (app/)
+import type { AlertSeverity, AlertStatus } from '../utils/alerts'
+
 export interface Channel {
   id: string
   name: string
@@ -23,8 +25,23 @@ export interface Message {
   parentId?: string
   /** Réactions dans l'ordre de première réaction ; absent sans aucune réaction */
   reactions?: Reaction[]
-  /** 'announcement' pour une annonce de l'animateur ; absent pour un message ordinaire */
-  kind?: 'announcement'
+  /** 'announcement' (annonce de l'animateur) ou 'alert' (carte d'alerte) ; absent pour un message ordinaire */
+  kind?: 'announcement' | 'alert'
+  /** Détails de l'alerte, présent seulement quand kind === 'alert' ; text en est la description */
+  alert?: Alert
+}
+
+export interface Alert {
+  severity: AlertSeverity
+  title: string
+  service: string
+  status: AlertStatus
+  acknowledgedBy?: string
+  /** Date ISO 8601 */
+  acknowledgedAt?: string
+  resolvedBy?: string
+  /** Date ISO 8601 */
+  resolvedAt?: string
 }
 
 export interface Reaction {

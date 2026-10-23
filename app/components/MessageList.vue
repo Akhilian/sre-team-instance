@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { Message } from '~~/shared/types/chat'
+import type { AlertStatus } from '~~/shared/utils/alerts'
+import { ALERT_SEVERITY_COLORS } from '~~/shared/utils/alerts'
 import { mentionsName } from '~/utils/mentions'
 import { groupThreads } from '~/utils/threads'
 
@@ -11,6 +13,8 @@ const props = defineProps<{
   reply: (parentId: string, text: string) => Promise<void>
   /** Bascule la réaction emoji du participant courant sur un message */
   react: (messageId: string, emoji: string) => Promise<void>
+  /** Acquitte ou résout une carte d'alerte au nom du participant courant */
+  setAlertStatus: (messageId: string, status: Exclude<AlertStatus, 'triggered'>) => Promise<void>
 }>()
 
 const emit = defineEmits<{
@@ -29,6 +33,11 @@ function mentionsMe(message: Message): boolean {
 
 function isAnnouncement(message: Message): boolean {
   return message.kind === 'announcement'
+}
+
+/** Bande gauche de la bulle d'une alerte, colorée selon sa sévérité */
+function alertBandStyle(message: Message): Record<string, string> | undefined {
+  return message.alert ? { borderLeftColor: ALERT_SEVERITY_COLORS[message.alert.severity] } : undefined
 }
 
 // Un seul champ de réponse ouvert à la fois
@@ -79,12 +88,12 @@ watch(
       <li v-for="thread in threads" :key="thread.id" class="thread" data-testid="thread">
         <div
           class="message"
-          :class="{ 'message--mentions-me': mentionsMe(thread), 'message--announcement': isAnnouncement(thread) }"
+          :class="{ 'message--mentions-me': mentionsMe(thread), 'message--announcement': isAnnouncement(thread), 'message--alert': thread.kind === 'alert' }"
           :data-testid="isAnnouncement(thread) ? 'announcement' : undefined"
         >
           <span class="avatar" :style="{ background: avatarColor(thread.author) }" :title="thread.author">{{ initials(thread.author) }}</span>
           <div class="message__body">
-            <div class="message__bubble" :data-testid="mentionsMe(thread) ? 'mentions-me' : undefined">
+            <div class="message__bubble" :data-testid="mentionsMe(thread) ? 'mentions-me' : undefined" :style="alertBandStyle(thread)">
               <div v-if="isAnnouncement(thread)" class="message__banner">
                 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
                   <path d="M4 10v4h3l6 4V6L7 10H4Zm12-1.5a4 4 0 0 1 0 7M18.5 6a7.5 7.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
@@ -95,7 +104,14 @@ watch(
                 <span class="message__author">{{ thread.author }}</span>
                 <time class="message__time" :datetime="thread.createdAt">{{ formatTime(thread.createdAt) }}</time>
               </div>
-              <MessageText :text="thread.text" :known-names="knownNames" :me="me" />
+              <AlertCard
+                v-if="thread.kind === 'alert' && thread.alert"
+                :alert="thread.alert"
+                :text="thread.text"
+                :me="me"
+                :set-status="status => setAlertStatus(thread.id, status)"
+              />
+              <MessageText v-else :text="thread.text" :known-names="knownNames" :me="me" />
             </div>
             <MessageReactions :reactions="thread.reactions" :me="me" :react="emoji => react(thread.id, emoji)" />
           </div>
@@ -319,6 +335,18 @@ watch(
 /* Message qui mentionne le participant courant : bordure gauche colorée, façon Teams */
 .message--mentions-me .message__bubble {
   border-left: 3px solid #c4314b;
+}
+
+/* Carte d'alerte façon connecteur Teams : bulle élargie, bande de sévérité à gauche (couleur en style) */
+.message--alert .message__body {
+  width: 100%;
+  max-width: 520px;
+}
+
+.message--alert .message__bubble {
+  width: 100%;
+  box-sizing: border-box;
+  border-left: 5px solid;
 }
 
 /* Écran étroit : marges réduites, bulles sur toute la largeur disponible */

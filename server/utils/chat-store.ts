@@ -2,6 +2,12 @@
 // Module pur (sans auto-import Nuxt) pour être testable directement avec Vitest.
 import type { Channel, ChannelSummary, Message } from '../../shared/types/chat'
 import { isReactionEmoji } from '../../shared/utils/reactions'
+import {
+  ALERT_SERVICE_MAX_LENGTH,
+  ALERT_TITLE_MAX_LENGTH,
+  canTransition,
+  isAlertSeverity,
+} from '../../shared/utils/alerts'
 
 export const AUTHOR_MAX_LENGTH = 50
 export const TEXT_MAX_LENGTH = 2000
@@ -43,6 +49,14 @@ export class ChannelValidationError extends Error {
   }
 }
 
+/** Changement de statut d'alerte interdit (déjà acquittée, déjà résolue) : 409 */
+export class AlertTransitionError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AlertTransitionError'
+  }
+}
+
 export class ChannelConflictError extends Error {
   constructor(channelId: string) {
     super(`Un canal existe déjà avec l'identifiant ${channelId}`)
@@ -81,12 +95,13 @@ export function hasChannel(channelId: string): boolean {
   return messagesByChannel.has(channelId)
 }
 
-/** Copie profonde : les réactions renvoyées ne partagent rien avec le store. */
+/** Copie profonde : les réactions et l'alerte renvoyées ne partagent rien avec le store. */
 function copyMessage(message: Message): Message {
   const copy = { ...message }
   if (message.reactions) {
     copy.reactions = message.reactions.map(reaction => ({ emoji: reaction.emoji, authors: [...reaction.authors] }))
   }
+  if (message.alert) copy.alert = { ...message.alert }
   return copy
 }
 
@@ -165,6 +180,77 @@ export function addAnnouncement(channelId: string, input: { text?: unknown }): M
     kind: 'announcement',
   }
   messages.push(message)
+  return copyMessage(message)
+}
+
+export const ALERT_AUTHOR = 'Alerting'
+
+/** Carte d'alerte publiée par l'animateur : message racine signé « Alerting », au statut triggered. */
+export function addAlert(
+  channelId: string,
+  input: { severity?: unknown, title?: unknown, service?: unknown, text?: unknown },
+): Message {
+  const messages = messagesByChannel.get(channelId)
+  if (!messages) throw new ChannelNotFoundError(channelId)
+
+  const severity = input?.severity
+  if (!isAlertSeverity(severity)) {
+    throw new MessageValidationError('severity doit valoir SEV1, SEV2 ou SEV3')
+  }
+  const title = requireText(input?.title, 'title', ALERT_TITLE_MAX_LENGTH)
+  const service = requireText(input?.service, 'service', ALERT_SERVICE_MAX_LENGTH)
+  const text = requireText(input?.text, 'text', TEXT_MAX_LENGTH)
+
+  const message: Message = {
+    id: crypto.randomUUID(),
+    channelId,
+    author: ALERT_AUTHOR,
+    text,
+    createdAt: new Date().toISOString(),
+    kind: 'alert',
+    alert: { severity, title, service, status: 'triggered' },
+  }
+  messages.push(message)
+  return copyMessage(message)
+}
+
+/**
+ * Acquitte ou résout une alerte au nom de name. Transitions : triggered → acknowledged,
+ * triggered|acknowledged → resolved ; toute autre transition lève AlertTransitionError.
+ */
+export function setAlertStatus(
+  channelId: string,
+  messageId: string,
+  input: { status?: unknown, name?: unknown },
+): Message {
+  const messages = messagesByChannel.get(channelId)
+  if (!messages) throw new ChannelNotFoundError(channelId)
+  const message = messages.find(candidate => candidate.id === messageId)
+  if (!message) throw new MessageNotFoundError(messageId)
+
+  const status = input?.status
+  if (status !== 'acknowledged' && status !== 'resolved') {
+    throw new MessageValidationError('status doit valoir acknowledged ou resolved')
+  }
+  const name = requireText(input?.name, 'name', AUTHOR_MAX_LENGTH)
+  const alert = message.alert
+  if (message.kind !== 'alert' || !alert) {
+    throw new MessageValidationError('Ce message n\'est pas une alerte')
+  }
+  if (!canTransition(alert.status, status)) {
+    throw new AlertTransitionError(alert.status === 'resolved' ? 'Alerte déjà résolue' : 'Alerte déjà acquittée')
+  }
+
+  const at = new Date().toISOString()
+  alert.status = status
+  if (status === 'acknowledged') {
+    alert.acknowledgedBy = name
+    alert.acknowledgedAt = at
+  }
+  else {
+    alert.resolvedBy = name
+    alert.resolvedAt = at
+  }
   return copyMessage(message)
 }
 

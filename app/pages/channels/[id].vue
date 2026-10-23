@@ -126,6 +126,22 @@ async function react(messageId: string, emoji: string) {
   messages.value = (messages.value ?? []).map(message => message.id === updated.id ? updated : message)
 }
 
+// Acquitte ou résout une alerte ; le message renvoyé remplace l'ancien sans attendre le polling.
+// En cas de refus (déjà acquittée ailleurs…), on recharge pour afficher l'état réel, puis on remonte l'erreur.
+async function setAlertStatus(messageId: string, status: 'acknowledged' | 'resolved') {
+  try {
+    const updated = await $fetch<Message>(`/api/channels/${channelId.value}/messages/${messageId}/alert-status`, {
+      method: 'POST',
+      body: { status, name: displayName.value },
+    })
+    messages.value = (messages.value ?? []).map(message => message.id === updated.id ? updated : message)
+  }
+  catch (error) {
+    await refresh()
+    throw error
+  }
+}
+
 // Panneau des canaux en tiroir sur écran étroit : fermé au SSR, refermé à chaque navigation
 const channelPanelOpen = ref(false)
 watch(channelId, () => {
@@ -247,7 +263,7 @@ onBeforeUnmount(() => {
           </div>
         </header>
 
-        <MessageList :messages="messages ?? []" :me="displayName" :reply="reply" :react="react" @typing="onTyping" />
+        <MessageList :messages="messages ?? []" :me="displayName" :reply="reply" :react="react" :set-alert-status="setAlertStatus" @typing="onTyping" />
         <p class="typing-indicator" data-testid="typing-indicator" aria-live="polite">{{ typingText }}</p>
         <Composer :disabled="!displayName" :channel-name="channel?.name ?? ''" :send="send" @typing="onTyping" />
       </main>

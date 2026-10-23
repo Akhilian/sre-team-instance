@@ -5,7 +5,7 @@ Application full-stack [Nuxt 4](https://nuxt.com/docs) : front Vue et API dans l
 ## Structure
 
 - `app/` : front façon Teams (pages dans `app/pages/` : `/` redirige vers le canal d'incident, `/channels/:id` affiche le fil avec rafraîchissement toutes les 3 s ; composants dans `app/components/`, nom d'affichage mémorisé dans le `localStorage`)
-- `server/api/` : back-end (routes API Nitro, ex. `GET /api/health`, `GET /api/channels`, `GET|POST /api/channels/:id/messages`, `POST /api/channels/:id/messages/:messageId/reactions`, `POST /api/presence` (présence et frappe, en mémoire), et pour l'animateur `POST /api/admin/announcements` et `POST /api/admin/reset`)
+- `server/api/` : back-end (routes API Nitro, ex. `GET /api/health`, `GET /api/channels`, `GET|POST /api/channels/:id/messages`, `POST /api/channels/:id/messages/:messageId/reactions`, `POST /api/channels/:id/messages/:messageId/alert-status` (acquitter / résoudre une alerte), `POST /api/presence` (présence et frappe, en mémoire), et pour l'animateur `POST /api/admin/announcements`, `POST /api/admin/alerts` et `POST /api/admin/reset`)
 - `server/utils/` : logique serveur (store en mémoire des canaux et messages)
 - `shared/types/` : types partagés front / API
 - `tests/` : tests unitaires Vitest
@@ -32,7 +32,7 @@ Le fichier [`render.yaml`](./render.yaml) décrit un *Web Service* Node (Bluepri
 
 ## Outils d'animateur
 
-La page `/admin` (non liée dans la navigation) permet de publier une annonce dans un canal et de
+La page `/admin` (non liée dans la navigation) permet de publier une annonce ou une carte d'alerte (SEV1 à SEV3) dans un canal et de
 réinitialiser les conversations (messages effacés, canaux conservés). Les routes `/api/admin/*`
 exigent l'en-tête `x-facilitator-code`, comparé à la variable d'environnement `FACILITATOR_CODE`
 (`animateur` si elle est absente ou vide). Sur Render, elle est déclarée dans `render.yaml` avec

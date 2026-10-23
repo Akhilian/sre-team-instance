@@ -1,7 +1,14 @@
 <script setup lang="ts">
-// Outils d'animateur (page non liée dans la navigation) : annonce dans un canal, réinitialisation
-// des conversations. Le code animateur est gardé dans le sessionStorage, envoyé en x-facilitator-code.
+// Outils d'animateur (page non liée dans la navigation) : annonce et carte d'alerte dans un canal,
+// réinitialisation des conversations. Le code animateur est gardé dans le sessionStorage, envoyé en x-facilitator-code.
 import type { Message } from '~~/shared/types/chat'
+import type { AlertSeverity } from '~~/shared/utils/alerts'
+import {
+  ALERT_SERVICE_MAX_LENGTH,
+  ALERT_SEVERITIES,
+  ALERT_SEVERITY_LABELS,
+  ALERT_TITLE_MAX_LENGTH,
+} from '~~/shared/utils/alerts'
 
 const FACILITATOR_CODE_STORAGE_KEY = 'sre-team-instance:facilitator-code'
 const TEXT_MAX_LENGTH = 2000
@@ -13,6 +20,11 @@ const { data: channels } = await useFetch('/api/channels', { default: () => [] }
 const code = ref('')
 const channelId = ref(channels.value.find(channel => channel.id.startsWith('incident-'))?.id ?? channels.value[0]?.id ?? '')
 const text = ref('')
+const alertChannelId = ref(channelId.value)
+const alertSeverity = ref<AlertSeverity>('SEV1')
+const alertTitle = ref('')
+const alertService = ref('')
+const alertText = ref('')
 const busy = ref(false)
 const status = ref<{ kind: 'success' | 'error', text: string } | null>(null)
 
@@ -23,6 +35,8 @@ onMounted(() => {
 watch(code, value => sessionStorage.setItem(FACILITATOR_CODE_STORAGE_KEY, value))
 
 const canPublish = computed(() => !busy.value && code.value !== '' && channelId.value !== '' && text.value.trim() !== '')
+const canPublishAlert = computed(() => !busy.value && code.value !== '' && alertChannelId.value !== ''
+  && alertTitle.value.trim() !== '' && alertService.value.trim() !== '' && alertText.value.trim() !== '')
 const canReset = computed(() => !busy.value && code.value !== '')
 
 function errorText(error: unknown): string {
@@ -56,6 +70,27 @@ function publish() {
     const name = channels.value.find(channel => channel.id === channelId.value)?.name ?? channelId.value
     text.value = ''
     return `Annonce publiée dans « ${name} ».`
+  })
+}
+
+function publishAlert() {
+  if (!canPublishAlert.value) return
+  return run(async () => {
+    await $fetch<Message>('/api/admin/alerts', {
+      method: 'POST',
+      headers: { 'x-facilitator-code': code.value },
+      body: {
+        channelId: alertChannelId.value,
+        severity: alertSeverity.value,
+        title: alertTitle.value.trim(),
+        service: alertService.value.trim(),
+        text: alertText.value.trim(),
+      },
+    })
+    const name = channels.value.find(channel => channel.id === alertChannelId.value)?.name ?? alertChannelId.value
+    alertTitle.value = ''
+    alertText.value = ''
+    return `Alerte ${alertSeverity.value} publiée dans « ${name} ».`
   })
 }
 
@@ -109,6 +144,50 @@ function reset() {
         <div class="card__actions">
           <button type="submit" class="button button--primary" data-testid="announcement-submit" :disabled="!canPublish">
             Publier l'annonce
+          </button>
+        </div>
+      </form>
+
+      <form class="card" data-testid="alert-form" @submit.prevent="publishAlert">
+        <h2>Publier une alerte</h2>
+        <label for="alert-channel">Canal</label>
+        <select id="alert-channel" v-model="alertChannelId" data-testid="alert-channel">
+          <option v-for="channel in channels" :key="channel.id" :value="channel.id">{{ channel.name }}</option>
+        </select>
+        <label for="alert-severity">Sévérité</label>
+        <select id="alert-severity" v-model="alertSeverity" data-testid="alert-severity">
+          <option v-for="severity in ALERT_SEVERITIES" :key="severity" :value="severity">{{ ALERT_SEVERITY_LABELS[severity] }}</option>
+        </select>
+        <label for="alert-title">Titre</label>
+        <input
+          id="alert-title"
+          v-model="alertTitle"
+          data-testid="alert-title"
+          type="text"
+          :maxlength="ALERT_TITLE_MAX_LENGTH"
+          placeholder="Ex. Taux d'erreur 5xx > 20 %"
+        >
+        <label for="alert-service">Service</label>
+        <input
+          id="alert-service"
+          v-model="alertService"
+          data-testid="alert-service"
+          type="text"
+          :maxlength="ALERT_SERVICE_MAX_LENGTH"
+          placeholder="Ex. checkout-api"
+        >
+        <label for="alert-text">Description</label>
+        <textarea
+          id="alert-text"
+          v-model="alertText"
+          data-testid="alert-text"
+          rows="2"
+          :maxlength="TEXT_MAX_LENGTH"
+          placeholder="Ex. Erreurs 5xx en hausse depuis 10 min"
+        />
+        <div class="card__actions">
+          <button type="submit" class="button button--primary" data-testid="alert-submit" :disabled="!canPublishAlert">
+            Publier l'alerte
           </button>
         </div>
       </form>
