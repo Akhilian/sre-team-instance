@@ -39,7 +39,8 @@ Le fichier [`render.yaml`](./render.yaml) décrit un *Web Service* Node (Bluepri
 La page `/admin` (non liée dans la navigation) permet de publier une annonce ou une carte d'alerte (SEV1 à SEV3) dans un canal et de
 réinitialiser les conversations (messages effacés, canaux conservés, scénario en cours arrêté).
 Elle permet aussi de lancer un scénario d'incident pré-écrit (`panne-checkout`, ≈ 14 min, ou
-`demo-express`, 6 s) : ses alertes et annonces sont publiées par le serveur au fil du temps, un seul
+`demo-express`, 6 s) : ses alertes, annonces et messages de PNJ (étapes `npc-message`, publiées même si
+les PNJ sont coupés) sont publiés par le serveur au fil du temps, un seul
 scénario à la fois, et l'exécution est perdue si le serveur redémarre. Les routes `/api/admin/*`
 exigent l'en-tête `x-facilitator-code`, comparé au code animateur résolu au démarrage :
 
@@ -72,9 +73,11 @@ Plafonds fixes, regroupés dans `shared/utils/limits.ts` :
 
 ## Personnages non joueurs (PNJ)
 
-Le scénario `panne-checkout` est accompagné de 4 PNJ, qui détiennent chacun une part de l'information :
-Sarah Benali (support client N1), Claire Dumont (CEO), Marc Lefort (CFO) et Julien Moreau (Release
-Manager de l'équipe Paiements, seul à connaître le déploiement récent). Un participant les interroge
+Le scénario `panne-checkout` est accompagné de 6 PNJ, qui détiennent chacun une part de l'information :
+Sarah Benali (support client N1, lanceuse d'alerte : elle ouvre l'incident au lancement du scénario),
+Claire Dumont (CEO), Marc Lefort (CFO), Inès Garnier (communication, agence externe), Thomas Keller
+(prestataire de paiement fictif Paiemio) et Julien Moreau (Release Manager de l'équipe Paiements, seul
+à connaître le déploiement récent). Aucune étape du scénario ne donne la cause : il faut recouper. Un participant les interroge
 en les mentionnant (`@Julien Moreau quel déploiement récent ?`) : chaque PNJ mentionné répond dans le
 fil du message après 1 à 2 s, avec le badge « PNJ ». Leurs noms sont réservés (un message signé d'un
 nom de PNJ est refusé en 400), et ils ne répondent jamais à un autre PNJ, à une annonce ni à une alerte.
@@ -87,8 +90,9 @@ nom de PNJ est refusé en 400), et ils ne répondent jamais à un autre PNJ, à 
   n'importe quel éditeur ; front-matter `clé: valeur` (`id`, `name`, `role`, `scenario`, `tone` = phrase
   d'ouverture du moteur `keywords`, `personality` = une phrase sur son caractère et son style, utilisée
   par les moteurs à modèle et obligatoire, `deflection` = réponse quand il n'a rien d'utile), puis les sections `## Sait`, `## Ignore`
-  et `## Sur question précise` (puces `- [mots: rollback, v2.40.3] texte`, livrées seulement si la
-  question contient l'un de ces mots). Les fiches sont embarquées au build : relancer `npm run build`
+  et `## Sur question précise` (puces `- [mots: rollback, revenir, !v2.40.3] texte`, livrées seulement si
+  la question contient au moins 2 de ces déclencheurs, ou un déclencheur spécifique préfixé de `!` ; une
+  puce sans déclencheur spécifique et avec un seul déclencheur est refusée). Les fiches sont embarquées au build : relancer `npm run build`
   après une modification. Une fiche invalide est écartée avec une erreur dans les logs.
 - **Moteur** (`NPC_ENGINE`, défaut `keywords`) : `keywords` répond sans modèle, de façon déterministe, par
   la phrase de ton suivie des 2 extraits de la fiche les plus proches de la question (recouvrement de

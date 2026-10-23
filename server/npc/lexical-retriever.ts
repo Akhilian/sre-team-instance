@@ -1,7 +1,7 @@
 // Retriever lexical (« RAG » minimal, sans modèle) : recouvrement de mots entre la question et chaque puce
 // de la fiche. Remplaçable par un retriever à embeddings derrière la même interface KnowledgeRetriever.
 // Module pur et déterministe.
-import type { KnowledgeExcerpt, KnowledgeRetriever, NpcPersona } from '../../shared/types/npc'
+import type { KnowledgeExcerpt, KnowledgeRetriever, NpcPersona, NpcPreciseEntry } from '../../shared/types/npc'
 
 /** Extraits retenus au plus */
 export const EXCERPTS_MAX = 2
@@ -9,6 +9,12 @@ export const EXCERPTS_MAX = 2
 const PREFIX_MIN_LENGTH = 4
 /** Écart de longueur toléré entre un mot et son préfixe (terminaisons) */
 const PREFIX_MAX_SUFFIX = 3
+/**
+ * Pour un déclencheur, lettres finales que le mot de la question peut omettre (publie → publier,
+ * connexion → connexions). Au-delà, un mot de la question plus court ne déclenche pas : « change » ne
+ * déclenche pas « changelog » (il faut le déclencheur « changé »).
+ */
+const TRIGGER_MAX_MISSING_SUFFIX = 1
 
 // Mots vides français, sans accents, et formules de politesse qui ne portent aucune information
 const STOP_WORDS = new Set([
@@ -51,30 +57,78 @@ function wordsMatch(a: string, b: string): boolean {
   return short.length >= PREFIX_MIN_LENGTH && long.length - short.length <= PREFIX_MAX_SUFFIX && long.startsWith(short)
 }
 
+/**
+ * Mot d'un déclencheur et mot de la question : identiques, ou le mot de la question est une forme
+ * fléchie du déclencheur (débit → débités, jusqu'à PREFIX_MAX_SUFFIX lettres en plus), ou il lui manque
+ * au plus TRIGGER_MAX_MISSING_SUFFIX lettre finale.
+ */
+export function triggerWordMatches(triggerWord: string, questionWord: string): boolean {
+  if (triggerWord === questionWord) return true
+  if (questionWord.length > triggerWord.length) {
+    return triggerWord.length >= PREFIX_MIN_LENGTH
+      && questionWord.length - triggerWord.length <= PREFIX_MAX_SUFFIX
+      && questionWord.startsWith(triggerWord)
+  }
+  return questionWord.length >= PREFIX_MIN_LENGTH
+    && triggerWord.length - questionWord.length <= TRIGGER_MAX_MISSING_SUFFIX
+    && triggerWord.startsWith(questionWord)
+}
+
 /** Nombre de mots de question présents dans words */
 function overlap(question: readonly string[], words: readonly string[]): number {
   return question.filter(word => words.some(candidate => wordsMatch(word, candidate))).length
 }
 
-/** Un déclencheur (mot ou expression) est présent dans la question : tous ses mots y figurent, dans l'ordre */
-function triggerPresent(trigger: string, question: readonly string[]): boolean {
+/**
+ * Positions où un déclencheur (mot ou expression) figure dans la question : tous ses mots, dans l'ordre et
+ * à la suite (« mise en production » ne compte que si les trois mots se suivent). Plages [début, fin).
+ */
+function triggerSpans(trigger: string, question: readonly string[]): [number, number][] {
   const words = allWords(trigger)
-  if (words.length === 0) return false
-  // Recherche de la séquence : « mise en production » ne compte que si les trois mots se suivent
-  return question.some((_, start) => words.every((word, offset) => {
-    const candidate = question[start + offset]
-    return candidate !== undefined && wordsMatch(word, candidate)
-  }))
+  if (words.length === 0) return []
+  const spans: [number, number][] = []
+  question.forEach((_, start) => {
+    const present = words.every((word, offset) => {
+      const candidate = question[start + offset]
+      return candidate !== undefined && triggerWordMatches(word, candidate)
+    })
+    if (present) spans.push([start, start + words.length])
+  })
+  return spans
+}
+
+/**
+ * Déclencheurs de l'entrée présents dans la question : nombre de déclencheurs distincts, c'est-à-dire
+ * trouvés sur des mots différents de la question (« débit » et « débités » sur le même mot, ou « point » et
+ * « prochain point » qui se chevauchent, comptent pour un), et présence d'un déclencheur spécifique.
+ */
+function triggersFound(entry: NpcPreciseEntry, question: readonly string[]): { distinct: number, specific: boolean } {
+  const found = entry.triggers
+    .map(trigger => ({ trigger, spans: triggerSpans(trigger.text, question) }))
+    .filter(({ spans }) => spans.length > 0)
+  // Glouton, expressions les plus longues d'abord : chaque déclencheur compte une fois, sans chevauchement
+  const taken: [number, number][] = []
+  let distinct = 0
+  for (const { spans } of [...found].sort((a, b) => (b.spans[0]![1] - b.spans[0]![0]) - (a.spans[0]![1] - a.spans[0]![0]))) {
+    const free = spans.find(([start, end]) => taken.every(([otherStart, otherEnd]) => end <= otherStart || start >= otherEnd))
+    if (!free) continue
+    taken.push(free)
+    distinct += 1
+  }
+  return { distinct, specific: found.some(({ trigger }) => trigger.specific) }
 }
 
 /** Poids d'un déclencheur présent : la question vise précisément cette information */
 const TRIGGER_WEIGHT = 2
+/** Déclencheurs distincts requis pour une entrée précise sans déclencheur spécifique présent */
+export const PRECISE_MIN_TRIGGERS = 2
 
 /**
  * Score chaque puce « Sait » par recouvrement de mots ; une puce « Sur question précise » n'est
- * éligible que si l'un de ses déclencheurs est dans la question (score : recouvrement + TRIGGER_WEIGHT
- * par déclencheur présent). Garde les EXCERPTS_MAX meilleures de score > 0 ; à égalité, les puces
- * « Sur question précise » d'abord, puis l'ordre de la fiche.
+ * éligible que si la question contient au moins PRECISE_MIN_TRIGGERS de ses déclencheurs distincts, ou
+ * l'un de ses déclencheurs spécifiques (score : recouvrement + TRIGGER_WEIGHT par déclencheur distinct
+ * présent). Garde les EXCERPTS_MAX meilleures de score > 0 ; à égalité, les puces « Sur question
+ * précise » d'abord, puis l'ordre de la fiche.
  */
 export function rankExcerpts(persona: NpcPersona, question: string): KnowledgeExcerpt[] {
   const words = significantWords(question)
@@ -83,8 +137,8 @@ export function rankExcerpts(persona: NpcPersona, question: string): KnowledgeEx
 
   const candidates: KnowledgeExcerpt[] = []
   for (const entry of persona.onPreciseQuestion) {
-    const triggered = entry.triggers.filter(trigger => triggerPresent(trigger, sequence)).length
-    if (triggered === 0) continue
+    const { distinct: triggered, specific } = triggersFound(entry, sequence)
+    if (!specific && triggered < PRECISE_MIN_TRIGGERS) continue
     candidates.push({
       source: 'precise',
       text: entry.text,

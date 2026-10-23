@@ -1,6 +1,7 @@
 // Scénario principal de l'atelier (≈ 14 min) : dégradation puis panne du tunnel de paiement après
-// une mise en production. Les alertes arrivent dans « Incident en cours », la pression métier
-// (support, direction, finance) dans les deux canaux.
+// une mise en production. Sarah Benali (support, PNJ) ouvre l'incident, puis les alertes arrivent dans
+// « Incident en cours » ; la pression métier vient des PNJ (support, CEO, communication, CFO) et de
+// quelques annonces. Aucune étape ne livre la cause : il faut interroger et recouper les PNJ.
 import type { Scenario } from '../../shared/types/scenario'
 
 const INCIDENT = 'incident-en-cours'
@@ -9,17 +10,27 @@ const GENERAL = 'general'
 export const panneCheckout: Scenario = {
   id: 'panne-checkout',
   title: 'Panne du checkout',
-  description: 'Latence puis erreurs 5xx sur le paiement après une mise en production, '
-    + 'sous la pression du support et de la direction. Environ 14 minutes.',
+  description: 'Le support ouvre l\'incident, puis latence et erreurs 5xx sur le paiement après une mise en production, '
+    + 'sous la pression de la direction, de la communication et de la finance. Environ 14 minutes.',
   steps: [
     {
       at: 0,
+      channelId: INCIDENT,
+      kind: 'npc-message',
+      npcId: 'support-n1',
+      text: 'Bonjour, ici Sarah du support. Depuis quelques minutes, des clients nous appellent : '
+        + 'au moment de payer, le bouton « Payer » tourne longtemps puis affiche « erreur technique, '
+        + 'réessayez plus tard ». Une dizaine de tickets déjà, tous sur l\'étape de paiement. '
+        + 'Quelqu\'un peut regarder ? Je vous donne le détail de ce qu\'ils voient si besoin.',
+    },
+    {
+      at: 20,
       channelId: INCIDENT,
       kind: 'alert',
       severity: 'SEV2',
       title: 'Latence p95 > 2 s sur POST /api/checkout',
       service: 'checkout-api',
-      text: 'p95 à 2,4 s depuis 5 min (SLO : 800 ms). 12 % des requêtes dépassent le timeout client de 3 s. '
+      text: 'p95 à 2,4 s depuis 5 min (SLO : 800 ms). 12 % des requêtes dépassent 3 s. '
         + 'Runbook : wiki/runbooks/checkout-latence.',
     },
     {
@@ -45,9 +56,10 @@ export const panneCheckout: Scenario = {
     {
       at: 160,
       channelId: GENERAL,
-      kind: 'announcement',
-      text: '[Support N1] On reçoit des plaintes clients en rafale : paniers bloqués à l\'étape paiement, '
-        + '« erreur technique, réessayez plus tard ». 40 tickets en 10 min. Qu\'est-ce qu\'on leur répond ?',
+      kind: 'npc-message',
+      npcId: 'support-n1',
+      text: 'Ça s\'accélère : 40 tickets en 10 min, paniers bloqués à l\'étape paiement, et 25 clients '
+        + 'en attente sur le chat. Qu\'est-ce qu\'on leur répond ? Il me faut un message et une heure de retour.',
     },
     {
       at: 230,
@@ -62,9 +74,10 @@ export const panneCheckout: Scenario = {
     {
       at: 300,
       channelId: INCIDENT,
-      kind: 'announcement',
-      text: '[Direction e-commerce] La newsletter « Black Friday » doit partir à 14h30 vers 1,2 M d\'abonnés. '
-        + 'On la décale ou pas ? Il me faut une réponse dans 10 minutes.',
+      kind: 'npc-message',
+      npcId: 'ceo',
+      text: 'La newsletter « Black Friday » doit partir à 14h30 vers 1,2 million d\'abonnés. '
+        + 'On la décale ou pas ? Il me faut une réponse dans 10 minutes, avec une heure de retour crédible.',
     },
     {
       at: 370,
@@ -79,9 +92,11 @@ export const panneCheckout: Scenario = {
     {
       at: 430,
       channelId: GENERAL,
-      kind: 'announcement',
-      text: '[Community management] Ça commence à chauffer sur les réseaux : 120 mentions « impossible de payer » '
-        + 'en 15 min, dont un compte à 80 k abonnés. On publie un message officiel ?',
+      kind: 'npc-message',
+      npcId: 'communication',
+      text: 'Ici Inès, de l\'agence. Ça chauffe sur les réseaux : 120 mentions « impossible de payer » en 15 min, '
+        + 'dont un compte à 80 000 abonnés. La page de statut dit toujours que tout est opérationnel. '
+        + 'On publie quoi, et qui valide ?',
     },
     {
       at: 490,
@@ -105,10 +120,10 @@ export const panneCheckout: Scenario = {
       channelId: INCIDENT,
       kind: 'alert',
       severity: 'SEV3',
-      title: 'Changement récent corrélé à l\'incident',
+      title: 'Changement récent sur checkout-api',
       service: 'checkout-api',
-      text: 'Déploiement checkout-api v2.41.0 terminé 6 min avant la première alerte. Changelog : nouveau client HTTP '
-        + 'vers payment-gateway (timeout 30 s, retries x3, pool 10 connexions). Rollback disponible : v2.40.3.',
+      text: 'Un déploiement de checkout-api a eu lieu peu avant la première alerte. '
+        + 'Voir avec l\'équipe Release pour le détail.',
     },
     {
       at: 690,
@@ -120,8 +135,9 @@ export const panneCheckout: Scenario = {
     {
       at: 760,
       channelId: INCIDENT,
-      kind: 'announcement',
-      text: '[Finance] Estimation du manque à gagner : environ 18 000 € par tranche de 15 minutes. '
+      kind: 'npc-message',
+      npcId: 'cfo',
+      text: 'Marc Lefort, finance. Estimation du manque à gagner : environ 18 000 € par tranche de 15 minutes. '
         + 'Le COMEX est informé et demande qui pilote l\'incident.',
     },
     {

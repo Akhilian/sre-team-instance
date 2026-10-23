@@ -94,7 +94,7 @@ describe('createNpcDispatcher', () => {
     expect(dispatcher.isEnabled()).toBe(false)
     expect(dispatcher.activateScenario('panne-checkout')).toBe(true)
     expect(dispatcher.isEnabled()).toBe(true)
-    expect(dispatcher.list().map(npc => npc.id)).toEqual(['ceo', 'cfo', 'release-manager', 'support-n1'])
+    expect(dispatcher.list().map(npc => npc.id)).toEqual(['ceo', 'cfo', 'communication', 'psp', 'release-manager', 'support-n1'])
   })
 
   it('message racine : réponse dans son fil, signée du PNJ, après le délai', async () => {

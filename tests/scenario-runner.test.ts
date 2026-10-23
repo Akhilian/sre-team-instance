@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import type { Scenario } from '../shared/types/scenario'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NpcPersona } from '../shared/types/npc'
+import type { Scenario, ScenarioStep } from '../shared/types/scenario'
 import {
   ScenarioConflictError,
   ScenarioNotFoundError,
@@ -8,6 +9,7 @@ import {
 } from '../server/utils/scenario-runner'
 import { clearMessages, listMessages, resetChatStore } from '../server/utils/chat-store'
 import { SCENARIO_LABEL_MAX_LENGTH, formatScenarioOffset, scenarioStepLabel } from '../shared/utils/scenarios'
+import { personaById } from './npc-helpers'
 
 const T0 = Date.UTC(2026, 9, 23, 12, 0, 0)
 
@@ -188,6 +190,65 @@ describe('scenario-runner', () => {
     run.steps[1]!.status = 'cancelled'
     expect(runner.getRun()!.status).toBe('running')
     expect(runner.getRun()!.steps[1]!.status).toBe('pending')
+  })
+})
+
+const WITH_NPC: Scenario = {
+  id: 'pnj',
+  title: 'Lanceur d\'alerte',
+  description: 'Test',
+  steps: [
+    { at: 0, channelId: 'incident-en-cours', kind: 'npc-message', npcId: 'support-n1', text: 'Les clients ne peuvent plus payer.' },
+    { at: 2, channelId: 'incident-en-cours', kind: 'npc-message', npcId: 'inconnu', text: 'Personne' },
+    { at: 4, channelId: 'incident-en-cours', kind: 'alert', severity: 'SEV2', title: 'Latence', service: 'api', text: 'Lent' },
+  ],
+}
+
+describe('scenario-runner : étapes npc-message (021 CA2)', () => {
+  beforeEach(() => resetChatStore())
+
+  const sarah = personaById('support-n1')
+  const findNpc = (id: string): NpcPersona | undefined => (id === sarah.id ? sarah : undefined)
+
+  it('publie avec la fiche résolue et passe en published ; label « Nom : début du texte »', () => {
+    const clock = fakeClock()
+    const publish = vi.fn<(step: ScenarioStep, npc?: NpcPersona) => void>()
+    const runner = createScenarioRunner({ ...clock, publish, findNpc, scenarios: [WITH_NPC] })
+    const run = runner.start('pnj')
+    expect(publish).toHaveBeenCalledOnce()
+    expect(publish).toHaveBeenCalledWith(WITH_NPC.steps[0], sarah)
+    expect(run.steps[0]).toMatchObject({ kind: 'npc-message', status: 'published', label: 'Sarah Benali : Les clients ne peuvent plus payer.' })
+    expect(run.steps[0]!.label.startsWith(sarah.name)).toBe(true)
+  })
+
+  it('npcId inconnu : failed, sans bloquer les étapes suivantes', () => {
+    const clock = fakeClock()
+    const publish = vi.fn<(step: ScenarioStep, npc?: NpcPersona) => void>()
+    const runner = createScenarioRunner({ ...clock, publish, findNpc, scenarios: [WITH_NPC] })
+    runner.start('pnj')
+    clock.advance(4_000)
+    const run = runner.getRun()!
+    expect(run.steps.map(step => step.status)).toEqual(['published', 'failed', 'published'])
+    expect(run.status).toBe('finished')
+    expect(publish).toHaveBeenCalledTimes(2)
+    expect(publish.mock.calls[1]![0]).toBe(WITH_NPC.steps[2])
+  })
+
+  it('publication réelle : message racine signé de la fiche, avec npc, sans kind', () => {
+    const clock = fakeClock()
+    const runner = createScenarioRunner({ ...clock, publish: publishScenarioStep, findNpc, scenarios: [WITH_NPC] })
+    runner.start('pnj')
+    const [message] = listMessages('incident-en-cours')
+    expect(message).toMatchObject({ author: 'Sarah Benali', text: 'Les clients ne peuvent plus payer.', npc: { id: 'support-n1', role: sarah.role } })
+    expect(message!.parentId).toBeUndefined()
+    expect(message!.kind).toBeUndefined()
+  })
+
+  it('sans findNpc : l\'étape npc-message passe en failed', () => {
+    const clock = fakeClock()
+    const runner = createScenarioRunner({ ...clock, publish: publishScenarioStep, scenarios: [WITH_NPC] })
+    expect(runner.start('pnj').steps[0]).toMatchObject({ status: 'failed', label: 'support-n1 : Les clients ne peuvent plus payer.' })
+    expect(listMessages('incident-en-cours')).toHaveLength(0)
   })
 })
 

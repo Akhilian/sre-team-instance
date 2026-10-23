@@ -15,7 +15,9 @@
 // ## Ignore
 // - ...
 // ## Sur question précise
-// - [mots: rollback, v2.40.3] information livrée seulement si la question contient un de ces mots
+// - [mots: rollback, retour arrière, !v2.40.3] information livrée seulement si la question contient au
+//   moins 2 de ces déclencheurs, ou un déclencheur spécifique (préfixé de !) ; une entrée qui n'a ni
+//   déclencheur spécifique ni au moins 2 déclencheurs est refusée
 import type { NpcPersona, NpcPreciseEntry } from '../../shared/types/npc'
 
 export class PersonaParseError extends Error {
@@ -57,10 +59,17 @@ function parseFrontMatter(lines: string[], source: string): { fields: Map<string
 function parsePrecise(text: string, source: string): NpcPreciseEntry {
   const match = PRECISE_RE.exec(text)
   if (!match) throw new PersonaParseError(source, `puce « Sur question précise » sans [mots: …] : « ${text} »`)
-  const triggers = match[1]!.split(',').map(word => word.trim()).filter(word => word !== '')
+  const triggers = match[1]!.split(',')
+    .map(word => word.trim())
+    .map(word => word.startsWith('!') ? { text: word.slice(1).trim(), specific: true } : { text: word, specific: false })
+    .filter(trigger => trigger.text !== '')
   const entry = match[2]!.trim()
   if (triggers.length === 0) throw new PersonaParseError(source, `puce « Sur question précise » sans mot déclencheur : « ${text} »`)
   if (entry === '') throw new PersonaParseError(source, `puce « Sur question précise » sans texte : « ${text} »`)
+  // Un seul mot courant ne doit pas suffire à livrer une information précise
+  if (triggers.length < 2 && !triggers.some(trigger => trigger.specific)) {
+    throw new PersonaParseError(source, `puce « Sur question précise » avec un seul déclencheur, non spécifique (au moins 2, ou un préfixé de !) : « ${text} »`)
+  }
   return { triggers, text: entry }
 }
 

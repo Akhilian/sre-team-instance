@@ -7,6 +7,7 @@ import type { ScenarioRun, ScenarioSummary, ScenariosResponse } from '~~/shared/
 import type { AlertSeverity } from '~~/shared/utils/alerts'
 import {
   SCENARIO_RUN_STATUS_LABELS,
+  SCENARIO_STEP_KIND_LABELS,
   SCENARIO_STEP_STATUS_LABELS,
   formatScenarioOffset,
 } from '~~/shared/utils/scenarios'
@@ -459,7 +460,7 @@ function reset(scope: ResetScope) {
               <span class="scenario-step__at">{{ formatScenarioOffset(step.at) }}</span>
               <span class="scenario-step__label">
                 {{ step.label }}
-                <small>{{ step.kind === 'alert' ? 'Alerte' : 'Annonce' }} · {{ channelName(step.channelId) }}</small>
+                <small>{{ SCENARIO_STEP_KIND_LABELS[step.kind] }} · {{ channelName(step.channelId) }}</small>
               </span>
               <span
                 class="scenario-step__status"

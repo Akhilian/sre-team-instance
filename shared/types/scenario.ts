@@ -20,7 +20,17 @@ export interface ScenarioAnnouncementStep extends ScenarioStepBase {
   text: string
 }
 
-export type ScenarioStep = ScenarioAlertStep | ScenarioAnnouncementStep
+/** Message racine d'un PNJ (lanceur d'alerte, direction…), publié même si les PNJ sont coupés */
+export interface ScenarioNpcMessageStep extends ScenarioStepBase {
+  kind: 'npc-message'
+  /** Id d'une fiche, cherché parmi toutes les fiches chargées ; introuvable → étape failed */
+  npcId: string
+  text: string
+}
+
+export type ScenarioStep = ScenarioAlertStep | ScenarioAnnouncementStep | ScenarioNpcMessageStep
+
+export type ScenarioStepKind = ScenarioStep['kind']
 
 export interface Scenario {
   id: string
@@ -46,9 +56,9 @@ export type ScenarioStepStatus = 'pending' | 'published' | 'failed' | 'cancelled
 export interface ScenarioRunStep {
   index: number
   at: number
-  kind: ScenarioStep['kind']
+  kind: ScenarioStepKind
   channelId: string
-  /** Titre de l'alerte ou début de l'annonce */
+  /** Titre de l'alerte, début de l'annonce, ou « Nom : début du texte » pour un message de PNJ */
   label: string
   status: ScenarioStepStatus
   /** Date ISO 8601, présente une fois l'étape publiée */

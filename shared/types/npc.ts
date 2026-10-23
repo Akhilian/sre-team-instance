@@ -3,10 +3,20 @@
 // interchangeables : un nouveau fournisseur n'implémente que NpcResponder, dans un fichier d'adaptateur.
 import type { Message } from './chat'
 
-/** Information livrée seulement si la question contient l'un des mots déclencheurs */
+/** Mot ou expression déclencheur d'une entrée « Sur question précise » */
+export interface NpcTrigger {
+  /** Tel qu'écrit dans la fiche, sans le préfixe ! */
+  text: string
+  /** Préfixé de ! dans la fiche : suffit seul à rendre l'entrée éligible */
+  specific: boolean
+}
+
+/**
+ * Information livrée seulement si la question contient au moins 2 déclencheurs distincts de l'entrée,
+ * ou un déclencheur spécifique
+ */
 export interface NpcPreciseEntry {
-  /** Mots ou expressions déclencheurs, tels qu'écrits dans la fiche */
-  triggers: string[]
+  triggers: NpcTrigger[]
   text: string
 }
 

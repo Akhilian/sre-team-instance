@@ -1,4 +1,4 @@
-// 019 CA4 et CA5 : PNJ sur le build (délai de réponse par défaut, 1 à 2 s)
+// 019 CA4 et CA5, 021 CA6 : PNJ sur le build (délai de réponse par défaut, 1 à 2 s)
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { Message } from '../../shared/types/chat'
 import { postJson, startServer, type TestServer } from './server'
@@ -62,7 +62,7 @@ describe('PNJ (019)', () => {
 
     const state = await npcs()
     expect(state.enabled).toBe(true)
-    expect(state.npcs).toHaveLength(4)
+    expect(state.npcs).toHaveLength(6)
     expect(state.npcs.map(npc => npc.name)).toContain(RELEASE)
     expect(Object.keys(state.npcs[0]!).sort()).toEqual(['id', 'name', 'role'])
   })
@@ -116,5 +116,55 @@ describe('PNJ (019)', () => {
 
     expect((await postJson(`${server.url}/api/admin/reset`, { scope: 'all' }, ADMIN)).status).toBe(200)
     expect((await npcs()).enabled).toBe(false)
+  })
+})
+
+describe('PNJ lanceur d\'alerte et nouveaux PNJ (021)', () => {
+  beforeEach(async () => {
+    expect((await postJson(`${server.url}/api/admin/reset`, { scope: 'all' }, ADMIN)).status).toBe(200)
+  })
+  afterAll(async () => {
+    await postJson(`${server.url}/api/admin/reset`, { scope: 'all' }, ADMIN)
+  })
+
+  it('CA6 : demo-express publie le message de Sarah en moins de 2 s, avant la première alerte', async () => {
+    const started = Date.now()
+    expect((await postJson(`${server.url}/api/admin/scenarios/demo-express/start`, {}, ADMIN)).status).toBe(201)
+    let sarah: Message | undefined
+    while (!sarah && Date.now() - started < 2000) {
+      sarah = (await messages()).find(message => message.author === 'Sarah Benali')
+      if (!sarah) await sleep(100)
+    }
+    expect(sarah).toMatchObject({ author: 'Sarah Benali', npc: { id: 'support-n1' } })
+    expect(sarah!.parentId).toBeUndefined()
+    expect(sarah!.kind).toBeUndefined()
+
+    // Première alerte de la démo (t = 3 s) : publiée après le message de Sarah
+    const deadline = Date.now() + 5000
+    let alert: Message | undefined
+    while (!alert && Date.now() < deadline) {
+      alert = (await messages()).find(message => message.kind === 'alert')
+      if (!alert) await sleep(200)
+    }
+    expect(alert).toBeDefined()
+    expect(Date.parse(sarah!.createdAt)).toBeLessThan(Date.parse(alert!.createdAt))
+  })
+
+  it('CA6 : panne-checkout s\'ouvre sur le message de Sarah, étape 0 npc-message publiée', async () => {
+    const response = await postJson(`${server.url}/api/admin/scenarios/panne-checkout/start`, {}, ADMIN)
+    expect(response.status).toBe(201)
+    const run = await response.json()
+    expect(run.steps[0]).toMatchObject({ kind: 'npc-message', status: 'published' })
+    expect(run.steps[0].label.startsWith('Sarah Benali : ')).toBe(true)
+    const [first] = await messages()
+    expect(first).toMatchObject({ author: 'Sarah Benali', npc: { id: 'support-n1' } })
+  })
+
+  it('CA6 : @Thomas Keller répond en fil', async () => {
+    expect((await setEnabled(true)).status).toBe(200)
+    const root = await ask('@Thomas Keller y a-t-il une maintenance ?')
+    const [reply] = await waitForNpcReplies(root.id, 1, 5000)
+    expect(reply).toMatchObject({ author: 'Thomas Keller', parentId: root.id, npc: { id: 'psp' } })
+    expect(reply!.text.toLowerCase()).toContain('aucune maintenance')
   })
 })

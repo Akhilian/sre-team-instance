@@ -18,6 +18,8 @@ const NPC_REPLY_DELAY_SPREAD_MS = 1000
 
 let engine: ResolvedNpcEngine | undefined
 let dispatcher: Promise<NpcDispatcher> | undefined
+/** Fiches chargées par useNpcDispatcher(), pour les recherches synchrones (étapes de scénario) */
+let loadedPersonas: readonly NpcPersona[] = []
 
 /** Moteur du processus, résolu une fois (avertissement unique si NPC_ENGINE est inconnu) */
 function npcEngine(): ResolvedNpcEngine {
@@ -83,22 +85,33 @@ function recentHistory(message: Message): Message[] {
 
 /** Orchestrateur du processus, créé au premier appel une fois les fiches chargées */
 export function useNpcDispatcher(): Promise<NpcDispatcher> {
-  dispatcher ??= loadNpcPersonas().then(personas => createNpcDispatcher({
-    schedule: (fn, delayMs) => setTimeout(fn, delayMs),
-    cancel: handle => clearTimeout(handle),
-    now: () => Date.now(),
-    retriever: createLexicalRetriever(),
-    responder: npcEngine().responder,
-    personas,
-    delayMs: replyDelayMs,
-    history: recentHistory,
-    publish: reply => addNpcMessage(reply.channelId, {
-      npc: reply.persona,
-      text: reply.text,
-      parentId: reply.parentId,
-    }),
-  }))
+  dispatcher ??= loadNpcPersonas().then((personas) => {
+    loadedPersonas = personas
+    return createNpcDispatcher({
+      schedule: (fn, delayMs) => setTimeout(fn, delayMs),
+      cancel: handle => clearTimeout(handle),
+      now: () => Date.now(),
+      retriever: createLexicalRetriever(),
+      responder: npcEngine().responder,
+      personas,
+      delayMs: replyDelayMs,
+      history: recentHistory,
+      publish: reply => addNpcMessage(reply.channelId, {
+        npc: reply.persona,
+        text: reply.text,
+        parentId: reply.parentId,
+      }),
+    })
+  })
   return dispatcher
+}
+
+/**
+ * Fiche d'id npcId parmi toutes les fiches chargées (tous scénarios), activées ou non ; undefined si
+ * elle est inconnue ou si useNpcDispatcher() n'a pas encore fini de charger les fiches.
+ */
+export function findLoadedNpcPersona(npcId: string): NpcPersona | undefined {
+  return loadedPersonas.find(persona => persona.id === npcId)
 }
 
 /** Planifie les réponses des PNJ mentionnés dans message (sans effet s'ils sont coupés). */

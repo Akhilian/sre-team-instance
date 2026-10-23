@@ -1,5 +1,7 @@
 // Exécuteur de scénarios d'incident en mémoire : un seul scénario en cours à la fois, perdu au redémarrage.
-// Module pur (sans auto-import Nuxt) : planificateur, horloge et publication injectés par createScenarioRunner.
+// Module pur (sans auto-import Nuxt) : planificateur, horloge, recherche des fiches de PNJ et publication
+// injectés par createScenarioRunner.
+import type { NpcPersona } from '../../shared/types/npc'
 import type {
   Scenario,
   ScenarioRun,
@@ -8,7 +10,8 @@ import type {
 } from '../../shared/types/scenario'
 import { scenarioStepLabel } from '../../shared/utils/scenarios'
 import { SCENARIOS } from '../scenarios'
-import { addAlert, addAnnouncement } from './chat-store'
+import { addAlert, addAnnouncement, addNpcMessage } from './chat-store'
+import { findLoadedNpcPersona } from './npc'
 
 /** Scénario inconnu : 404 */
 export class ScenarioNotFoundError extends Error {
@@ -32,8 +35,13 @@ export interface ScenarioRunnerDeps<Handle = unknown> {
   cancel: (handle: Handle) => void
   /** Horloge en millisecondes epoch */
   now: () => number
-  /** Publie l'étape dans son canal ; une exception marque l'étape failed */
-  publish: (step: ScenarioStep) => void
+  /**
+   * Publie l'étape dans son canal, avec la fiche résolue pour une étape npc-message ; une exception
+   * marque l'étape failed
+   */
+  publish: (step: ScenarioStep, npc?: NpcPersona) => void
+  /** Fiche de PNJ d'id npcId (synchrone : fiches déjà chargées) ; absente → étapes npc-message failed */
+  findNpc?: (npcId: string) => NpcPersona | undefined
   scenarios?: readonly Scenario[]
 }
 
@@ -68,7 +76,12 @@ export function createScenarioRunner<Handle>(deps: ScenarioRunnerDeps<Handle>): 
     // Run remplacé ou arrêté entre-temps : rien à publier
     if (run !== current || current.status !== 'running' || !runStep || runStep.status !== 'pending') return
     try {
-      deps.publish(step)
+      if (step.kind === 'npc-message') {
+        const npc = deps.findNpc?.(step.npcId)
+        if (!npc) throw new Error(`Fiche PNJ inconnue : ${step.npcId}`)
+        deps.publish(step, npc)
+      }
+      else deps.publish(step)
       runStep.status = 'published'
       runStep.publishedAt = new Date(deps.now()).toISOString()
     }
@@ -108,7 +121,7 @@ export function createScenarioRunner<Handle>(deps: ScenarioRunnerDeps<Handle>): 
           at: step.at,
           kind: step.kind,
           channelId: step.channelId,
-          label: scenarioStepLabel(step),
+          label: scenarioStepLabel(step, step.kind === 'npc-message' ? deps.findNpc?.(step.npcId)?.name : undefined),
           status: 'pending',
         })),
       }
@@ -136,9 +149,13 @@ export function createScenarioRunner<Handle>(deps: ScenarioRunnerDeps<Handle>): 
   }
 }
 
-/** Publication réelle dans le store des canaux */
-export function publishScenarioStep(step: ScenarioStep): void {
+/** Publication réelle dans le store des canaux ; un message de PNJ est un message racine signé de la fiche */
+export function publishScenarioStep(step: ScenarioStep, npc?: NpcPersona): void {
   if (step.kind === 'alert') addAlert(step.channelId, step)
+  else if (step.kind === 'npc-message') {
+    if (!npc) throw new Error(`Fiche PNJ non résolue : ${step.npcId}`)
+    addNpcMessage(step.channelId, { npc, text: step.text })
+  }
   else addAnnouncement(step.channelId, { text: step.text })
 }
 
@@ -147,6 +164,8 @@ const defaultRunner = createScenarioRunner({
   cancel: handle => clearTimeout(handle),
   now: () => Date.now(),
   publish: publishScenarioStep,
+  // Fiches chargées par useNpcDispatcher(), attendu par la route de lancement avant startScenario
+  findNpc: findLoadedNpcPersona,
 })
 
 export function listScenarioSummaries(): ScenarioSummary[] {
