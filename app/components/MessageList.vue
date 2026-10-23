@@ -22,6 +22,10 @@ function mentionsMe(message: Message): boolean {
   return mentionsName(message.text, knownNames.value, props.me)
 }
 
+function isAnnouncement(message: Message): boolean {
+  return message.kind === 'announcement'
+}
+
 // Un seul champ de réponse ouvert à la fois
 const replyingTo = ref<string | null>(null)
 
@@ -68,10 +72,20 @@ watch(
         Aucun message pour l'instant. Lancez la conversation !
       </li>
       <li v-for="thread in threads" :key="thread.id" class="thread" data-testid="thread">
-        <div class="message" :class="{ 'message--mentions-me': mentionsMe(thread) }">
+        <div
+          class="message"
+          :class="{ 'message--mentions-me': mentionsMe(thread), 'message--announcement': isAnnouncement(thread) }"
+          :data-testid="isAnnouncement(thread) ? 'announcement' : undefined"
+        >
           <span class="avatar" :style="{ background: avatarColor(thread.author) }" :title="thread.author">{{ initials(thread.author) }}</span>
           <div class="message__body">
             <div class="message__bubble" :data-testid="mentionsMe(thread) ? 'mentions-me' : undefined">
+              <div v-if="isAnnouncement(thread)" class="message__banner">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path d="M4 10v4h3l6 4V6L7 10H4Zm12-1.5a4 4 0 0 1 0 7M18.5 6a7.5 7.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                Annonce
+              </div>
               <div class="message__meta">
                 <span class="message__author">{{ thread.author }}</span>
                 <time class="message__time" :datetime="thread.createdAt">{{ formatTime(thread.createdAt) }}</time>
@@ -267,6 +281,26 @@ watch(
 .message--reply .message__text {
   font-size: 13px;
   line-height: 1.4;
+}
+
+/* Annonce de l'animateur, façon Teams : bandeau coloré en tête de bulle et bordure violette */
+.message--announcement .message__bubble {
+  overflow: hidden;
+  padding-top: 0;
+  border: 2px solid var(--teams-purple);
+}
+
+.message__banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 -14px 8px;
+  padding: 8px 14px;
+  background: linear-gradient(90deg, var(--teams-purple-dark), var(--teams-purple));
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 /* Message qui mentionne le participant courant : bordure gauche colorée, façon Teams */

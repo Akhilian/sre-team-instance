@@ -15,6 +15,8 @@ export interface Message {
   parentId?: string
   /** Réactions dans l'ordre de première réaction ; absent sans aucune réaction */
   reactions?: Reaction[]
+  /** 'announcement' pour une annonce de l'animateur ; absent pour un message ordinaire */
+  kind?: 'announcement'
 }
 
 export interface Reaction {

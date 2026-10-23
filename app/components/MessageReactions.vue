@@ -208,12 +208,20 @@ onBeforeUnmount(removeListeners)
   cursor: default;
 }
 
+/* Palette ouverte : au-dessus des boutons d'ajout des messages voisins */
+.reactions--open .reactions__add-wrapper {
+  z-index: 20;
+}
+
+/* Palette flottante à droite du bouton, dans la marge laissée à droite des bulles (max 70 %) :
+   ne recouvre le texte ni du message suivant ni du précédent. Grille 3 × 2 pour rester étroite. */
 .reaction-picker {
   position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
+  top: 0;
+  left: calc(100% + 4px);
   z-index: 10;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, 32px);
   gap: 2px;
   padding: 4px;
   border-radius: 6px;

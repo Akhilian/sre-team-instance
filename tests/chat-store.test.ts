@@ -4,8 +4,10 @@ import {
   ChannelNotFoundError,
   ChannelValidationError,
   MessageValidationError,
+  addAnnouncement,
   addChannel,
   addMessage,
+  clearMessages,
   listChannels,
   listMessages,
   resetChatStore,
@@ -70,6 +72,13 @@ describe('chat-store', () => {
     expect(message.text).toHaveLength(2000)
   })
 
+  it('ignore un kind fourni dans l\'entrée', () => {
+    const input = { author: 'Eve', text: 'faux', kind: 'announcement' } as Parameters<typeof addMessage>[1]
+    const message = addMessage('general', input)
+    expect(message).not.toHaveProperty('kind')
+    expect(listMessages('general')[0]).not.toHaveProperty('kind')
+  })
+
   it('lève ChannelNotFoundError sur un canal inconnu', () => {
     expect(() => listMessages('inconnu')).toThrow(ChannelNotFoundError)
     expect(() => addMessage('inconnu', { author: 'Alice', text: 'Bonjour' })).toThrow(ChannelNotFoundError)
@@ -81,6 +90,61 @@ describe('chat-store', () => {
     listChannels()[0]!.name = 'modifié'
     expect(listMessages('general')[0]!.text).toBe('Bonjour')
     expect(listChannels()[0]!.name).not.toBe('modifié')
+  })
+})
+
+describe('addAnnouncement', () => {
+  beforeEach(() => resetChatStore())
+
+  it('crée un message racine signé Animateur avec kind announcement', () => {
+    const announcement = addAnnouncement('incident-en-cours', { text: ' Le checkout renvoie 30 % de 500 ' })
+    expect(announcement).toMatchObject({
+      channelId: 'incident-en-cours',
+      author: 'Animateur',
+      text: 'Le checkout renvoie 30 % de 500',
+      kind: 'announcement',
+    })
+    expect(announcement).not.toHaveProperty('parentId')
+    expect(listMessages('incident-en-cours')).toEqual([announcement])
+  })
+
+  it('accepte une réponse sur une annonce', () => {
+    const announcement = addAnnouncement('general', { text: 'Annonce' })
+    const reply = addMessage('general', { author: 'Alice', text: 'Vu', parentId: announcement.id })
+    expect(reply.parentId).toBe(announcement.id)
+    expect(reply).not.toHaveProperty('kind')
+  })
+
+  it.each([[{}], [{ text: '' }], [{ text: '   ' }], [{ text: 42 }], [{ text: 'x'.repeat(2001) }]])(
+    'refuse un texte invalide sans rien ajouter (%j)',
+    (input) => {
+      expect(() => addAnnouncement('general', input)).toThrow(MessageValidationError)
+      expect(listMessages('general')).toEqual([])
+    },
+  )
+
+  it('lève ChannelNotFoundError sur un canal inconnu', () => {
+    expect(() => addAnnouncement('inconnu', { text: 'x' })).toThrow(ChannelNotFoundError)
+  })
+})
+
+describe('clearMessages', () => {
+  beforeEach(() => resetChatStore())
+
+  it('vide les messages de tous les canaux en conservant les canaux', () => {
+    const channel = addChannel({ name: 'Exercice 2' })
+    addMessage('general', { author: 'Alice', text: 'Bonjour' })
+    addAnnouncement('incident-en-cours', { text: 'Annonce' })
+    addMessage(channel.id, { author: 'Bob', text: 'hello' })
+    const channelsBefore = listChannels()
+
+    clearMessages()
+
+    expect(listChannels()).toEqual(channelsBefore)
+    expect(listChannels().map(c => c.id)).toContain('exercice-2')
+    for (const { id } of channelsBefore) expect(listMessages(id)).toEqual([])
+    // Le canal reste utilisable après la réinitialisation
+    expect(addMessage(channel.id, { author: 'Bob', text: 'encore' }).channelId).toBe('exercice-2')
   })
 })
 

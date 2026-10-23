@@ -133,6 +133,31 @@ export function addMessage(
   return copyMessage(message)
 }
 
+export const ANNOUNCEMENT_AUTHOR = 'Animateur'
+
+/** Annonce de l'animateur : message racine signé « Animateur », mêmes règles de texte que addMessage. */
+export function addAnnouncement(channelId: string, input: { text?: unknown }): Message {
+  const messages = messagesByChannel.get(channelId)
+  if (!messages) throw new ChannelNotFoundError(channelId)
+
+  const text = requireText(input?.text, 'text', TEXT_MAX_LENGTH)
+  const message: Message = {
+    id: crypto.randomUUID(),
+    channelId,
+    author: ANNOUNCEMENT_AUTHOR,
+    text,
+    createdAt: new Date().toISOString(),
+    kind: 'announcement',
+  }
+  messages.push(message)
+  return copyMessage(message)
+}
+
+/** Vide les messages de tous les canaux ; les canaux, y compris ceux créés par les participants, restent. */
+export function clearMessages(): void {
+  for (const channelId of messagesByChannel.keys()) messagesByChannel.set(channelId, [])
+}
+
 /**
  * Bascule la réaction emoji de author sur un message (racine ou réponse) : ajoutée si absente,
  * retirée sinon. Une entrée sans auteur est retirée, et le champ reactions supprimé s'il est vide.
