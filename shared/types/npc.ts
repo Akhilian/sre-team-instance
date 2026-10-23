@@ -91,3 +91,33 @@ export interface NpcAdminState extends NpcsResponse {
   /** Scénario dont les PNJ sont proposés */
   scenarioId: string
 }
+
+/** Source des fiches : dossier NPC_PERSONAS_DIR ou fiches embarquées au build */
+export type NpcPersonaSource = 'dir' | 'embedded'
+
+/** Fiche chargée, telle qu'exposée à l'animateur (GET /api/admin/npc-personas) */
+export interface NpcPersonaFileSummary {
+  /** Chemin relatif : <scénario>/<id>.md */
+  path: string
+  id: string
+  name: string
+  role: string
+  scenarioId: string
+  /** Texte source de la fiche chargée */
+  markdown: string
+}
+
+export interface NpcPersonasAdminState {
+  source: NpcPersonaSource
+  personas: NpcPersonaFileSummary[]
+}
+
+/** Rapport de POST /api/admin/npc-personas/reload (200, ou 422 si aucune fiche valide) */
+export interface NpcPersonaReloadReport {
+  source: NpcPersonaSource
+  /** Fiches valides relues */
+  loaded: string[]
+  errors: { path: string, message: string }[]
+  /** Fiches en erreur qui gardent leur version précédente */
+  kept: string[]
+}

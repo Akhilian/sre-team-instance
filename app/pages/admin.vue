@@ -2,7 +2,7 @@
 // Outils d'animateur (page non liée dans la navigation) : annonce et carte d'alerte dans un canal,
 // scénario d'incident pré-écrit, PNJ, chronologie pour le post-mortem, réinitialisation des conversations. Le code animateur est gardé dans le sessionStorage, envoyé en x-facilitator-code.
 import type { Message } from '~~/shared/types/chat'
-import type { NpcAdminState } from '~~/shared/types/npc'
+import type { NpcAdminState, NpcPersonaReloadReport, NpcPersonasAdminState } from '~~/shared/types/npc'
 import type { ScenarioRun, ScenarioSummary, ScenariosResponse } from '~~/shared/types/scenario'
 import type { AlertSeverity } from '~~/shared/utils/alerts'
 import {
@@ -45,6 +45,13 @@ let unmounted = false
 
 // PNJ : état chargé avec le code animateur, comme les scénarios
 const npcState = ref<NpcAdminState | null>(null)
+// Fiches des PNJ (texte source, lecture seule) et dernier rapport de rechargement
+const personasState = ref<NpcPersonasAdminState | null>(null)
+const reloadReport = ref<NpcPersonaReloadReport | null>(null)
+const PERSONA_SOURCE_LABELS = {
+  dir: 'dossier NPC_PERSONAS_DIR',
+  embedded: 'fiches embarquées au build',
+} as const
 
 // Chronologie : '' = tous les canaux
 const timelineChannelId = ref('')
@@ -183,15 +190,52 @@ async function loadNpcs() {
   const requestCode = code.value
   if (requestCode === '') {
     npcState.value = null
+    personasState.value = null
     return
   }
   try {
-    const state = await $fetch<NpcAdminState>('/api/admin/npcs', { headers: { 'x-facilitator-code': requestCode } })
-    if (requestCode === code.value && !unmounted) npcState.value = state
+    const headers = { 'x-facilitator-code': requestCode }
+    const [state, personas] = await Promise.all([
+      $fetch<NpcAdminState>('/api/admin/npcs', { headers }),
+      $fetch<NpcPersonasAdminState>('/api/admin/npc-personas', { headers }),
+    ])
+    if (requestCode === code.value && !unmounted) {
+      npcState.value = state
+      personasState.value = personas
+    }
   }
   catch {
-    if (requestCode === code.value && !unmounted) npcState.value = null
+    if (requestCode === code.value && !unmounted) {
+      npcState.value = null
+      personasState.value = null
+    }
   }
+}
+
+/** « Recharger les fiches » : relit la source en service ; 422 = aucune fiche valide, rien n'est remplacé */
+function reloadPersonas() {
+  if (busy.value || code.value === '') return
+  return run(async () => {
+    reloadReport.value = null
+    let report: NpcPersonaReloadReport
+    let replaced = true
+    try {
+      report = await $fetch<NpcPersonaReloadReport>('/api/admin/npc-personas/reload', {
+        method: 'POST',
+        headers: { 'x-facilitator-code': code.value },
+      })
+    }
+    catch (error) {
+      const { statusCode, data } = error as { statusCode?: number, data?: NpcPersonaReloadReport }
+      if (statusCode !== 422 || !data) throw error
+      report = data
+      replaced = false
+    }
+    reloadReport.value = report
+    await loadNpcs()
+    if (!replaced) return 'Aucune fiche valide : les fiches en cours sont conservées.'
+    return `${report.loaded.length} fiche(s) rechargée(s), ${report.errors.length} en erreur.`
+  })
 }
 
 /** Interrupteur « PNJ actifs » : l'état affiché est celui renvoyé par le serveur */
@@ -495,6 +539,31 @@ function reset(scope: ResetScope) {
           <ul class="npcs" data-testid="npc-list">
             <li v-for="npc in npcState.npcs" :key="npc.id"><strong>{{ npc.name }}</strong> · {{ npc.role }}</li>
           </ul>
+          <template v-if="personasState">
+            <h3 class="personas__title">Fiches</h3>
+            <p data-testid="npc-personas-source">Source : {{ PERSONA_SOURCE_LABELS[personasState.source] }} ({{ personasState.personas.length }} fiche(s)).</p>
+            <!-- Texte source affiché tel quel par interpolation (HTML échappé, jamais interprété) -->
+            <details v-for="persona in personasState.personas" :key="persona.path" class="persona" data-testid="npc-persona">
+              <summary><strong>{{ persona.name }}</strong> · {{ persona.role }} <code>{{ persona.path }}</code></summary>
+              <pre class="persona__markdown" data-testid="npc-persona-markdown">{{ persona.markdown }}</pre>
+            </details>
+          </template>
+          <div class="card__actions">
+            <button type="button" class="button" data-testid="npc-personas-reload" :disabled="busy || code === ''" @click="reloadPersonas">
+              Recharger les fiches
+            </button>
+          </div>
+          <div v-if="reloadReport" class="reload-report" data-testid="npc-reload-report">
+            <p>
+              Rechargées : {{ reloadReport.loaded.length }}
+              <template v-if="reloadReport.kept.length > 0"> · version précédente conservée : {{ reloadReport.kept.join(', ') }}</template>
+            </p>
+            <ul v-if="reloadReport.errors.length > 0" class="reload-report__errors">
+              <li v-for="error in reloadReport.errors" :key="error.path + error.message" data-testid="npc-reload-error">
+                <code>{{ error.path }}</code> : {{ error.message }}
+              </li>
+            </ul>
+          </div>
         </template>
       </section>
 
@@ -692,6 +761,44 @@ function reset(scope: ResetScope) {
   margin: 4px 0 0;
   padding-left: 18px;
   color: var(--teams-text-muted);
+}
+
+.personas__title {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+.persona {
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.persona summary {
+  cursor: pointer;
+}
+
+.persona code,
+.reload-report code {
+  font-size: 12px;
+  color: var(--teams-text-muted);
+}
+
+.persona__markdown {
+  padding: 10px 12px;
+  background: #fafafa;
+  max-height: 360px;
+  margin: 8px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.reload-report__errors {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: #c4314b;
 }
 
 .scenarios,

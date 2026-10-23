@@ -70,6 +70,12 @@ export interface NpcDispatcher {
   activateScenario: (scenarioId: string) => boolean
   /** PNJ du scénario courant, dans l'ordre des fiches */
   list: () => NpcSummary[]
+  /**
+   * Remplace les fiches (rechargement à chaud) : l'état activé ou coupé est conservé, ainsi que le
+   * scénario courant s'il a encore des fiches (sinon celui de la première fiche). Les réponses déjà
+   * planifiées ne sont pas annulées (elles gardent la fiche d'avant).
+   */
+  replacePersonas: (personas: readonly NpcPersona[]) => void
   /** Fiche dont le nom (casse ignorée) est name, tous scénarios confondus */
   findByName: (name: string) => NpcPersona | undefined
   /** Planifie les réponses au message ; renvoie les ids des PNJ qui vont répondre */
@@ -92,7 +98,7 @@ function summary(persona: NpcPersona): NpcSummary {
 }
 
 export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): NpcDispatcher {
-  const personas = deps.personas
+  let personas = deps.personas
   const onError = deps.onError ?? logAbandoned
   let currentScenarioId = personas[0]?.scenarioId ?? ''
   let enabled = false
@@ -223,6 +229,11 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
     },
 
     list: () => personas.filter(persona => persona.scenarioId === currentScenarioId).map(summary),
+
+    replacePersonas(next) {
+      personas = next
+      if (!personas.some(persona => persona.scenarioId === currentScenarioId)) currentScenarioId = personas[0]?.scenarioId ?? ''
+    },
 
     findByName(name) {
       const key = name.trim().toLowerCase()

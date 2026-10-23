@@ -14,6 +14,9 @@ services:
       # Persistance des conversations (optionnelle) : URL d'un Redis externe (Render Key Value, Upstash…)
       - key: REDIS_URL
         sync: false
+      # Fiches des PNJ lues dans un dossier (optionnel, disque persistant requis) : <dir>/<scénario>/<id>.md
+      - key: NPC_PERSONAS_DIR
+        sync: false
       # Moteur de réponse des PNJ : keywords (défaut, sans modèle), openai-compatible ou anthropic (voir README)
       - key: NPC_ENGINE
         value: keywords

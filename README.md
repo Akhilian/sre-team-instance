@@ -93,8 +93,9 @@ nom de PNJ est refusé en 400), et ils ne répondent jamais à un autre PNJ, à 
   par les moteurs à modèle et obligatoire, `deflection` = réponse quand il n'a rien d'utile), puis les sections `## Sait`, `## Ignore`
   et `## Sur question précise` (puces `- [mots: rollback, revenir, !v2.40.3] texte`, livrées seulement si
   la question contient au moins 2 de ces déclencheurs, ou un déclencheur spécifique préfixé de `!` ; une
-  puce sans déclencheur spécifique et avec un seul déclencheur est refusée). Les fiches sont embarquées au build : relancer `npm run build`
-  après une modification. Une fiche invalide est écartée avec une erreur dans les logs.
+  puce sans déclencheur spécifique et avec un seul déclencheur est refusée). Par défaut, les fiches sont embarquées au build : relancer `npm run build`
+  après une modification. Une fiche invalide est écartée avec une erreur dans les logs. Pour les retoucher
+  sans rebuild, voir « Fiches dans un dossier ».
 - **Moteur** (`NPC_ENGINE`, défaut `keywords`) : `keywords` répond sans modèle, de façon déterministe, par
   la phrase de ton suivie des 2 extraits de la fiche les plus proches de la question (recouvrement de
   mots). `openai-compatible` interroge un modèle (voir « Brancher un modèle »), `anthropic` l'API Claude
@@ -121,6 +122,28 @@ nom de PNJ est refusé en 400), et ils ne répondent jamais à un autre PNJ, à 
   la barre latérale grise les conversations existantes. Tout disparaît dès que les PNJ sont réactivés.
 - **Délai** : `NPC_REPLY_DELAY_MS` fixe le délai avant réponse en millisecondes (défaut : tiré entre 1 et 2 s).
 - **Reset** : « Effacer les messages » (`reset {scope:"messages"}`) annule les réponses de PNJ en attente, sans couper les PNJ.
+
+### Fiches dans un dossier (`NPC_PERSONAS_DIR`)
+
+`NPC_PERSONAS_DIR` (facultative) désigne un dossier du serveur lu au démarrage à la place des fiches
+embarquées, avec la même organisation : `<dossier>/<scénario>/<id>.md`, un seul niveau de sous-dossier
+(par exemple une copie de `server/npc/personas`). Garde-fous : le chemin vient seulement de la variable
+d'environnement ; noms de dossier et de fichier en `^[a-z0-9-]+$` (plus `.md`) ; un lien symbolique qui
+sort du dossier est refusé ; 32 Ko au plus par fiche, 50 fiches au plus. Mêmes validations que les fiches
+embarquées (parseur, id et scénario égaux au chemin, nom unique). Si le dossier est absent, illisible ou
+sans fiche valide au démarrage, les fiches embarquées sont utilisées, avec un avertissement d'une ligne.
+
+Dans `/admin`, la section « Personnages (PNJ) » indique la source et affiche chaque fiche en lecture
+seule ; « Recharger les fiches » (`POST /api/admin/npc-personas/reload`, code animateur) relit la source
+en service sans redémarrer : les fiches valides remplacent les fiches en cours, une fiche en erreur garde
+sa version précédente (listée dans `kept`), une fiche supprimée disparaît ; sans aucune fiche valide, rien
+n'est remplacé (422). L'état activé ou coupé des PNJ et le scénario courant sont conservés. `GET
+/api/admin/npc-personas` renvoie la source et les fiches chargées avec leur texte.
+
+Sur Render, le système de fichiers du service est effacé à chaque déploiement ou redémarrage : il faut un
+**disque persistant** (Render Disk, offre payante) monté par exemple sur `/var/data`, avec
+`NPC_PERSONAS_DIR=/var/data/personas`, saisie dans **Environment** (déclarée en `sync: false` dans
+`render.yaml`). Sans disque, laisser la variable vide : les fiches embarquées sont utilisées.
 
 ### Brancher un modèle
 

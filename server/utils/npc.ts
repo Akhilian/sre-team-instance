@@ -1,12 +1,23 @@
-// Branchement des PNJ sur l'application : fiches embarquées (nitro.serverAssets, base assets:npc),
+// Branchement des PNJ sur l'application : fiches lues dans NPC_PERSONAS_DIR ou embarquées (nitro.serverAssets,
+// base assets:npc), rechargeables à chaud depuis /admin,
 // moteur choisi par NPC_ENGINE, orchestrateur unique du processus (état activé en mémoire seulement)
 // et publication dans le store des canaux. La logique pure vit dans server/npc/.
 import type { Message } from '../../shared/types/chat'
-import type { NpcAdminState, NpcPersona } from '../../shared/types/npc'
+import type { NpcAdminState, NpcPersona, NpcPersonasAdminState } from '../../shared/types/npc'
 import { createNpcDispatcher, type NpcDispatcher } from '../npc/dispatcher'
 import { type ResolvedNpcEngine, resolveNpcEngine } from '../npc/engines'
 import { createLexicalRetriever } from '../npc/lexical-retriever'
-import { PersonaParseError, parsePersona } from '../npc/persona-parser'
+import {
+  mergePersonaReload,
+  type PersonaFile,
+  type PersonaFs,
+  type PersonaLoadError,
+  type PersonaLoadResult,
+  type PersonaReloadReport,
+  type PersonaSourceKind,
+  readEmbeddedPersonas,
+  readPersonaDir,
+} from '../npc/persona-source'
 import { addNpcMessage, getChannel, listMessages } from './chat-store'
 import { processEnv } from './env'
 import { setNpcTyping } from './presence-store'
@@ -21,6 +32,9 @@ let engine: ResolvedNpcEngine | undefined
 let dispatcher: Promise<NpcDispatcher> | undefined
 /** Fiches chargées par useNpcDispatcher(), pour les recherches synchrones (étapes de scénario) */
 let loadedPersonas: readonly NpcPersona[] = []
+/** Les mêmes, avec leur chemin et leur texte source (/admin), et la source en service */
+let loadedFiles: readonly PersonaFile[] = []
+let personaSource: PersonaSourceKind = 'embedded'
 
 /** Moteur du processus, résolu une fois (avertissement unique si NPC_ENGINE est inconnu) */
 function npcEngine(): ResolvedNpcEngine {
@@ -33,35 +47,44 @@ export function npcEngineName(): string {
   return npcEngine().name
 }
 
+/** Une ligne de journal par fiche écartée */
+function logPersonaErrors(errors: readonly PersonaLoadError[]) {
+  for (const error of errors) console.error('[npc] fiche écartée :', error.message)
+}
+
+/** NPC_PERSONAS_DIR si elle est définie et non vide (jamais influencée par une requête) */
+function personasDir(): string | undefined {
+  const dir = processEnv().NPC_PERSONAS_DIR?.trim()
+  return dir ? dir : undefined
+}
+
+/** fs/promises de Node (le projet n'a pas @types/node : import non résolu par TypeScript) */
+async function nodeFs(): Promise<PersonaFs> {
+  return await import('node:fs/promises' as string) as PersonaFs
+}
+
+/** Relit la source kind : le dossier NPC_PERSONAS_DIR ou les fiches embarquées */
+async function readPersonaSource(kind: PersonaSourceKind): Promise<PersonaLoadResult> {
+  const dir = personasDir()
+  if (kind === 'dir' && dir !== undefined) return readPersonaDir(dir, await nodeFs())
+  return readEmbeddedPersonas(useStorage(NPC_ASSETS_BASE))
+}
+
 /**
- * Fiches valides de tous les scénarios, triées par scénario puis par id. Une fiche invalide (ou dont
- * l'id ou le scénario ne correspond pas à son chemin, ou au nom déjà pris) est écartée avec une erreur
- * dans les logs.
+ * Fiches du démarrage : le dossier NPC_PERSONAS_DIR s'il est défini et contient au moins une fiche
+ * valide, sinon les fiches embarquées (avertissement d'une ligne). Les fiches invalides sont écartées
+ * avec une erreur dans les logs.
  */
-export async function loadNpcPersonas(): Promise<NpcPersona[]> {
-  const storage = useStorage(NPC_ASSETS_BASE)
-  const keys = (await storage.getKeys()).filter(key => key.endsWith('.md')).sort()
-  const personas: NpcPersona[] = []
-  for (const key of keys) {
-    const path = key.replace(/:/g, '/')
-    try {
-      const raw = await storage.getItem(key)
-      if (typeof raw !== 'string') throw new PersonaParseError(path, 'contenu illisible')
-      const persona = parsePersona(raw, path)
-      const [scenarioId, file] = key.split(':')
-      if (`${persona.scenarioId}:${persona.id}.md` !== `${scenarioId}:${file}`) {
-        throw new PersonaParseError(path, `id « ${persona.id} » ou scénario « ${persona.scenarioId} » différent du chemin`)
-      }
-      if (personas.some(other => other.name.toLowerCase() === persona.name.toLowerCase())) {
-        throw new PersonaParseError(path, `nom « ${persona.name} » déjà pris par une autre fiche`)
-      }
-      personas.push(persona)
-    }
-    catch (error) {
-      console.error('[npc] fiche écartée :', error instanceof Error ? error.message : error)
-    }
+async function loadInitialPersonas(): Promise<{ source: PersonaSourceKind, files: PersonaFile[] }> {
+  if (personasDir() !== undefined) {
+    const result = await readPersonaSource('dir')
+    logPersonaErrors(result.errors)
+    if (result.files.length > 0) return { source: 'dir', files: result.files }
+    console.warn('[npc] NPC_PERSONAS_DIR absent, illisible ou sans fiche valide : fiches embarquées utilisées')
   }
-  return personas
+  const result = await readPersonaSource('embedded')
+  logPersonaErrors(result.errors)
+  return { source: 'embedded', files: result.files }
 }
 
 /** Délai simulé : NPC_REPLY_DELAY_MS (entier ≥ 0) s'il est défini, sinon entre 1 et 2 s */
@@ -86,7 +109,10 @@ function recentHistory(message: Message): Message[] {
 
 /** Orchestrateur du processus, créé au premier appel une fois les fiches chargées */
 export function useNpcDispatcher(): Promise<NpcDispatcher> {
-  dispatcher ??= loadNpcPersonas().then((personas) => {
+  dispatcher ??= loadInitialPersonas().then(({ source, files }) => {
+    personaSource = source
+    loadedFiles = files
+    const personas = files.map(file => file.persona)
     loadedPersonas = personas
     return createNpcDispatcher({
       schedule: (fn, delayMs) => setTimeout(fn, delayMs),
@@ -163,4 +189,38 @@ export async function npcAdminState(): Promise<NpcAdminState> {
     engine: npcEngineName(),
     scenarioId: current.scenarioId(),
   }
+}
+
+/** Fiches chargées pour /admin, avec leur texte source ; tous scénarios */
+export async function npcPersonaFiles(): Promise<NpcPersonasAdminState> {
+  await useNpcDispatcher()
+  return {
+    source: personaSource,
+    personas: loadedFiles.map(({ path, markdown, persona }) => ({
+      path,
+      id: persona.id,
+      name: persona.name,
+      role: persona.role,
+      scenarioId: persona.scenarioId,
+      markdown,
+    })),
+  }
+}
+
+/**
+ * Relit la source en service (jamais changée à chaud) et remplace les fiches du dispatcher ; une fiche
+ * en erreur garde sa version précédente. Sans aucune fiche valide, rien n'est remplacé (replaced faux).
+ */
+export async function reloadNpcPersonas(): Promise<{ replaced: boolean, report: PersonaReloadReport }> {
+  const current = await useNpcDispatcher()
+  const source = personaSource
+  const result = await readPersonaSource(source)
+  logPersonaErrors(result.errors)
+  const outcome = mergePersonaReload(loadedFiles, result, source)
+  if (outcome.replaced) {
+    loadedFiles = outcome.files
+    loadedPersonas = outcome.files.map(file => file.persona)
+    current.replacePersonas(loadedPersonas)
+  }
+  return { replaced: outcome.replaced, report: outcome.report }
 }
