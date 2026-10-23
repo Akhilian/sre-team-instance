@@ -7,6 +7,7 @@ import type { KnowledgeRetriever, NpcPersona, NpcResponder, NpcSummary } from '.
 import { splitMentions } from '../../shared/utils/mentions'
 import {
   NPC_MENTIONS_PER_MESSAGE_MAX,
+  NPC_REPLIES_GLOBAL_PER_MINUTE,
   NPC_REPLIES_PER_MINUTE,
   NPC_REPLIES_PER_NPC_PER_MINUTE,
 } from '../../shared/utils/limits'
@@ -44,7 +45,7 @@ export interface NpcDispatcherDeps<Handle = unknown> {
   delayMs?: () => number
   /** Messages récents du fil ou du canal, question comprise ou non (elle est retirée) */
   history?: (message: Message) => Message[]
-  /** Échecs du moteur ou de la publication (défaut console.error) */
+  /** Échecs du moteur ou de la publication (défaut : une ligne sur console.error, sans trace de pile) */
   onError?: (error: unknown) => void
   /** Délai maximal du moteur (défaut NPC_RESPOND_TIMEOUT_MS) */
   respondTimeoutMs?: number
@@ -64,6 +65,17 @@ export interface NpcDispatcher {
   findByName: (name: string) => NpcPersona | undefined
   /** Planifie les réponses au message ; renvoie les ids des PNJ qui vont répondre */
   handle: (message: Message) => string[]
+  /**
+   * Annule les réponses en attente (planifiées ou en cours de formulation) : ni publication ni onError
+   * ensuite. Appelée par la coupure et par le reset des messages (leurs fils ont disparu).
+   */
+  cancelPending: () => void
+}
+
+/** Une ligne de journal, sans trace de pile */
+function logAbandoned(error: unknown) {
+  const message = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ').trim()
+  console.error(`[npc] réponse abandonnée : ${message}`)
 }
 
 function summary(persona: NpcPersona): NpcSummary {
@@ -72,11 +84,12 @@ function summary(persona: NpcPersona): NpcSummary {
 
 export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): NpcDispatcher {
   const personas = deps.personas
-  const onError = deps.onError ?? (error => console.error('[npc] réponse abandonnée', error))
+  const onError = deps.onError ?? logAbandoned
   let currentScenarioId = personas[0]?.scenarioId ?? ''
   let enabled = false
-  // Horodatages des réponses planifiées, par PNJ et tous PNJ confondus (fenêtre glissante d'une minute)
-  const repliesByNpc = new Map<string, number[]>()
+  // Horodatages des réponses planifiées (fenêtre glissante d'une minute), par clé : `channelId` (tous PNJ
+  // du canal) et `channelId:personaId` ; allReplies borne les appels au moteur, tous canaux confondus
+  const repliesByKey = new Map<string, number[]>()
   let allReplies: number[] = []
   const pending = new Set<Handle>()
   // Incrémentée à chaque coupure : une réponse planifiée avant ne publie plus rien
@@ -92,15 +105,31 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
     pending.clear()
   }
 
-  /** Vrai et compté si le PNJ peut encore répondre dans la minute */
-  function takeRateSlot(persona: NpcPersona): boolean {
-    const since = deps.now() - RATE_WINDOW_MS
+  /** Horodatages encore dans la fenêtre pour key (les clés vides sont retirées) */
+  function recent(key: string, since: number): number[] {
+    const kept = (repliesByKey.get(key) ?? []).filter(at => at > since)
+    if (kept.length === 0) repliesByKey.delete(key)
+    else repliesByKey.set(key, kept)
+    return kept
+  }
+
+  /** Vrai et compté si le PNJ peut encore répondre dans ce canal dans la minute */
+  function takeRateSlot(persona: NpcPersona, channelId: string): boolean {
+    const now = deps.now()
+    const since = now - RATE_WINDOW_MS
     allReplies = allReplies.filter(at => at > since)
-    const own = (repliesByNpc.get(persona.id) ?? []).filter(at => at > since)
-    repliesByNpc.set(persona.id, own)
-    if (own.length >= NPC_REPLIES_PER_NPC_PER_MINUTE || allReplies.length >= NPC_REPLIES_PER_MINUTE) return false
-    own.push(deps.now())
-    allReplies.push(deps.now())
+    const channelKey = channelId
+    const npcKey = `${channelId}:${persona.id}`
+    const inChannel = recent(channelKey, since)
+    const own = recent(npcKey, since)
+    if (
+      own.length >= NPC_REPLIES_PER_NPC_PER_MINUTE
+      || inChannel.length >= NPC_REPLIES_PER_MINUTE
+      || allReplies.length >= NPC_REPLIES_GLOBAL_PER_MINUTE
+    ) return false
+    repliesByKey.set(channelKey, [...inChannel, now])
+    repliesByKey.set(npcKey, [...own, now])
+    allReplies.push(now)
     return true
   }
 
@@ -174,7 +203,7 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
       const scheduled: string[] = []
       const startGeneration = generation
       targets.forEach((persona) => {
-        if (!takeRateSlot(persona)) return
+        if (!takeRateSlot(persona, message.channelId)) return
         const delay = (deps.delayMs?.() ?? 1500) + scheduled.length * NPC_STAGGER_MS
         const handle: Handle = deps.schedule(() => {
           pending.delete(handle)
@@ -185,12 +214,18 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
               if (generation !== startGeneration || !enabled) return
               deps.publish(result)
             })
-            .catch(onError)
+            .catch((error: unknown) => {
+              // Annulée entre-temps : l'échec (fil effacé, moteur interrompu) est attendu, rien à signaler
+              if (generation !== startGeneration || !enabled) return
+              onError(error)
+            })
         }, delay)
         pending.add(handle)
         scheduled.push(persona.id)
       })
       return scheduled
     },
+
+    cancelPending,
   }
 }

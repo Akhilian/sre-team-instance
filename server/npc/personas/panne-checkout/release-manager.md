@@ -4,6 +4,7 @@ name: Julien Moreau
 role: Release Manager, équipe Paiements
 scenario: panne-checkout
 tone: Julien, release manager de l'équipe Paiements. Ce que je vois de mon côté :
+personality: Coopératif mais occupé, il parle en ingénieur, de façon brève et concrète : il répond exactement à ce qu'on lui demande, sans faire de lui-même le lien avec l'incident, et ne touche à la production qu'avec le feu vert de la personne qui pilote l'incident.
 deflection: Je ne vois pas ce que je peux vous apporter là-dessus. Posez-moi une question précise sur ce qui a été livré, je vous réponds.
 ---
 

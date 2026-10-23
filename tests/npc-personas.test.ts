@@ -9,6 +9,7 @@ name: Test Persona
 role: Testeur
 scenario: demo
 tone: Bonjour :
+personality: Calme et méthodique.
 deflection: Je ne sais pas.
 ---
 ## Sait
@@ -29,6 +30,8 @@ describe('fiches de panne-checkout', () => {
       expect(persona.name).not.toBe('')
       expect(persona.role).not.toBe('')
       expect(persona.tone).not.toBe('')
+      expect(persona.personality.length).toBeGreaterThan(40)
+      expect(persona.personality).not.toBe(persona.tone)
       expect(persona.deflection).not.toBe('')
       expect(persona.knows.length).toBeGreaterThan(0)
       expect(persona.ignores.length).toBeGreaterThan(0)
@@ -62,6 +65,7 @@ describe('parsePersona', () => {
       role: 'Testeur',
       scenarioId: 'demo',
       tone: 'Bonjour :',
+      personality: 'Calme et méthodique.',
       deflection: 'Je ne sais pas.',
       knows: ['Une information qui continue sur deux lignes.'],
       ignores: ['Le reste.'],
@@ -77,6 +81,12 @@ describe('parsePersona', () => {
     const source = VALID.replace('name: Test Persona\n', '')
     expect(() => parsePersona(source, 'sans-nom.md')).toThrow(PersonaParseError)
     expect(() => parsePersona(source, 'sans-nom.md')).toThrow('Fiche PNJ sans-nom.md : champ « name » manquant')
+  })
+
+  it('020 : rejette une fiche sans personality (champ obligatoire, pas de repli)', () => {
+    const missing = VALID.replace('personality: Calme et méthodique.\n', '')
+    expect(() => parsePersona(missing, 'sans-perso.md')).toThrow('Fiche PNJ sans-perso.md : champ « personality » manquant')
+    expect(() => parsePersona(VALID.replace('personality: Calme et méthodique.', 'personality:'), 'vide.md')).toThrow(/« personality » manquant/)
   })
 
   it('rejette un front-matter absent ou non fermé', () => {

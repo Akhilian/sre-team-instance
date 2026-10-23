@@ -8,12 +8,15 @@ import { resolve } from 'node:path'
 const ENTRY = resolve(import.meta.dirname, '../../.output/server/index.mjs')
 
 // Variables héritées qui changeraient le comportement testé (Vitest fixe NODE_ENV=test)
-const CLEARED = ['NODE_ENV', 'FACILITATOR_CODE', 'REDIS_URL', 'CHAT_DATA_DIR', 'PORT', 'NITRO_PORT', 'HOST', 'NITRO_HOST', 'NPC_ENGINE', 'NPC_REPLY_DELAY_MS']
+const CLEARED = ['NODE_ENV', 'FACILITATOR_CODE', 'REDIS_URL', 'CHAT_DATA_DIR', 'PORT', 'NITRO_PORT', 'HOST', 'NITRO_HOST', 'NPC_ENGINE', 'NPC_REPLY_DELAY_MS',
+  'NPC_LLM_BASE_URL', 'NPC_LLM_MODEL', 'NPC_LLM_API_KEY', 'NPC_LLM_TIMEOUT_MS']
 
 export interface TestServer {
   url: string
   /** Sortie standard accumulée depuis le lancement */
   stdout: () => string
+  /** Sortie d'erreur accumulée depuis le lancement (console.warn, console.error) */
+  stderr: () => string
   stop: () => Promise<void>
 }
 
@@ -72,7 +75,7 @@ export async function startServer(env: Record<string, string> = {}): Promise<Tes
     await new Promise(done => setTimeout(done, 100))
   }
 
-  return { url, stdout: () => stdout, stop: () => stopProcess(child) }
+  return { url, stdout: () => stdout, stderr: () => stderr, stop: () => stopProcess(child) }
 }
 
 export function postJson(url: string, body: unknown, headers: Record<string, string> = {}): Promise<Response> {

@@ -8,6 +8,7 @@ import { createLexicalRetriever } from '../server/npc/lexical-retriever'
 import {
   addAlert,
   addAnnouncement,
+  addChannel,
   addMessage,
   addNpcMessage,
   exportSnapshot,
@@ -181,7 +182,80 @@ describe('createNpcDispatcher', () => {
     expect(dispatcher.handle(post(`@${RELEASE.name} question 8`))).toEqual(['release-manager'])
   })
 
-  it('au plus 20 réponses par minute tous PNJ confondus', () => {
+  it('020 CA4 : 20 réponses dans le canal A n\'empêchent pas une réponse dans le canal B', async () => {
+    const { clock, dispatcher } = setup()
+    dispatcher.setEnabled(true)
+    const names = loadPersonas().map(persona => `@${persona.name}`)
+    let scheduled = 0
+    for (let index = 0; index < 5; index++) {
+      scheduled += dispatcher.handle(post(`${names.join(' ')} ?`)).length
+    }
+    // 3 PNJ au plus par message : 5 × 3 = 15, puis 5 de plus
+    for (let index = 0; index < 5; index++) scheduled += dispatcher.handle(post(`${names[3]} ?`)).length
+    expect(scheduled).toBe(20)
+    expect(dispatcher.handle(post(`${names[3]} encore ?`))).toEqual([])
+    const inB = addMessage('general', { author: 'Alice', text: `${names[0]} et ici ?` })
+    expect(dispatcher.handle(inB)).toHaveLength(1)
+    await clock.advance(30_000)
+    expect(listMessages('general').filter(message => message.npc)).toHaveLength(1)
+  })
+
+  it('020 CA4 : au plus 60 réponses par minute tous canaux confondus', () => {
+    const { dispatcher } = setup()
+    dispatcher.setEnabled(true)
+    const names = loadPersonas().map(persona => `@${persona.name}`)
+    let scheduled = 0
+    for (let channel = 0; channel < 4; channel++) {
+      const channelId = addChannel({ name: `Canal ${channel}` }).id
+      for (let index = 0; index < 8; index++) {
+        const text = `${names[index % 4]} ${names[(index + 1) % 4]} ${names[(index + 2) % 4]} ?`
+        scheduled += dispatcher.handle(addMessage(channelId, { author: 'Alice', text })).length
+      }
+    }
+    expect(scheduled).toBe(60)
+  })
+
+  it('020 CA4 : cancelPending (reset messages) : ni publication ni onError', async () => {
+    let release: (text: string) => void = () => {}
+    const responder: NpcResponder = { respond: () => new Promise((done) => { release = done }) }
+    const { clock, dispatcher, onError } = setup({ responder })
+    dispatcher.setEnabled(true)
+    // Une réponse en cours de formulation et une encore planifiée
+    dispatcher.handle(post(`@${RELEASE.name} quel déploiement ?`))
+    await clock.advance(1500)
+    dispatcher.handle(post(`@${CFO.name} combien ?`))
+    dispatcher.cancelPending()
+    resetChatStore()
+    release('trop tard')
+    await clock.advance(60_000)
+    expect(npcReplies()).toEqual([])
+    expect(onError).not.toHaveBeenCalled()
+    expect(dispatcher.isEnabled()).toBe(true)
+  })
+
+  it('020 CA4 : le onError par défaut écrit une seule ligne, sans trace de pile', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const clock = fakeClock()
+      const dispatcher = createNpcDispatcher({
+        ...clock,
+        retriever: createLexicalRetriever(),
+        responder: { respond: () => Promise.reject(new Error('moteur\nen panne')) },
+        personas: loadPersonas(),
+        publish: () => {},
+      })
+      dispatcher.setEnabled(true)
+      dispatcher.handle(post(`@${RELEASE.name} quel déploiement ?`))
+      await clock.advance(10_000)
+      expect(error).toHaveBeenCalledOnce()
+      expect(error.mock.calls[0]).toEqual(['[npc] réponse abandonnée : moteur en panne'])
+    }
+    finally {
+      error.mockRestore()
+    }
+  })
+
+  it('au plus 20 réponses par minute tous PNJ confondus dans un canal', () => {
     const { dispatcher } = setup()
     dispatcher.setEnabled(true)
     const names = loadPersonas().map(persona => `@${persona.name}`)

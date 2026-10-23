@@ -35,7 +35,9 @@ export const WRITE_RATE_WINDOW_MS = 10_000
 export const NPC_REPLY_MAX_LENGTH = 600
 /** PNJ distincts qui répondent à un même message (mentions suivantes ignorées) */
 export const NPC_MENTIONS_PER_MESSAGE_MAX = 3
-/** Réponses d'un même PNJ par minute glissante : il se tait au-delà */
+/** Réponses d'un même PNJ dans un même canal par minute glissante : il s'y tait au-delà */
 export const NPC_REPLIES_PER_NPC_PER_MINUTE = 6
-/** Réponses de tous les PNJ par minute glissante : ils se taisent au-delà */
+/** Réponses de tous les PNJ dans un même canal par minute glissante : ils s'y taisent au-delà */
 export const NPC_REPLIES_PER_MINUTE = 20
+/** Réponses de tous les PNJ, tous canaux confondus, par minute glissante : borne les appels au modèle */
+export const NPC_REPLIES_GLOBAL_PER_MINUTE = 60

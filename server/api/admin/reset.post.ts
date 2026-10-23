@@ -1,5 +1,6 @@
 // Corps optionnel { scope: "messages" | "all" } (défaut messages) : "all" ramène aussi les canaux à
-// ceux par défaut, vide la présence et coupe les PNJ. Le scénario en cours est arrêté dans les deux cas.
+// ceux par défaut, vide la présence et coupe les PNJ. Le scénario en cours est arrêté et les réponses de
+// PNJ en attente sont annulées dans les deux cas.
 const RESET_SCOPES = ['messages', 'all'] as const
 type ResetScope = typeof RESET_SCOPES[number]
 
@@ -30,6 +31,8 @@ export default defineEventHandler(async (event) => {
     await setNpcsEnabled(false)
   }
   else {
+    // Réponses en attente annulées d'abord : elles visaient des fils qui vont disparaître
+    await cancelPendingNpcReplies()
     clearMessages()
   }
   return { cleared: true, scope: rawScope }

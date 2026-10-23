@@ -68,7 +68,7 @@ Plafonds fixes, regroupés dans `shared/utils/limits.ts` :
 | auteurs par réaction | 100 | 409 |
 | réponse d'un PNJ | 600 caractères | tronquée |
 | PNJ qui répondent à un même message | 3 | mentions suivantes ignorées |
-| réponses de PNJ par minute glissante | 6 par PNJ, 20 au total | le PNJ se tait, sans erreur |
+| réponses de PNJ par minute glissante | par canal : 6 par PNJ, 20 tous PNJ confondus ; 60 au total (appels au modèle) | le PNJ se tait, sans erreur |
 
 ## Personnages non joueurs (PNJ)
 
@@ -85,16 +85,49 @@ nom de PNJ est refusé en 400), et ils ne répondent jamais à un autre PNJ, à 
   `GET /api/npcs` (public) renvoie `{ enabled, npcs: [{ id, name, role }] }`.
 - **Fiches** : un fichier Markdown par PNJ dans `server/npc/personas/<scénario>/<id>.md`, modifiable dans
   n'importe quel éditeur ; front-matter `clé: valeur` (`id`, `name`, `role`, `scenario`, `tone` = phrase
-  d'ouverture, `deflection` = réponse quand il n'a rien d'utile), puis les sections `## Sait`, `## Ignore`
+  d'ouverture du moteur `keywords`, `personality` = une phrase sur son caractère et son style, utilisée
+  par les moteurs à modèle et obligatoire, `deflection` = réponse quand il n'a rien d'utile), puis les sections `## Sait`, `## Ignore`
   et `## Sur question précise` (puces `- [mots: rollback, v2.40.3] texte`, livrées seulement si la
   question contient l'un de ces mots). Les fiches sont embarquées au build : relancer `npm run build`
   après une modification. Une fiche invalide est écartée avec une erreur dans les logs.
 - **Moteur** (`NPC_ENGINE`, défaut `keywords`) : `keywords` répond sans modèle, de façon déterministe, par
   la phrase de ton suivie des 2 extraits de la fiche les plus proches de la question (recouvrement de
-  mots). Une valeur inconnue retombe sur `keywords` avec un avertissement. Un autre fournisseur
-  s'ajoute par un fichier d'adaptateur dans `server/npc/engines/` et une ligne dans `NPC_ENGINES`.
-  `GET /api/health` indique le moteur en service (`npcEngine`).
+  mots). `openai-compatible` interroge un modèle (voir « Brancher un modèle »). Une valeur inconnue
+  retombe sur `keywords` avec un avertissement. Un autre fournisseur s'ajoute par un fichier d'adaptateur
+  dans `server/npc/engines/` et une ligne dans `NPC_ENGINES`. `GET /api/health` indique le moteur
+  effectivement en service (`npcEngine`), sans URL, modèle ni clé.
 - **Délai** : `NPC_REPLY_DELAY_MS` fixe le délai avant réponse en millisecondes (défaut : tiré entre 1 et 2 s).
+- **Reset** : « Effacer les messages » (`reset {scope:"messages"}`) annule les réponses de PNJ en attente, sans couper les PNJ.
+
+### Brancher un modèle
+
+Le moteur `openai-compatible` appelle `POST {NPC_LLM_BASE_URL}/chat/completions` depuis le serveur
+(jamais depuis le navigateur), avec un prompt construit à partir de la fiche du PNJ, des extraits retenus
+et de l'historique du fil. Réponses courtes (2 à 4 phrases, tronquées à 600 caractères).
+
+| Variable | Rôle |
+| --- | --- |
+| `NPC_ENGINE` | `openai-compatible` |
+| `NPC_LLM_BASE_URL` | URL de base de l'API, `/v1` compris (slash final toléré) |
+| `NPC_LLM_MODEL` | nom du modèle tel que le serveur le connaît |
+| `NPC_LLM_API_KEY` | facultative : envoyée en `Authorization: Bearer …` si elle est définie |
+| `NPC_LLM_TIMEOUT_MS` | délai maximal d'un appel (défaut 8000, plafonné à 14000) |
+
+- **Ollama** : `ollama pull <modèle>` (un petit modèle instruct qui parle français suffit), puis
+  `NPC_LLM_BASE_URL=http://localhost:11434/v1` et `NPC_LLM_MODEL=<modèle>` ; pas de clé.
+- **LM Studio** : charger un modèle et activer le serveur local (onglet Developer), puis
+  `NPC_LLM_BASE_URL=http://localhost:1234/v1` et `NPC_LLM_MODEL=<identifiant du modèle>`.
+- **Sans modèle sous la main** : `node scripts/fake-openai.mjs` lance un faux serveur sur
+  `http://127.0.0.1:11999/v1` (port en argument ou `PORT`), qui répond « [faux modèle] … ».
+
+Sans `NPC_LLM_BASE_URL` ou sans `NPC_LLM_MODEL`, le moteur `keywords` est utilisé, avec un avertissement.
+Si le modèle fait défaut (réseau, statut d'erreur, délai, JSON invalide, réponse vide), le PNJ répond
+avec `keywords` et les journaux contiennent une ligne `[npc] openai-compatible indisponible (…) : repli
+keywords`, sans URL ni clé : l'atelier continue.
+
+Sur Render, un modèle lancé sur votre poste (`localhost`) n'est pas joignable : il faut une URL publique
+ou auto-hébergée (serveur Ollama/vLLM exposé, fournisseur compatible), saisie avec `NPC_LLM_MODEL` et
+`NPC_LLM_API_KEY` dans **Environment** (déclarées en `sync: false` dans `render.yaml`).
 
 ## Persistance des conversations
 

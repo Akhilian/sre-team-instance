@@ -17,8 +17,10 @@ export interface NpcPersona {
   name: string
   role: string
   scenarioId: string
-  /** Phrase d'ouverture de ses réponses, dans le ton de sa fonction */
+  /** Phrase d'ouverture de ses réponses (moteur keywords seulement : c'est une réplique, pas une consigne) */
   tone: string
+  /** Caractère et style de réponse, en une phrase (prompt des moteurs à modèle) */
+  personality: string
   /** Réponse quand il n'a rien d'utile à dire sur la question */
   deflection: string
   /** Ce qu'il sait et livre volontiers (section « Sait ») */

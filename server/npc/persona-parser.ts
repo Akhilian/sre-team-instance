@@ -6,7 +6,8 @@
 // name: Julien Moreau
 // role: Release Manager, équipe Paiements
 // scenario: panne-checkout
-// tone: Phrase d'ouverture de ses réponses.
+// tone: Phrase d'ouverture de ses réponses (moteur keywords).
+// personality: Une phrase sur son caractère et son style (prompt des moteurs à modèle).
 // deflection: Réponse quand il n'a rien d'utile à dire.
 // ---
 // ## Sait
@@ -24,7 +25,7 @@ export class PersonaParseError extends Error {
   }
 }
 
-const REQUIRED_FIELDS = ['id', 'name', 'role', 'scenario', 'tone', 'deflection'] as const
+const REQUIRED_FIELDS = ['id', 'name', 'role', 'scenario', 'tone', 'personality', 'deflection'] as const
 type RequiredField = typeof REQUIRED_FIELDS[number]
 
 /** Titres de section reconnus (comparés sans casse) → liste visée */
@@ -103,6 +104,7 @@ export function parsePersona(markdown: string, source = 'sans nom'): NpcPersona 
     role: head.role,
     scenarioId: head.scenario,
     tone: head.tone,
+    personality: head.personality,
     deflection: head.deflection,
     knows: bullets.knows,
     ignores: bullets.ignores,

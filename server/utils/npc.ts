@@ -120,6 +120,11 @@ export async function setNpcsEnabled(enabled: boolean): Promise<void> {
   (await useNpcDispatcher()).setEnabled(enabled)
 }
 
+/** Annule les réponses en attente sans couper les PNJ (reset des messages : leurs fils ont disparu). */
+export async function cancelPendingNpcReplies(): Promise<void> {
+  (await useNpcDispatcher()).cancelPending()
+}
+
 /** État complet pour /admin */
 export async function npcAdminState(): Promise<NpcAdminState> {
   const current = await useNpcDispatcher()

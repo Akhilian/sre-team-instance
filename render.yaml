@@ -14,6 +14,13 @@ services:
       # Persistance des conversations (optionnelle) : URL d'un Redis externe (Render Key Value, Upstash…)
       - key: REDIS_URL
         sync: false
-      # Moteur de réponse des PNJ : keywords (défaut, sans modèle)
+      # Moteur de réponse des PNJ : keywords (défaut, sans modèle) ou openai-compatible (voir README)
       - key: NPC_ENGINE
         value: keywords
+      # openai-compatible : URL publique ou auto-hébergée de l'API (/v1 compris), modèle et clé éventuelle
+      - key: NPC_LLM_BASE_URL
+        sync: false
+      - key: NPC_LLM_MODEL
+        sync: false
+      - key: NPC_LLM_API_KEY
+        sync: false
