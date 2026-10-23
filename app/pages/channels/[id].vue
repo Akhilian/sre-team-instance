@@ -44,6 +44,15 @@ async function reply(parentId: string, text: string) {
   await refresh()
 }
 
+// Bascule une réaction ; le message renvoyé remplace aussitôt l'ancien, sans attendre le polling
+async function react(messageId: string, emoji: string) {
+  const updated = await $fetch<Message>(`/api/channels/${channelId.value}/messages/${messageId}/reactions`, {
+    method: 'POST',
+    body: { emoji, author: displayName.value },
+  })
+  messages.value = (messages.value ?? []).map(message => message.id === updated.id ? updated : message)
+}
+
 async function onChannelCreated(created: Channel) {
   await refreshChannels()
   await navigateTo(`/channels/${created.id}`)
@@ -112,7 +121,7 @@ onBeforeUnmount(() => {
           </nav>
         </header>
 
-        <MessageList :messages="messages ?? []" :me="displayName" :reply="reply" />
+        <MessageList :messages="messages ?? []" :me="displayName" :reply="reply" :react="react" />
         <Composer :disabled="!displayName" :channel-name="channel?.name ?? ''" :send="send" />
       </main>
     </div>

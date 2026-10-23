@@ -13,4 +13,12 @@ export interface Message {
   createdAt: string
   /** Id du message racine du fil ; absent pour un message racine */
   parentId?: string
+  /** Réactions dans l'ordre de première réaction ; absent sans aucune réaction */
+  reactions?: Reaction[]
+}
+
+export interface Reaction {
+  emoji: string
+  /** Noms des participants, dans l'ordre d'arrivée */
+  authors: string[]
 }

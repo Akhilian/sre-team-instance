@@ -8,17 +8,19 @@
 
 - 002 — Interface façon Teams + polling 3 s (74691a6) : page `/channels/[id]` SSR, composants dans `app/components/`, CSS maison `app/assets/css/main.css` (palette #464775 / #5b5fc7), nom d'affichage en `localStorage`.
 
-## 003 — Création d'un canal par un participant, fil ancré en bas (2026-10-23, commit dc253a4)
-- Livré : `POST /api/channels {name}` (id slugifié sans accents, 400 invalide, 409 doublon) ; bouton « + » et formulaire dans la liste de canaux, redirection vers le nouveau canal ; polling 3 s de la liste des canaux ; fil ancré en bas avec défilement auto (si ≤ 100 px du bas ou message envoyé par soi) ; `statusMessage` → `message` dans `server/`. Vérifié dans Chrome (création locale + canal créé par un autre visible < 4 s, ancrage en bas, changement de canal).
-- Décisions : erreurs métier du store via classes `ChannelValidationError` / `ChannelConflictError`, traduites en 400/409 par les routes.
-- Dette / suite : les messages consécutifs d'un même auteur ne sont pas regroupés comme dans Teams ; bruit de logs sur les 404. Suite pressentie : réponses en fil, puis mentions et réactions.
+- 003 — Création de canal + fil ancré en bas (dc253a4) : `POST /api/channels` (slug, 400/409), erreurs métier via classes d'erreur du store traduites en codes HTTP.
 
 ## 004 — Réponses en fil façon Teams (2026-10-23, commit beb180a)
 - Livré : champ optionnel `parentId` sur `Message` (un seul niveau, même canal, 400 sinon) ; `app/utils/threads.ts` (`groupThreads`) testé ; rendu en fils (réponses indentées et compactes, bouton « Répondre », `ReplyComposer` inline, Échap ferme) ; auto-scroll seulement pour une nouvelle racine. Vérifié dans Chrome (réponse locale, réponse et nouvelle racine d'un autre auteur visibles < 4 s).
 - Décisions : un seul champ de réponse ouvert à la fois ; « Répondre » désactivé sans nom d'affichage.
 - Dette / suite : ses propres messages sont alignés à droite sans nom, y compris dans les fils — ce n'est pas le rendu d'un canal Teams (tout à gauche, nom affiché) ; à corriger. Suite pressentie : mentions `@nom` et réactions emoji.
 
-## 005 — Mentions `@nom` et messages de canal alignés à gauche (2026-10-23, commit à renseigner)
+## 005 — Mentions `@nom` et messages de canal alignés à gauche (2026-10-23, commit 2cafbf1)
 - Livré : `app/utils/mentions.ts` (`splitMentions`, noms connus = auteurs du canal + soi, nom le plus long prioritaire, insensible à la casse, `ops@bob.fr` ignoré) ; `MessageText.vue` (sans `v-html`) ; mention en violet gras, mention de soi sur fond orangé + bordure rouge à gauche du message (`data-testid="mentions-me"`) ; tous les messages à gauche avec avatar et nom. Vérifié dans Chrome.
 - Décisions : la mise en évidence « me » n'existe que côté client (nom vide au SSR) ; jamais de `v-html` pour le texte des messages.
 - Dette / suite : pas d'autocomplétion des mentions à la saisie. Suite pressentie : réactions emoji (dernier point du périmètre 1–5), puis outils d'animateur (annonce, réinitialisation).
+
+## 006 — Réactions emoji façon Teams (2026-10-23, commit à renseigner)
+- Livré : `POST /api/channels/:id/messages/:messageId/reactions {emoji, author}` (bascule ; 400 emoji hors jeu ou auteur invalide ; 404 message/canal inconnu) ; champ `reactions?: {emoji, authors[]}[]` renvoyé par le GET (synchro par polling) ; `MessageReactions.vue` (pastilles avec compteur, noms en `title`, la sienne en violet, palette de 6 emojis au survol). Vérifié dans Chrome (ajout sur racine et réponse, état serveur cohérent). Régression CSS sur les bulles racines relevée par le vérificateur et corrigée avant clôture.
+- Décisions : jeu d'emojis dans `shared/utils/reactions.ts` (partagé front/serveur) ; le store renvoie des copies profondes.
+- Dette / suite : la palette ouverte recouvre le texte de la réponse en dessous ; un poll concurrent peut réafficher l'ancien état ≤ 3 s. Points 1 à 5 du périmètre livrés. Suite pressentie : outils d'animateur (annonce système, réinitialisation), puis déploiement vérifié sur Render.

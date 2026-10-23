@@ -9,6 +9,8 @@ const props = defineProps<{
   me: string
   /** Poste une réponse dans le fil de la racine parentId */
   reply: (parentId: string, text: string) => Promise<void>
+  /** Bascule la réaction emoji du participant courant sur un message */
+  react: (messageId: string, emoji: string) => Promise<void>
 }>()
 
 const threads = computed(() => groupThreads(props.messages))
@@ -68,12 +70,15 @@ watch(
       <li v-for="thread in threads" :key="thread.id" class="thread" data-testid="thread">
         <div class="message" :class="{ 'message--mentions-me': mentionsMe(thread) }">
           <span class="avatar" :style="{ background: avatarColor(thread.author) }" :title="thread.author">{{ initials(thread.author) }}</span>
-          <div class="message__bubble" :data-testid="mentionsMe(thread) ? 'mentions-me' : undefined">
-            <div class="message__meta">
-              <span class="message__author">{{ thread.author }}</span>
-              <time class="message__time" :datetime="thread.createdAt">{{ formatTime(thread.createdAt) }}</time>
+          <div class="message__body">
+            <div class="message__bubble" :data-testid="mentionsMe(thread) ? 'mentions-me' : undefined">
+              <div class="message__meta">
+                <span class="message__author">{{ thread.author }}</span>
+                <time class="message__time" :datetime="thread.createdAt">{{ formatTime(thread.createdAt) }}</time>
+              </div>
+              <MessageText :text="thread.text" :known-names="knownNames" :me="me" />
             </div>
-            <MessageText :text="thread.text" :known-names="knownNames" :me="me" />
+            <MessageReactions :reactions="thread.reactions" :me="me" :react="emoji => react(thread.id, emoji)" />
           </div>
         </div>
 
@@ -87,12 +92,15 @@ watch(
               data-testid="reply"
             >
               <span class="avatar" :style="{ background: avatarColor(message.author) }" :title="message.author">{{ initials(message.author) }}</span>
-              <div class="message__bubble" :data-testid="mentionsMe(message) ? 'mentions-me' : undefined">
-                <div class="message__meta">
-                  <span class="message__author">{{ message.author }}</span>
-                  <time class="message__time" :datetime="message.createdAt">{{ formatTime(message.createdAt) }}</time>
+              <div class="message__body">
+                <div class="message__bubble" :data-testid="mentionsMe(message) ? 'mentions-me' : undefined">
+                  <div class="message__meta">
+                    <span class="message__author">{{ message.author }}</span>
+                    <time class="message__time" :datetime="message.createdAt">{{ formatTime(message.createdAt) }}</time>
+                  </div>
+                  <MessageText :text="message.text" :known-names="knownNames" :me="me" />
                 </div>
-                <MessageText :text="message.text" :known-names="knownNames" :me="me" />
+                <MessageReactions :reactions="message.reactions" :me="me" :react="emoji => react(message.id, emoji)" />
               </div>
             </li>
           </ol>
@@ -198,8 +206,17 @@ watch(
   gap: 10px;
 }
 
-.message__bubble {
+.message__body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   max-width: 70%;
+  min-width: 0;
+}
+
+.message__bubble {
+  max-width: 100%;
   padding: 8px 14px 10px;
   border-radius: 6px;
   background: #fff;
@@ -235,7 +252,6 @@ watch(
 }
 
 .message--reply .message__bubble {
-  max-width: 70%;
   padding: 5px 10px 6px;
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
 }
