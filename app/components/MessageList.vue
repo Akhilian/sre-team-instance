@@ -1,16 +1,24 @@
 <script setup lang="ts">
 import type { Message } from '~~/shared/types/chat'
+import { mentionsName } from '~/utils/mentions'
 import { groupThreads } from '~/utils/threads'
 
 const props = defineProps<{
   messages: Message[]
-  /** Nom du participant courant : ses messages sont alignés à droite */
+  /** Nom du participant courant : ses mentions sont mises en évidence */
   me: string
   /** Poste une réponse dans le fil de la racine parentId */
   reply: (parentId: string, text: string) => Promise<void>
 }>()
 
 const threads = computed(() => groupThreads(props.messages))
+
+// Noms reconnus comme mentions : auteurs du canal affiché, plus le participant courant
+const knownNames = computed(() => [...new Set([...props.messages.map(message => message.author), props.me])])
+
+function mentionsMe(message: Message): boolean {
+  return mentionsName(message.text, knownNames.value, props.me)
+}
 
 // Un seul champ de réponse ouvert à la fois
 const replyingTo = ref<string | null>(null)
@@ -58,14 +66,14 @@ watch(
         Aucun message pour l'instant. Lancez la conversation !
       </li>
       <li v-for="thread in threads" :key="thread.id" class="thread" data-testid="thread">
-        <div class="message" :class="{ 'message--mine': isMine(thread) }">
+        <div class="message" :class="{ 'message--mentions-me': mentionsMe(thread) }">
           <span class="avatar" :style="{ background: avatarColor(thread.author) }" :title="thread.author">{{ initials(thread.author) }}</span>
-          <div class="message__bubble">
+          <div class="message__bubble" :data-testid="mentionsMe(thread) ? 'mentions-me' : undefined">
             <div class="message__meta">
               <span class="message__author">{{ thread.author }}</span>
               <time class="message__time" :datetime="thread.createdAt">{{ formatTime(thread.createdAt) }}</time>
             </div>
-            <p class="message__text">{{ thread.text }}</p>
+            <MessageText :text="thread.text" :known-names="knownNames" :me="me" />
           </div>
         </div>
 
@@ -75,16 +83,16 @@ watch(
               v-for="message in thread.replies"
               :key="message.id"
               class="message message--reply"
-              :class="{ 'message--mine': isMine(message) }"
+              :class="{ 'message--mentions-me': mentionsMe(message) }"
               data-testid="reply"
             >
               <span class="avatar" :style="{ background: avatarColor(message.author) }" :title="message.author">{{ initials(message.author) }}</span>
-              <div class="message__bubble">
+              <div class="message__bubble" :data-testid="mentionsMe(message) ? 'mentions-me' : undefined">
                 <div class="message__meta">
                   <span class="message__author">{{ message.author }}</span>
                   <time class="message__time" :datetime="message.createdAt">{{ formatTime(message.createdAt) }}</time>
                 </div>
-                <p class="message__text">{{ message.text }}</p>
+                <MessageText :text="message.text" :known-names="knownNames" :me="me" />
               </div>
             </li>
           </ol>
@@ -215,13 +223,6 @@ watch(
   color: var(--teams-text-muted);
 }
 
-.message__text {
-  margin: 0;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 /* Réponses : plus compactes que la racine */
 .message--reply {
   gap: 8px;
@@ -252,17 +253,8 @@ watch(
   line-height: 1.4;
 }
 
-/* Ses propres messages : à droite, bulle violette claire, sans avatar ni nom */
-.message--mine {
-  flex-direction: row-reverse;
-}
-
-.message--mine .avatar,
-.message--mine .message__author {
-  display: none;
-}
-
-.message--mine .message__bubble {
-  background: var(--teams-purple-tint);
+/* Message qui mentionne le participant courant : bordure gauche colorée, façon Teams */
+.message--mentions-me .message__bubble {
+  border-left: 3px solid #c4314b;
 }
 </style>
