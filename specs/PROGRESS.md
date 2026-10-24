@@ -79,7 +79,7 @@
 - Décisions : les guides décrivent les fichiers du dépôt ; toute modification d'étape ou de fiche doit mettre à jour le guide (le test le signale).
 - Dette / suite : fiche modifiée dans `/admin` ou la ConfigMap non reflétée dans le guide ; parseur sans liens ni listes imbriquées. Prochaine : 038, onboarding des participants et rôles d'incident (spec écrite).
 
-## 038 — Onboarding des participants et rôles d'incident (2026-10-24, commit à renseigner)
+## 038 — Onboarding des participants et rôles d'incident (2026-10-24, commit 48dec84)
 - Livré : parcours en 5 étapes (`OnboardingDialog.vue`, textes dans `shared/onboarding/steps.ts`) à la première connexion, rejouable par le bouton « Aide » ; 5 rôles (`shared/onboarding/roles.ts` : responsable d'incident, investigation technique, communication, scribe, équipier) avec mission, réflexes, à qui parler ; rôle en mémoire serveur (`role-store.ts`, `POST /api/roles`), renvoyé par la présence, badge dans la barre du haut et à côté des messages ; section `/admin` « Participants et rôles » (réattribution, `POST /api/admin/roles`, avertissement sans responsable d'incident). Test d'absence de fuite du scénario. PASS, vérifié dans Chrome sur Colima.
 - Décisions : le serveur fait foi pour le rôle ; textes d'onboarding sans « PNJ » ni information de scénario (test).
 - Dette / suite : échec du POST de rôle → l'ancien rôle serveur écrase en silence le choix local ; texte « nom en clair suffit » à nuancer (pas si une @mention connue est présente) ; section « Conversations » présentée comme toujours visible. Prochaine : `/admin` sur deux colonnes (demande de l'utilisateur).
