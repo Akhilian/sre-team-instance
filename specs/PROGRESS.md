@@ -77,7 +77,7 @@
 - Décisions : couches et liens codés dans le composant, état fourni par la route ; `scenario-runner` actif seulement si `running`.
 - Dette / suite : `fetch` refuse une `NPC_LLM_BASE_URL` avec identifiants (appel en échec, signalé dans `lastModelCall`).
 
-## 037 — Guide animateur par scénario (2026-10-24, commit à renseigner)
+## 037 — Guide animateur par scénario (2026-10-24, commit 41668c5)
 - Livré : `docs/guide-animateur/{panne-checkout,fuite-donnees,demo-express}.md` (pitch sans solution, vérité terrain, chronologie des injections, tableau des PNJ, recoupement et décisions attendus, relances graduées sur 3 niveaux, grille de débrief, préparation), embarqués en serverAsset `guides` ; `GET /api/admin/guides/:scenarioId` (401 / 404) ; panneau repliable « Guide animateur » dans `/admin` avec sélecteur de scénario ; parseur Markdown maison `shared/utils/markdown-blocks.ts` + `MarkdownBlocks.vue` (titres, listes, tableaux, gras, code, sans `v-html` ni dépendance). Test de cohérence `tests/guides.test.ts` (chaque étape à la bonne minute avec le bon auteur, chaque PNJ, chiffres cités présents dans les fiches, pitchs sans la cause). PASS, 3 corrections de contenu, vérifié dans Chrome sur Colima.
 - Décisions : les guides décrivent les fichiers du dépôt ; toute modification d'étape ou de fiche doit mettre à jour le guide (le test le signale).
 - Dette / suite : fiche modifiée dans `/admin` ou la ConfigMap non reflétée dans le guide ; parseur sans liens ni listes imbriquées. Prochaine : 038, onboarding des participants et rôles d'incident (spec écrite).
