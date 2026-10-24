@@ -4,7 +4,8 @@ import type { NpcsResponse } from '~~/shared/types/npc'
 import type { MentionCandidate } from '~~/shared/utils/mentions'
 import { CHANNEL_MESSAGES_MAX } from '~~/shared/utils/limits'
 import { mergeMessages } from '~/utils/messages'
-import { isRoleId, roleBadge, roleLabel, type RoleId } from '~~/shared/onboarding/roles'
+import { decideRoleSync } from '~~/shared/onboarding/role-sync'
+import { roleBadge, roleLabel, type RoleId } from '~~/shared/onboarding/roles'
 
 const POLL_INTERVAL_MS = 3000
 /** Plafond de l'intervalle après des échecs successifs (doublé à chaque échec) */
@@ -141,19 +142,26 @@ async function finishOnboarding(chosen: RoleId) {
 interface ChannelPresence { present: string[], typing: string[], roles?: Record<string, string> }
 const presence = ref<ChannelPresence>({ present: [], typing: [] })
 
-// Rôles des présents (tous canaux) renvoyés par le serveur, qui fait foi
-const roles = computed<Record<string, string>>(() => presence.value.roles ?? {})
+// Rôles des présents (tous canaux) renvoyés par le serveur, qui fait foi une fois le choix local confirmé
+const pendingRole = ref<RoleId | null>(null)
+const roles = computed<Record<string, string>>(() => {
+  const received = presence.value.roles ?? {}
+  // Choix local non confirmé : affiché à la place de l'ancien rôle du serveur
+  return pendingRole.value && displayName.value ? { ...received, [displayName.value]: pendingRole.value } : received
+})
 const myRole = computed(() => (displayName.value ? roles.value[displayName.value] : undefined) ?? localRole.value)
-// Choix ou envoi du rôle en cours : la réponse d'un battement parti avant ne doit pas l'écraser
+// Envoi du rôle en cours : un seul à la fois
 let roleRequests = 0
 
 async function pushRole(name: string, role: RoleId) {
   roleRequests++
   try {
     await $fetch('/api/roles', { method: 'POST', body: { name, role } })
+    // Confirmé, sauf si un autre choix a été fait entre-temps
+    if (pendingRole.value === role) pendingRole.value = null
   }
   catch {
-    // Le battement suivant constatera l'absence du rôle et réessaiera
+    // Le choix reste en attente : le battement suivant le renverra
   }
   finally {
     roleRequests--
@@ -163,23 +171,17 @@ async function pushRole(name: string, role: RoleId) {
 async function chooseRole(role: RoleId) {
   if (!displayName.value) return
   setLocalRole(role)
-  presence.value = { ...presence.value, roles: { ...roles.value, [displayName.value]: role } }
+  pendingRole.value = role
   await pushRole(displayName.value, role)
   heartbeat()
 }
 
-// Le rôle du serveur fait foi (réattribution par l'animateur) ; s'il n'en a pas pour soi (redémarrage,
-// changement de nom), le rôle local lui est renvoyé
 function syncRole(received: Record<string, string> | undefined) {
   const name = displayName.value
   if (!name || roleRequests > 0) return
-  const serverRole = received?.[name]
-  if (isRoleId(serverRole)) {
-    if (serverRole !== localRole.value) setLocalRole(serverRole)
-  }
-  else if (localRole.value) {
-    pushRole(name, localRole.value)
-  }
+  const action = decideRoleSync({ pending: pendingRole.value, local: localRole.value, server: received?.[name] })
+  if (action.type === 'adopt') setLocalRole(action.role)
+  else if (action.type === 'push') pushRole(name, action.role)
 }
 let lastTypingSentAt = 0
 

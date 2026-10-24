@@ -56,3 +56,11 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST localhost:10128/api/admin/reset
 - Rendu : dans `MessageList.vue`, ajouter une classe `message--announcement` et le bandeau sur la bulle racine quand `thread.kind === 'announcement'` ; ne pas toucher au rendu des messages ordinaires.
 - Palette : dans `MessageReactions.vue`, passer `.reaction-picker` de `top: calc(100% + 4px)` à `bottom: calc(100% + 4px)` (z-index au-dessus des bulles).
 - `/admin` : `app/pages/admin.vue`, réutilise les classes CSS existantes ; la liste des canaux vient de `GET /api/channels`.
+
+## Évolution 2026-10-24 — `/admin` sur deux colonnes
+
+Demande de l'utilisateur : « un ajustement de la page admin sur deux colonnes plutôt qu'une seule ». La page empile une douzaine de cartes et oblige à beaucoup défiler pendant l'exercice.
+
+- [x] CA-E1 — Au-delà de ~1100 px de large, `/admin` affiche deux colonnes. Colonne gauche, le pilotage en séance : scénario, participants et rôles, annonce, alerte. Colonne droite, le suivi et les références : PNJ, chronologie, entre deux groupes, architecture, guide animateur. Le formulaire du code reste en haut, sur toute la largeur.
+- [x] CA-E2 — En dessous de ce seuil, une seule colonne dans le même ordre logique, sans défilement horizontal à 375 px.
+- [x] CA-E3 — Pas de régression : les `data-testid` existants sont conservés, le SSR et la CSP sont inchangés et les tests HTTP passent. Les panneaux `<details>` (architecture, guide) restent fermés par défaut, et le guide ouvert reste lisible : il peut prendre toute la largeur sous les deux colonnes.

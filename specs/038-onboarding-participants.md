@@ -39,3 +39,7 @@ npm run k8s:up   # puis Chrome sur http://localhost:8088 et /admin, code demo-an
 - `roles` de la présence : rôles des noms présents dans n'importe quel canal (`presence-store` expose la liste des présents) ; le changement de nom (DisplayNameDialog) renvoie le rôle sous le nouveau nom.
 - Dialogue : `role="dialog"`, `aria-modal`, `aria-labelledby`, radios natives dans un `fieldset`/`legend`, piège de focus simple ; plein écran sous 600 px ; style des dialogues existants.
 - Section admin dans `app/pages/admin.vue` (ou composant `AdminParticipants.vue`), à côté du panneau Scénario ; ne pas toucher aux fichiers de 037 (`AdminGuide.vue`, `MarkdownBlocks.vue`, `docs/guide-animateur/`).
+
+## Évolution 2026-10-24 — précisions de texte
+
+- [x] CA-E1 — Dans `shared/onboarding/steps.ts`, le texte sur le nom écrit en clair précise qu'il fonctionne quand le message ne contient pas déjà une @mention. La section « Conversations » est présentée comme visible quand des collègues sont disponibles, pas comme toujours présente. Le test d'absence de fuite reste vert.

@@ -559,286 +559,291 @@ function reset(scope: ResetScope) {
         </div>
       </form>
 
-      <form class="card" @submit.prevent="publish">
-        <h2>Publier une annonce</h2>
-        <label for="announcement-channel">Canal</label>
-        <select id="announcement-channel" v-model="channelId" data-testid="announcement-channel">
-          <option v-for="channel in channels" :key="channel.id" :value="channel.id">{{ channel.name }}</option>
-        </select>
-        <label for="announcement-text">Texte</label>
-        <textarea
-          id="announcement-text"
-          v-model="text"
-          data-testid="announcement-text"
-          rows="3"
-          :maxlength="TEXT_MAX_LENGTH"
-          placeholder="Ex. 14h02 : le taux d'erreur du checkout passe à 30 %"
-        />
-        <div class="card__actions">
-          <button type="submit" class="button button--primary" data-testid="announcement-submit" :disabled="!canPublish">
-            Publier l'annonce
-          </button>
-        </div>
-      </form>
-
-      <form class="card" data-testid="alert-form" @submit.prevent="publishAlert">
-        <h2>Publier une alerte</h2>
-        <label for="alert-channel">Canal</label>
-        <select id="alert-channel" v-model="alertChannelId" data-testid="alert-channel">
-          <option v-for="channel in channels" :key="channel.id" :value="channel.id">{{ channel.name }}</option>
-        </select>
-        <label for="alert-severity">Sévérité</label>
-        <select id="alert-severity" v-model="alertSeverity" data-testid="alert-severity">
-          <option v-for="severity in ALERT_SEVERITIES" :key="severity" :value="severity">{{ ALERT_SEVERITY_LABELS[severity] }}</option>
-        </select>
-        <label for="alert-title">Titre</label>
-        <input
-          id="alert-title"
-          v-model="alertTitle"
-          data-testid="alert-title"
-          type="text"
-          :maxlength="ALERT_TITLE_MAX_LENGTH"
-          placeholder="Ex. Taux d'erreur 5xx > 20 %"
-        >
-        <label for="alert-service">Service</label>
-        <input
-          id="alert-service"
-          v-model="alertService"
-          data-testid="alert-service"
-          type="text"
-          :maxlength="ALERT_SERVICE_MAX_LENGTH"
-          placeholder="Ex. checkout-api"
-        >
-        <label for="alert-text">Description</label>
-        <textarea
-          id="alert-text"
-          v-model="alertText"
-          data-testid="alert-text"
-          rows="2"
-          :maxlength="TEXT_MAX_LENGTH"
-          placeholder="Ex. Erreurs 5xx en hausse depuis 10 min"
-        />
-        <div class="card__actions">
-          <button type="submit" class="button button--primary" data-testid="alert-submit" :disabled="!canPublishAlert">
-            Publier l'alerte
-          </button>
-        </div>
-      </form>
-
-      <section class="card" data-testid="scenario-panel">
-        <h2>Scénario d'incident</h2>
-        <p v-if="!scenarios">Saisissez et validez le code animateur pour afficher les scénarios.</p>
-        <ul v-else class="scenarios">
-          <li v-for="scenario in scenarios" :key="scenario.id" class="scenario" :data-testid="`scenario-${scenario.id}`">
-            <div class="scenario__info">
-              <strong>{{ scenario.title }}</strong>
-              <p>{{ scenario.description }}</p>
-              <p class="scenario__meta">
-                {{ scenario.stepCount }} étapes · durée {{ formatScenarioOffset(scenario.durationSeconds).slice(1) }}
-              </p>
-            </div>
-            <button
-              type="button"
-              class="button button--primary"
-              :data-testid="`scenario-start-${scenario.id}`"
-              :disabled="!canStartScenario"
-              @click="startScenario(scenario)"
-            >
-              Lancer
-            </button>
-          </li>
-        </ul>
-
-        <div v-if="pendingStart" class="scenario-confirm" data-testid="scenario-confirm" role="alertdialog" aria-labelledby="scenario-confirm-text">
-          <p id="scenario-confirm-text">
-            <strong data-testid="scenario-confirm-count">{{ pendingStart.messageCount }} messages existent.</strong>
-            Avant de lancer « {{ pendingStart.scenario.title }} » :
-          </p>
-          <div class="card__actions">
-            <button type="button" class="button button--danger" data-testid="scenario-confirm-clear" :disabled="!canStartScenario" @click="startScenario(pendingStart.scenario, 'clear')">
-              Effacer et lancer
-            </button>
-            <button type="button" class="button button--primary" data-testid="scenario-confirm-keep" :disabled="!canStartScenario" @click="startScenario(pendingStart.scenario, 'keep')">
-              Lancer sans effacer
-            </button>
-            <button type="button" class="button" data-testid="scenario-confirm-cancel" :disabled="busy" @click="cancelPendingStart">
-              Annuler
-            </button>
-          </div>
-        </div>
-
-        <div v-if="scenarioRun" class="scenario-run" data-testid="scenario-run">
-          <div class="scenario-run__header">
-            <strong>{{ scenarioRun.title }}</strong>
-            <span
-              class="scenario-run__status"
-              :class="`scenario-run__status--${scenarioRun.status}`"
-              data-testid="scenario-run-status"
-            >{{ SCENARIO_RUN_STATUS_LABELS[scenarioRun.status] }}</span>
-          </div>
-          <ol class="scenario-steps">
-            <li
-              v-for="step in scenarioRun.steps"
-              :key="step.index"
-              class="scenario-step"
-              :data-testid="`scenario-step-${step.index}`"
-            >
-              <span class="scenario-step__at">{{ formatScenarioOffset(step.at) }}</span>
-              <span class="scenario-step__label">
-                {{ step.label }}
-                <small>{{ SCENARIO_STEP_KIND_LABELS[step.kind] }} · {{ channelName(step.channelId) }}</small>
-              </span>
-              <span
-                class="scenario-step__status"
-                :class="`scenario-step__status--${step.status}`"
-                data-testid="scenario-step-status"
-              >{{ SCENARIO_STEP_STATUS_LABELS[step.status] }}</span>
+      <div class="admin__columns">
+        <div class="admin__column" data-testid="admin-column-live">
+        <section class="card" data-testid="scenario-panel">
+          <h2>Scénario d'incident</h2>
+          <p v-if="!scenarios">Saisissez et validez le code animateur pour afficher les scénarios.</p>
+          <ul v-else class="scenarios">
+            <li v-for="scenario in scenarios" :key="scenario.id" class="scenario" :data-testid="`scenario-${scenario.id}`">
+              <div class="scenario__info">
+                <strong>{{ scenario.title }}</strong>
+                <p>{{ scenario.description }}</p>
+                <p class="scenario__meta">
+                  {{ scenario.stepCount }} étapes · durée {{ formatScenarioOffset(scenario.durationSeconds).slice(1) }}
+                </p>
+              </div>
+              <button
+                type="button"
+                class="button button--primary"
+                :data-testid="`scenario-start-${scenario.id}`"
+                :disabled="!canStartScenario"
+                @click="startScenario(scenario)"
+              >
+                Lancer
+              </button>
             </li>
-          </ol>
-          <div v-if="scenarioRunning" class="card__actions">
-            <button type="button" class="button button--danger" data-testid="scenario-stop" :disabled="busy" @click="stopScenario">
-              Arrêter
-            </button>
-            <label class="scenario-stop__npcs">
-              <input v-model="stopDisablesNpcs" type="checkbox" data-testid="scenario-stop-npcs">
-              Couper aussi les PNJ
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <AdminParticipants :code="code" />
-
-      <section class="card" data-testid="npc-panel">
-        <h2>Personnages (PNJ)</h2>
-        <p v-if="!npcState">Saisissez et validez le code animateur pour afficher les PNJ.</p>
-        <template v-else>
-          <p>Mentionnés par <strong>@Nom</strong>, ils répondent dans le fil après quelques secondes (moteur {{ npcState.engine }}). Lancer un scénario les active (sauf la démo), « Arrêter » (case cochée) et « Tout réinitialiser » les coupent.</p>
-          <p v-if="lastModelCallText" data-testid="npc-last-model-call" :class="`model-call model-call--${npcState.lastModelCall?.ok ? 'ok' : 'failed'}`">{{ lastModelCallText }}</p>
-          <label class="switch">
-            <input
-              type="checkbox"
-              data-testid="npc-toggle"
-              :checked="npcState.enabled"
-              :disabled="busy || code === '' || npcState.npcs.length === 0"
-              @change="setNpcsEnabled"
-            >
-            PNJ actifs
-          </label>
-          <label class="switch">
-            <input
-              type="checkbox"
-              data-testid="npc-spontaneous-toggle"
-              :checked="npcState.spontaneous"
-              :disabled="busy || code === ''"
-              @change="setSpontaneous"
-            >
-            Interventions spontanées
-          </label>
-          <ul class="npcs" data-testid="npc-list">
-            <li v-for="npc in npcState.npcs" :key="npc.id"><strong>{{ npc.name }}</strong> · {{ npc.role }}</li>
           </ul>
-          <template v-if="personasState">
-            <h3 class="personas__title">Fiches</h3>
-            <p data-testid="npc-personas-source">Source : {{ PERSONA_SOURCE_LABELS[personasState.source] }} ({{ personasState.personas.length }} fiche(s)).</p>
-            <p class="personas__note" data-testid="npc-personas-memory">Modifications en mémoire : perdues au redémarrage du serveur, téléchargez le .md pour les garder.</p>
-            <!-- Texte source affiché tel quel par interpolation ou v-model (HTML échappé, jamais interprété) -->
-            <details v-for="persona in personasState.personas" :key="persona.path" class="persona" data-testid="npc-persona" :open="editingPath === persona.path || undefined">
-              <summary>
-                <strong>{{ persona.name }}</strong> · {{ persona.role }} <code>{{ persona.path }}</code>
-                <span v-if="persona.modified" class="persona__badge" data-testid="npc-persona-modified">Modifiée</span>
-              </summary>
-              <template v-if="editingPath === persona.path">
-                <label class="persona__label" :for="`persona-editor-${persona.id}`">Markdown de la fiche</label>
-                <textarea
-                  :id="`persona-editor-${persona.id}`"
-                  v-model="personaDraft"
-                  class="persona__editor"
-                  data-testid="npc-persona-editor"
-                  rows="20"
-                  spellcheck="false"
-                />
-                <ul v-if="personaErrors.length > 0" class="reload-report__errors" data-testid="npc-persona-errors">
-                  <li v-for="(error, index) in personaErrors" :key="index" data-testid="npc-persona-error">{{ error.message }}</li>
-                </ul>
-                <div class="card__actions">
-                  <button type="button" class="button button--primary" data-testid="npc-persona-save" :disabled="busy || code === ''" @click="savePersonaEdit(persona)">
-                    Valider et appliquer
-                  </button>
-                  <button type="button" class="button" data-testid="npc-persona-download" @click="downloadPersonaDraft(persona)">
-                    Télécharger .md
-                  </button>
-                  <button type="button" class="button" data-testid="npc-persona-cancel" :disabled="busy" @click="cancelPersonaEdit">
-                    Annuler
-                  </button>
-                </div>
-              </template>
-              <template v-else>
-                <pre class="persona__markdown" data-testid="npc-persona-markdown">{{ persona.markdown }}</pre>
-                <div class="card__actions">
-                  <button type="button" class="button" data-testid="npc-persona-edit" :disabled="busy || code === ''" @click="startPersonaEdit(persona)">
-                    Modifier
-                  </button>
-                  <button v-if="persona.modified" type="button" class="button" data-testid="npc-persona-revert" :disabled="busy || code === ''" @click="revertPersona(persona)">
-                    Revenir à l'original
-                  </button>
-                </div>
-              </template>
-            </details>
-          </template>
+
+          <div v-if="pendingStart" class="scenario-confirm" data-testid="scenario-confirm" role="alertdialog" aria-labelledby="scenario-confirm-text">
+            <p id="scenario-confirm-text">
+              <strong data-testid="scenario-confirm-count">{{ pendingStart.messageCount }} messages existent.</strong>
+              Avant de lancer « {{ pendingStart.scenario.title }} » :
+            </p>
+            <div class="card__actions">
+              <button type="button" class="button button--danger" data-testid="scenario-confirm-clear" :disabled="!canStartScenario" @click="startScenario(pendingStart.scenario, 'clear')">
+                Effacer et lancer
+              </button>
+              <button type="button" class="button button--primary" data-testid="scenario-confirm-keep" :disabled="!canStartScenario" @click="startScenario(pendingStart.scenario, 'keep')">
+                Lancer sans effacer
+              </button>
+              <button type="button" class="button" data-testid="scenario-confirm-cancel" :disabled="busy" @click="cancelPendingStart">
+                Annuler
+              </button>
+            </div>
+          </div>
+
+          <div v-if="scenarioRun" class="scenario-run" data-testid="scenario-run">
+            <div class="scenario-run__header">
+              <strong>{{ scenarioRun.title }}</strong>
+              <span
+                class="scenario-run__status"
+                :class="`scenario-run__status--${scenarioRun.status}`"
+                data-testid="scenario-run-status"
+              >{{ SCENARIO_RUN_STATUS_LABELS[scenarioRun.status] }}</span>
+            </div>
+            <ol class="scenario-steps">
+              <li
+                v-for="step in scenarioRun.steps"
+                :key="step.index"
+                class="scenario-step"
+                :data-testid="`scenario-step-${step.index}`"
+              >
+                <span class="scenario-step__at">{{ formatScenarioOffset(step.at) }}</span>
+                <span class="scenario-step__label">
+                  {{ step.label }}
+                  <small>{{ SCENARIO_STEP_KIND_LABELS[step.kind] }} · {{ channelName(step.channelId) }}</small>
+                </span>
+                <span
+                  class="scenario-step__status"
+                  :class="`scenario-step__status--${step.status}`"
+                  data-testid="scenario-step-status"
+                >{{ SCENARIO_STEP_STATUS_LABELS[step.status] }}</span>
+              </li>
+            </ol>
+            <div v-if="scenarioRunning" class="card__actions">
+              <button type="button" class="button button--danger" data-testid="scenario-stop" :disabled="busy" @click="stopScenario">
+                Arrêter
+              </button>
+              <label class="scenario-stop__npcs">
+                <input v-model="stopDisablesNpcs" type="checkbox" data-testid="scenario-stop-npcs">
+                Couper aussi les PNJ
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <AdminParticipants :code="code" />
+
+        <form class="card" @submit.prevent="publish">
+          <h2>Publier une annonce</h2>
+          <label for="announcement-channel">Canal</label>
+          <select id="announcement-channel" v-model="channelId" data-testid="announcement-channel">
+            <option v-for="channel in channels" :key="channel.id" :value="channel.id">{{ channel.name }}</option>
+          </select>
+          <label for="announcement-text">Texte</label>
+          <textarea
+            id="announcement-text"
+            v-model="text"
+            data-testid="announcement-text"
+            rows="3"
+            :maxlength="TEXT_MAX_LENGTH"
+            placeholder="Ex. 14h02 : le taux d'erreur du checkout passe à 30 %"
+          />
           <div class="card__actions">
-            <button type="button" class="button" data-testid="npc-personas-reload" :disabled="busy || code === ''" @click="reloadPersonas">
-              Recharger les fiches
+            <button type="submit" class="button button--primary" data-testid="announcement-submit" :disabled="!canPublish">
+              Publier l'annonce
             </button>
           </div>
-          <div v-if="reloadReport" class="reload-report" data-testid="npc-reload-report">
-            <p>
-              Rechargées : {{ reloadReport.loaded.length }}
-              <template v-if="reloadReport.kept.length > 0"> · version précédente conservée : {{ reloadReport.kept.join(', ') }}</template>
-            </p>
-            <ul v-if="reloadReport.errors.length > 0" class="reload-report__errors">
-              <li v-for="error in reloadReport.errors" :key="error.path + error.message" data-testid="npc-reload-error">
-                <code>{{ error.path }}</code> : {{ error.message }}
-              </li>
-            </ul>
+        </form>
+
+        <form class="card" data-testid="alert-form" @submit.prevent="publishAlert">
+          <h2>Publier une alerte</h2>
+          <label for="alert-channel">Canal</label>
+          <select id="alert-channel" v-model="alertChannelId" data-testid="alert-channel">
+            <option v-for="channel in channels" :key="channel.id" :value="channel.id">{{ channel.name }}</option>
+          </select>
+          <label for="alert-severity">Sévérité</label>
+          <select id="alert-severity" v-model="alertSeverity" data-testid="alert-severity">
+            <option v-for="severity in ALERT_SEVERITIES" :key="severity" :value="severity">{{ ALERT_SEVERITY_LABELS[severity] }}</option>
+          </select>
+          <label for="alert-title">Titre</label>
+          <input
+            id="alert-title"
+            v-model="alertTitle"
+            data-testid="alert-title"
+            type="text"
+            :maxlength="ALERT_TITLE_MAX_LENGTH"
+            placeholder="Ex. Taux d'erreur 5xx > 20 %"
+          >
+          <label for="alert-service">Service</label>
+          <input
+            id="alert-service"
+            v-model="alertService"
+            data-testid="alert-service"
+            type="text"
+            :maxlength="ALERT_SERVICE_MAX_LENGTH"
+            placeholder="Ex. checkout-api"
+          >
+          <label for="alert-text">Description</label>
+          <textarea
+            id="alert-text"
+            v-model="alertText"
+            data-testid="alert-text"
+            rows="2"
+            :maxlength="TEXT_MAX_LENGTH"
+            placeholder="Ex. Erreurs 5xx en hausse depuis 10 min"
+          />
+          <div class="card__actions">
+            <button type="submit" class="button button--primary" data-testid="alert-submit" :disabled="!canPublishAlert">
+              Publier l'alerte
+            </button>
           </div>
-        </template>
-      </section>
-
-      <section class="card" data-testid="timeline-panel">
-        <h2>Chronologie (post-mortem)</h2>
-        <p>Messages, annonces et alertes horodatés, pour préparer le post-mortem.</p>
-        <label for="timeline-channel">Canal</label>
-        <select id="timeline-channel" v-model="timelineChannelId" data-testid="timeline-channel">
-          <option value="">Tous les canaux</option>
-          <option v-for="channel in channels" :key="channel.id" :value="channel.id">{{ channel.name }}</option>
-        </select>
-        <div class="card__actions">
-          <button type="button" class="button" data-testid="timeline-show" :disabled="!canExportTimeline" @click="showTimeline">
-            Afficher
-          </button>
-          <button type="button" class="button button--primary" data-testid="timeline-download" :disabled="!canExportTimeline" @click="downloadTimeline">
-            Télécharger .md
-          </button>
+        </form>
         </div>
-        <pre v-if="timelinePreview !== null" class="timeline-preview" data-testid="timeline-preview">{{ timelinePreview }}</pre>
-      </section>
+        <div class="admin__column" data-testid="admin-column-follow">
+        <section class="card" data-testid="npc-panel">
+          <h2>Personnages (PNJ)</h2>
+          <p v-if="!npcState">Saisissez et validez le code animateur pour afficher les PNJ.</p>
+          <template v-else>
+            <p>Mentionnés par <strong>@Nom</strong>, ils répondent dans le fil après quelques secondes (moteur {{ npcState.engine }}). Lancer un scénario les active (sauf la démo), « Arrêter » (case cochée) et « Tout réinitialiser » les coupent.</p>
+            <p v-if="lastModelCallText" data-testid="npc-last-model-call" :class="`model-call model-call--${npcState.lastModelCall?.ok ? 'ok' : 'failed'}`">{{ lastModelCallText }}</p>
+            <label class="switch">
+              <input
+                type="checkbox"
+                data-testid="npc-toggle"
+                :checked="npcState.enabled"
+                :disabled="busy || code === '' || npcState.npcs.length === 0"
+                @change="setNpcsEnabled"
+              >
+              PNJ actifs
+            </label>
+            <label class="switch">
+              <input
+                type="checkbox"
+                data-testid="npc-spontaneous-toggle"
+                :checked="npcState.spontaneous"
+                :disabled="busy || code === ''"
+                @change="setSpontaneous"
+              >
+              Interventions spontanées
+            </label>
+            <ul class="npcs" data-testid="npc-list">
+              <li v-for="npc in npcState.npcs" :key="npc.id"><strong>{{ npc.name }}</strong> · {{ npc.role }}</li>
+            </ul>
+            <template v-if="personasState">
+              <h3 class="personas__title">Fiches</h3>
+              <p data-testid="npc-personas-source">Source : {{ PERSONA_SOURCE_LABELS[personasState.source] }} ({{ personasState.personas.length }} fiche(s)).</p>
+              <p class="personas__note" data-testid="npc-personas-memory">Modifications en mémoire : perdues au redémarrage du serveur, téléchargez le .md pour les garder.</p>
+              <!-- Texte source affiché tel quel par interpolation ou v-model (HTML échappé, jamais interprété) -->
+              <details v-for="persona in personasState.personas" :key="persona.path" class="persona" data-testid="npc-persona" :open="editingPath === persona.path || undefined">
+                <summary>
+                  <strong>{{ persona.name }}</strong> · {{ persona.role }} <code>{{ persona.path }}</code>
+                  <span v-if="persona.modified" class="persona__badge" data-testid="npc-persona-modified">Modifiée</span>
+                </summary>
+                <template v-if="editingPath === persona.path">
+                  <label class="persona__label" :for="`persona-editor-${persona.id}`">Markdown de la fiche</label>
+                  <textarea
+                    :id="`persona-editor-${persona.id}`"
+                    v-model="personaDraft"
+                    class="persona__editor"
+                    data-testid="npc-persona-editor"
+                    rows="20"
+                    spellcheck="false"
+                  />
+                  <ul v-if="personaErrors.length > 0" class="reload-report__errors" data-testid="npc-persona-errors">
+                    <li v-for="(error, index) in personaErrors" :key="index" data-testid="npc-persona-error">{{ error.message }}</li>
+                  </ul>
+                  <div class="card__actions">
+                    <button type="button" class="button button--primary" data-testid="npc-persona-save" :disabled="busy || code === ''" @click="savePersonaEdit(persona)">
+                      Valider et appliquer
+                    </button>
+                    <button type="button" class="button" data-testid="npc-persona-download" @click="downloadPersonaDraft(persona)">
+                      Télécharger .md
+                    </button>
+                    <button type="button" class="button" data-testid="npc-persona-cancel" :disabled="busy" @click="cancelPersonaEdit">
+                      Annuler
+                    </button>
+                  </div>
+                </template>
+                <template v-else>
+                  <pre class="persona__markdown" data-testid="npc-persona-markdown">{{ persona.markdown }}</pre>
+                  <div class="card__actions">
+                    <button type="button" class="button" data-testid="npc-persona-edit" :disabled="busy || code === ''" @click="startPersonaEdit(persona)">
+                      Modifier
+                    </button>
+                    <button v-if="persona.modified" type="button" class="button" data-testid="npc-persona-revert" :disabled="busy || code === ''" @click="revertPersona(persona)">
+                      Revenir à l'original
+                    </button>
+                  </div>
+                </template>
+              </details>
+            </template>
+            <div class="card__actions">
+              <button type="button" class="button" data-testid="npc-personas-reload" :disabled="busy || code === ''" @click="reloadPersonas">
+                Recharger les fiches
+              </button>
+            </div>
+            <div v-if="reloadReport" class="reload-report" data-testid="npc-reload-report">
+              <p>
+                Rechargées : {{ reloadReport.loaded.length }}
+                <template v-if="reloadReport.kept.length > 0"> · version précédente conservée : {{ reloadReport.kept.join(', ') }}</template>
+              </p>
+              <ul v-if="reloadReport.errors.length > 0" class="reload-report__errors">
+                <li v-for="error in reloadReport.errors" :key="error.path + error.message" data-testid="npc-reload-error">
+                  <code>{{ error.path }}</code> : {{ error.message }}
+                </li>
+              </ul>
+            </div>
+          </template>
+        </section>
 
-      <section class="card">
-        <h2>Entre deux groupes</h2>
-        <p>« Effacer les messages » vide tous les canaux ; les canaux, y compris ceux créés par les participants, sont conservés.</p>
-        <p>« Tout réinitialiser » supprime aussi les canaux créés par les participants et la présence ; seuls les canaux par défaut restent. Le scénario en cours est arrêté dans les deux cas.</p>
-        <div class="card__actions">
-          <button type="button" class="button button--danger" data-testid="reset" :disabled="!canReset" @click="reset('messages')">
-            Effacer les messages
-          </button>
-          <button type="button" class="button button--danger" data-testid="reset-all" :disabled="!canReset" @click="reset('all')">
-            Tout réinitialiser
-          </button>
+        <section class="card" data-testid="timeline-panel">
+          <h2>Chronologie (post-mortem)</h2>
+          <p>Messages, annonces et alertes horodatés, pour préparer le post-mortem.</p>
+          <label for="timeline-channel">Canal</label>
+          <select id="timeline-channel" v-model="timelineChannelId" data-testid="timeline-channel">
+            <option value="">Tous les canaux</option>
+            <option v-for="channel in channels" :key="channel.id" :value="channel.id">{{ channel.name }}</option>
+          </select>
+          <div class="card__actions">
+            <button type="button" class="button" data-testid="timeline-show" :disabled="!canExportTimeline" @click="showTimeline">
+              Afficher
+            </button>
+            <button type="button" class="button button--primary" data-testid="timeline-download" :disabled="!canExportTimeline" @click="downloadTimeline">
+              Télécharger .md
+            </button>
+          </div>
+          <pre v-if="timelinePreview !== null" class="timeline-preview" data-testid="timeline-preview">{{ timelinePreview }}</pre>
+        </section>
+
+        <section class="card">
+          <h2>Entre deux groupes</h2>
+          <p>« Effacer les messages » vide tous les canaux ; les canaux, y compris ceux créés par les participants, sont conservés.</p>
+          <p>« Tout réinitialiser » supprime aussi les canaux créés par les participants et la présence ; seuls les canaux par défaut restent. Le scénario en cours est arrêté dans les deux cas.</p>
+          <div class="card__actions">
+            <button type="button" class="button button--danger" data-testid="reset" :disabled="!canReset" @click="reset('messages')">
+              Effacer les messages
+            </button>
+            <button type="button" class="button button--danger" data-testid="reset-all" :disabled="!canReset" @click="reset('all')">
+              Tout réinitialiser
+            </button>
+          </div>
+        </section>
+
+        <AdminArchitecture :code="code" />
         </div>
-      </section>
-
-      <AdminArchitecture :code="code" />
+      </div>
 
       <AdminGuide :code="code" />
 
@@ -886,6 +891,39 @@ function reset(scope: ResetScope) {
   max-width: 640px;
   margin: 0 auto;
   padding: 24px 16px;
+}
+
+/* Deux colonnes au-delà de 1100 px : pilotage en séance à gauche, suivi et références à droite */
+.admin__columns {
+  display: contents;
+}
+
+.admin__column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .admin__content {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    max-width: 1280px;
+  }
+
+  .admin__content > * {
+    grid-column: 1 / -1;
+  }
+
+  .admin__columns {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
 }
 
 .admin__content h1 {
