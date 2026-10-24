@@ -12,8 +12,12 @@ export default defineNuxtConfig({
     },
   },
   nitro: {
-    // Fiches des PNJ (Markdown) embarquées dans le build, lues par useStorage('assets:npc')
-    serverAssets: [{ baseName: 'npc', dir: 'npc/personas' }],
+    // Fiches des PNJ (Markdown, useStorage('assets:npc')) et guides de l'animateur (docs/guide-animateur/,
+    // dir relatif à server/, useStorage('assets:guides')) embarqués dans le build
+    serverAssets: [
+      { baseName: 'npc', dir: 'npc/personas' },
+      { baseName: 'guides', dir: '../docs/guide-animateur' },
+    ],
   },
   app: {
     head: {

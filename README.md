@@ -67,6 +67,9 @@ npm run k8s:down        # supprime le namespace sre-teams, PVC compris
 
 La page `/admin` (non liée dans la navigation) permet de publier une annonce ou une carte d'alerte (SEV1 à SEV3) dans un canal et de
 réinitialiser les conversations (messages effacés, canaux conservés, scénario en cours arrêté).
+Les guides de l'animateur (pitch, vérité terrain, chronologie, PNJ, relances, débrief, préparation) sont dans
+`docs/guide-animateur/` (un fichier par scénario), embarqués au build et lisibles dans `/admin`, panneau « Guide animateur »
+(`GET /api/admin/guides/:scenarioId`, code animateur) ; `tests/guides.test.ts` les vérifie contre les scénarios et les fiches.
 La section repliable « Architecture » (`GET /api/admin/architecture`, code animateur) dessine l'instance : hébergement,
 stockage, moteur et modèle des PNJ, fiches, scénario en cours ; actif en couleur, inactif grisé, sans secret (hôtes seulement).
 Elle permet aussi de lancer un scénario d'incident pré-écrit (`panne-checkout`, ≈ 14 min,

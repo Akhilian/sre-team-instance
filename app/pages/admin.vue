@@ -838,6 +838,8 @@ function reset(scope: ResetScope) {
 
       <AdminArchitecture :code="code" />
 
+      <AdminGuide :code="code" />
+
       <p
         v-if="status"
         class="admin__status"
