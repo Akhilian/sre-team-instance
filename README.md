@@ -55,9 +55,12 @@ npm run k8s:down        # supprime le namespace sre-teams, PVC compris
   `<scénario>_<id>.md`), attendre la synchronisation du kubelet (environ 1 min), puis « Recharger » dans
   `/admin`. La modification est écrasée au prochain `up`. Sans fiches copiées, les fiches embarquées sont utilisées.
 - **Ollama** : `ollama.enabled=true` (ce que fait `k8s:up:ollama`) ajoute un Deployment `ollama/ollama`, un
-  PVC de 10 Gi et un Service ; un initContainer tire le modèle `ollama.model` (`qwen2.5:1.5b` par défaut,
-  environ 1 Go). Les PNJ passent en `openai-compatible` (`NPC_LLM_TIMEOUT_MS=45000`). Pour un modèle plus
-  riche, `--set ollama.model=qwen2.5:3b` (environ 1,9 Go) dans `deploy/local.sh`. Sur CPU, la première réponse
+  PVC de 10 Gi et un Service ; un initContainer tire le modèle `ollama.model` (`qwen2.5:3b` par défaut,
+  environ 1,9 Go ; requests 3 Gi / limits 4 Gi de mémoire, `OLLAMA_KEEP_ALIVE=24h` pour garder le modèle chargé,
+  sondes tolérantes sous charge). Les PNJ passent en `openai-compatible` (`NPC_LLM_TIMEOUT_MS=60000`). Le 7b a mesuré
+  104 s au 1er appel et saturé une VM Colima de 10 Gi ; il reste possible avec une VM d'au moins 14 Gi
+  (`colima stop && colima start --memory 14`, puis `--set ollama.model=qwen2.5:7b --set ollama.resources.requests.memory=5Gi
+  --set ollama.resources.limits.memory=7Gi` dans `deploy/local.sh`). Sur CPU, la première réponse
   charge le modèle : le script fait un appel de chauffe. Sans `--ollama`, `up` repasse en `keywords`.
 - **NetworkPolicy** (`networkPolicy.enabled`, entrée seulement) : Redis et Ollama n'acceptent que les pods de
   l'application. Pas de règle de sortie (le pull du modèle a besoin d'Internet). k3s les applique : depuis un pod
@@ -190,7 +193,17 @@ fiche dont l'id est déjà porté par une fiche placée avant elle dans l'ordre 
 - **Ton et lecture du canal** (moteurs à modèle) : les PNJ répondent en collègue (1 à 3 phrases, sans
   formule de service client ; un filtre de sortie retire excuses, remerciements et salutations), connaissent
   l'auteur de la question et lisent les 30 derniers messages du canal d'incident (y compris en conversation directe).
-- **Délai** : `NPC_REPLY_DELAY_MS` fixe le délai avant réponse en millisecondes (défaut : tiré entre 1 et 2 s).
+- **Rythme de réponse** : `NPC_PACE` (`instant`, `realistic` par défaut, `busy`), réglable aussi dans `/admin`
+  (« Rythme de réponse », remis à la valeur de l'environnement par « Tout réinitialiser »). L'indicateur de frappe
+  apparaît tout de suite ; la réponse part après un délai tiré au hasard : 1 à 2 s en `instant` (ou
+  `NPC_REPLY_DELAY_MS` en millisecondes, mode `instant` seulement), 5 à 40 s en `realistic`, 30 s à 3 min en
+  `busy` (avec un accusé bref « je regarde, je reviens vers vous » si la réponse tarde). Le délai court pendant la
+  génération du modèle : la réponse part au plus tard des deux. Une fiche peut surcharger le rythme de son PNJ
+  (`## Disponibilité` : `- rythme: rapide|normal|lent`, `- délai: 10-60 s`). `NPC_DELAY_SCALE` multiplie tous les
+  délais (`0` : aucun, pour les tests).
+- **Mention d'un PNJ d'un autre scénario** : un message système « X n'est pas dans ce scénario. » apparaît dans le fil.
+  `@Nom` sans texte reprend la dernière question du même auteur dans le canal. Un message sans mention ni nom
+  dans un canal d'incident ne reçoit aucune réponse.
 - **Reset** : « Effacer les messages » (`reset {scope:"messages"}`) annule les réponses de PNJ en attente, sans couper les PNJ,
   et supprime les conversations directes. « Tout réinitialiser » remet aussi `lastModelCall` à `null`.
 

@@ -40,8 +40,8 @@ export interface Message {
   parentId?: string
   /** Réactions dans l'ordre de première réaction ; absent sans aucune réaction */
   reactions?: Reaction[]
-  /** 'announcement' (annonce de l'animateur) ou 'alert' (carte d'alerte) ; absent pour un message ordinaire */
-  kind?: 'announcement' | 'alert'
+  /** 'announcement' (annonce de l'animateur), 'alert' (carte d'alerte) ou 'system' (avis court du serveur) ; absent pour un message ordinaire */
+  kind?: 'announcement' | 'alert' | 'system'
   /** Détails de l'alerte, présent seulement quand kind === 'alert' ; text en est la description */
   alert?: Alert
   /** Présent seulement sur la réponse d'un PNJ (posé par le serveur, jamais par le corps HTTP) */

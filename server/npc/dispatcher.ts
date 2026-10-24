@@ -8,6 +8,8 @@
 import type { Message } from '../../shared/types/chat'
 import type { KnowledgeRetriever, NpcPersona, NpcResponder, NpcSummary } from '../../shared/types/npc'
 import { namedPersons, splitMentions } from '../../shared/utils/mentions'
+import { NPC_ACK_TEXTS, NPC_BUSY_REPLY } from './generic-phrases'
+import type { Acknowledgement } from './pace'
 import {
   NPC_CHANNEL_CONTEXT_MAX,
   NPC_DIRECT_REPLIES_GLOBAL_PER_MINUTE,
@@ -25,8 +27,11 @@ const RATE_WINDOW_MS = 60_000
 export const NPC_RESPOND_TIMEOUT_MS = 15_000
 /** Écart entre les réponses de plusieurs PNJ mentionnés dans un même message */
 const NPC_STAGGER_MS = 700
-/** Réponse publiée sans moteur quand un PNJ ne peut plus répondre faute de place dans les plafonds */
-export const NPC_BUSY_REPLY = 'Je suis sollicité de toutes parts, je reviens vers vous dans une minute.'
+export { NPC_BUSY_REPLY }
+/** Intervalle avant la réponse où la frappe reprend après un accusé */
+const NPC_RETYPE_LEAD_MS = 8000
+/** Accusés mémorisés par PNJ et canal (jamais deux fois la même formule) */
+const NPC_ACKS_KEPT = NPC_ACK_TEXTS.length
 /** Écart minimal entre deux réponses fixes d'un même PNJ dans un même canal */
 const NPC_BUSY_WINDOW_MS = 60_000
 /** Mention @… quelconque (PNJ ou humain) : @ en début de texte ou après une espace ou ponctuation, suivi d'un non-blanc */
@@ -54,8 +59,18 @@ export interface NpcDispatcherDeps<Handle = unknown> {
   personas: readonly NpcPersona[]
   /** Scénario courant avant tout lancement (défaut, ou s'il n'a aucune fiche : celui de la première fiche) */
   initialScenarioId?: string
-  /** Délai simulé avant chaque réponse (défaut 1500 ms) */
-  delayMs?: () => number
+  /**
+   * Délai avant la publication de chaque réponse (défaut 1500 ms), indicateur de frappe affiché dès la
+   * sollicitation. Il court en même temps que la génération du modèle : la réponse part au plus tard des deux.
+   */
+  delayMs?: (persona: NpcPersona) => number
+  /**
+   * Accusé bref (« je regarde, je reviens vers vous ») publié avant une réponse lointaine ; already : formules
+   * déjà dites par ce PNJ dans ce canal. Absent ou undefined : aucun accusé.
+   */
+  ack?: (persona: NpcPersona, delayMs: number, already: readonly string[]) => Acknowledgement | undefined
+  /** Message système court dans le fil (ex. « X n'est pas dans ce scénario ») ; absent : aucun avis */
+  notice?: (channelId: string, parentId: string | undefined, text: string) => void
   /** Messages récents du fil ou du canal, question comprise ou non (elle est retirée) */
   history?: (message: Message) => Message[]
   /**
@@ -146,6 +161,8 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
   const repliesByKey = new Map<string, number[]>()
   // Dernière réponse fixe « sollicité de toutes parts », par `channelId:personaId` (hors budgets)
   const busyRepliesByKey = new Map<string, number>()
+  // Accusés déjà publiés, par `channelId:personaId`
+  const acksByKey = new Map<string, string[]>()
   let allReplies: number[] = []
   let directReplies: number[] = []
   const pending = new Set<Handle>()
@@ -238,6 +255,49 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
     return found.slice(0, NPC_MENTIONS_PER_MESSAGE_MAX)
   }
 
+  /** Noms des PNJ d'un autre scénario @mentionnés dans le texte (dans l'ordre, sans doublon) */
+  function foreignMentions(text: string, others: readonly string[]): string[] {
+    const foreign = personas.filter(persona => persona.scenarioId !== currentScenarioId).map(persona => persona.name)
+    if (foreign.length === 0) return []
+    const known = [...personas.filter(persona => persona.scenarioId === currentScenarioId).map(persona => persona.name), ...others, ...foreign]
+    const names = splitMentions(text, known).flatMap(segment => segment.type === 'mention' ? [segment.name] : [])
+    return [...new Set(names.filter(name => foreign.some(candidate => candidate.toLowerCase() === name.toLowerCase())))]
+  }
+
+  /** Avis « X n'est pas dans ce scénario », au plus un par minute pour un même nom dans un canal */
+  function noticeForeign(message: Message, parentId: string | undefined, names: readonly string[]) {
+    if (!deps.notice) return
+    const now = deps.now()
+    for (const name of names) {
+      const key = `foreign:${message.channelId}:${name.toLowerCase()}`
+      const last = busyRepliesByKey.get(key)
+      if (last !== undefined && now - last < NPC_BUSY_WINDOW_MS) continue
+      busyRepliesByKey.set(key, now)
+      try {
+        deps.notice(message.channelId, parentId, `${name} n'est pas dans ce scénario.`)
+      }
+      catch (error) {
+        onError(error)
+      }
+    }
+  }
+
+  /**
+   * Question à traiter : le texte du message, ou, s'il ne contient que des mentions (« @Julien ? »), la dernière
+   * question du même auteur dans le canal (messages avec « ? » d'abord, sinon son dernier message).
+   */
+  function questionOf(message: Message, direct: boolean): string {
+    const rest = splitMentions(message.text, personas.map(persona => persona.name))
+      .map(segment => segment.type === 'text' ? segment.value : '')
+      .join('')
+    if (direct || /[\p{L}\p{N}]/u.test(rest)) return message.text
+    const own = (deps.channelContext?.(message) ?? deps.history?.(message) ?? [])
+      .filter(candidate => candidate.author === message.author && candidate.id !== message.id && candidate.rev < message.rev && candidate.kind === undefined && !candidate.npc)
+      .filter(candidate => /[\p{L}\p{N}]/u.test(candidate.text))
+    const previous = own.filter(candidate => candidate.text.includes('?')).at(-1) ?? own.at(-1)
+    return previous ? previous.text : message.text
+  }
+
   /**
    * Réponse implicite dans un fil d'équipe (H2) : le PNJ actif auteur du dernier message du fil avant
    * message (racine comprise), si message ne contient aucune mention @… ; sinon aucun.
@@ -292,15 +352,15 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
       .slice(-NPC_CHANNEL_CONTEXT_MAX)
   }
 
-  async function reply(persona: NpcPersona, message: Message, parentId: string | undefined, history: Message[]): Promise<NpcReply> {
+  async function reply(persona: NpcPersona, message: Message, question: string, parentId: string | undefined, history: Message[]): Promise<NpcReply> {
     // Récupération et formulation sous le même délai maximal (retriever ou moteur distants possibles)
     const text = await withTimeout(
-      deps.retriever.retrieve(persona, message.text)
+      deps.retriever.retrieve(persona, question)
         .then(excerpts => deps.responder.respond({
           persona,
           excerpts,
           history,
-          question: message.text,
+          question,
           questionAuthor: message.author,
           channelContext: readChannel(message, history),
         })),
@@ -372,11 +432,17 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
         : mentioned(message.text, candidates, fullHistory.map(candidate => candidate.author))
       if (targets.length > 0 && fullHistory.length === 0) fullHistory = readHistory()
       if (!direct && targets.length === 0) targets = implicitTarget(message, fullHistory, candidates)
+      if (!direct) {
+        if (fullHistory.length === 0) fullHistory = readHistory()
+        const foreign = foreignMentions(message.text, fullHistory.map(candidate => candidate.author))
+        if (foreign.length > 0) noticeForeign(message, message.parentId ?? message.id, foreign)
+      }
       if (targets.length === 0) return []
 
       // En canal d'équipe, toujours dans le fil ; en conversation directe, à la racine pour un message racine
       const parentId = direct ? message.parentId : message.parentId ?? message.id
       const history = fullHistory.slice(-NPC_HISTORY_MAX)
+      const question = questionOf(message, direct)
       const scheduled: string[] = []
       const startGeneration = generation
       targets.forEach((persona) => {
@@ -384,31 +450,82 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
           publishBusyReply(persona, message.channelId, parentId)
           return
         }
-        const delay = (deps.delayMs?.() ?? 1500) + scheduled.length * NPC_STAGGER_MS
+        const delay = (deps.delayMs?.(persona) ?? 1500) + scheduled.length * NPC_STAGGER_MS
+        const ackKey = `${message.channelId}:${persona.id}`
+        const already = acksByKey.get(ackKey) ?? []
+        const ack = deps.ack?.(persona, delay, already)
         // Frappe signalée dès la planification ; l'annulation (cancelPending) la termine aussi
-        const token = startTyping(persona, message.channelId)
-        const handle: Handle = deps.schedule(() => {
-          pending.delete(handle)
-          if (generation !== startGeneration || !enabled) {
+        let token = startTyping(persona, message.channelId)
+        const cancelled = () => generation !== startGeneration || !enabled
+        // Le délai et la génération courent ensemble : publication quand les deux sont terminés
+        let delayDone = false
+        let result: NpcReply | undefined
+        let failed = false
+        let published = false
+        const settle = () => {
+          if (published || !delayDone || result === undefined) return
+          published = true
+          if (cancelled()) {
             stopTyping(token)
             return
           }
-          reply(persona, message, parentId, history)
-            .then((result) => {
-              // Coupés pendant que le moteur réfléchissait : rien n'est publié
-              if (generation !== startGeneration || !enabled) return
-              stopTyping(token)
-              deps.publish(result)
-            })
-            .catch((error: unknown) => {
-              stopTyping(token)
-              // Annulée entre-temps : l'échec (fil effacé, moteur interrompu) est attendu, rien à signaler
-              if (generation !== startGeneration || !enabled) return
-              onError(error)
-            })
-            .finally(() => stopTyping(token))
+          stopTyping(token)
+          try {
+            deps.publish(result)
+          }
+          catch (error) {
+            onError(error)
+          }
+        }
+        const handle: Handle = deps.schedule(() => {
+          pending.delete(handle)
+          delayDone = true
+          if (cancelled()) {
+            stopTyping(token)
+            return
+          }
+          settle()
         }, delay)
         pending.add(handle)
+        if (ack) {
+          const ackHandle: Handle = deps.schedule(() => {
+            pending.delete(ackHandle)
+            if (cancelled() || delayDone || failed || published) return
+            acksByKey.set(ackKey, [...already, ack.text].slice(-NPC_ACKS_KEPT))
+            const ackReply: NpcReply = { persona, channelId: message.channelId, text: ack.text }
+            if (parentId !== undefined) ackReply.parentId = parentId
+            // Pas de frappe entre l'accusé et le moment où la réponse approche
+            stopTyping(token)
+            try {
+              deps.publish(ackReply)
+            }
+            catch (error) {
+              onError(error)
+            }
+            const resumeIn = Math.max(1, delay - ack.atMs - NPC_RETYPE_LEAD_MS)
+            const resume: Handle = deps.schedule(() => {
+              pending.delete(resume)
+              if (cancelled() || published || failed) return
+              token = startTyping(persona, message.channelId)
+            }, resumeIn)
+            pending.add(resume)
+            token = 0
+          }, ack.atMs)
+          pending.add(ackHandle)
+        }
+        reply(persona, message, question, parentId, history)
+          .then((value) => {
+            result = value
+            settle()
+          })
+          .catch((error: unknown) => {
+            failed = true
+            published = true
+            stopTyping(token)
+            // Annulée entre-temps : l'échec (fil effacé, moteur interrompu) est attendu, rien à signaler
+            if (cancelled()) return
+            onError(error)
+          })
         scheduled.push(persona.id)
       })
       return scheduled

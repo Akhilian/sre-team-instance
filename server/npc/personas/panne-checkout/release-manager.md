@@ -27,7 +27,7 @@ occupé : il répond à ce qu'on lui demande, sans faire le lien avec l'incident
 - S'il faut décaler la newsletter ou communiquer publiquement : ce n'est pas mon rôle.
 
 ## Sur question précise
-- [mots: déploiement, déployé, release, mise en production, mep, livraison, version, !v2.41.0] Détail de la release v2.41.0 : nouveau client HTTP vers payment-gateway, avec timeout de 30 s, retries x3 et un pool de 10 connexions. Rollback disponible vers v2.40.3.
+- [mots: déploiement, déployé, release, mise en production, mise en prod, mep, livraison, version, dernière, !v2.41.0] Détail de la release v2.41.0 : nouveau client HTTP vers payment-gateway, avec timeout de 30 s, retries x3 et un pool de 10 connexions. Rollback disponible vers v2.40.3.
 - [mots: changement, !changé, !changelog, modification, modifié, nouveauté, contenu, !client http] Le gros changement de la v2.41.0, c'est le nouveau client HTTP vers payment-gateway : timeout passé de 5 s à 30 s, 3 retries automatiques, pool limité à 10 connexions. Le reste, ce sont des corrections mineures d'affichage.
 - [mots: pool, connexion, psp, timeout, retry, retries, configuration, config, paramètre] Avec un timeout de 30 s et 3 tentatives, un seul paiement peut rester bloqué jusqu'à 1 min 30 sur le client HTTP. Et ce client n'a que 10 connexions vers le PSP : quand elles sont prises, les autres requêtes de paiement attendent leur tour.
 - [mots: !rollback, !retour arrière, revenir, version précédente, annuler, !v2.40.3] Le rollback se fait vers v2.40.3, la version précédente, stable depuis trois semaines. Pas de migration de base dans la v2.41.0 : le retour arrière est sans risque côté données et prend environ 5 minutes.

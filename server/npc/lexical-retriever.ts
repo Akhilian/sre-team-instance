@@ -102,7 +102,7 @@ function triggerSpans(trigger: string, question: readonly string[]): [number, nu
  * trouvés sur des mots différents de la question (« débit » et « débités » sur le même mot, ou « point » et
  * « prochain point » qui se chevauchent, comptent pour un), et présence d'un déclencheur spécifique.
  */
-function triggersFound(entry: NpcPreciseEntry, question: readonly string[]): { distinct: number, specific: boolean } {
+function triggersFound(entry: NpcPreciseEntry, question: readonly string[]): { distinct: number, specific: boolean, phrase: boolean } {
   const found = entry.triggers
     .map(trigger => ({ trigger, spans: triggerSpans(trigger.text, question) }))
     .filter(({ spans }) => spans.length > 0)
@@ -115,17 +115,29 @@ function triggersFound(entry: NpcPreciseEntry, question: readonly string[]): { d
     taken.push(free)
     distinct += 1
   }
-  return { distinct, specific: found.some(({ trigger }) => trigger.specific) }
+  return {
+    distinct,
+    specific: found.some(({ trigger }) => trigger.specific),
+    phrase: found.some(({ trigger }) => allWords(trigger.text).length >= PHRASE_MIN_WORDS),
+  }
 }
 
 /** Poids d'un déclencheur présent : la question vise précisément cette information */
 const TRIGGER_WEIGHT = 2
 /** Déclencheurs distincts requis pour une entrée précise sans déclencheur spécifique présent */
 export const PRECISE_MIN_TRIGGERS = 2
+/**
+ * Question courte (au plus ce nombre de mots significatifs) : une expression déclencheur d'au moins PHRASE_MIN_WORDS
+ * mots suffit seule (« mise en prod récente ? »), alors qu'un mot isolé reste insuffisant (« Et la carte ? »)
+ */
+export const SHORT_QUESTION_WORDS = 3
+/** Mots d'une « expression » déclencheur qui suffit seule dans une question courte */
+export const PHRASE_MIN_WORDS = 3
 
 /**
  * Score chaque puce « Sait » par recouvrement de mots ; une puce « Sur question précise » n'est
- * éligible que si la question contient au moins PRECISE_MIN_TRIGGERS de ses déclencheurs distincts, ou
+ * éligible que si la question contient au moins PRECISE_MIN_TRIGGERS de ses déclencheurs distincts (une
+ * expression d'au moins PHRASE_MIN_WORDS mots suffit seule pour une question courte), ou
  * l'un de ses déclencheurs spécifiques (score : recouvrement + TRIGGER_WEIGHT par déclencheur distinct
  * présent). Garde les EXCERPTS_MAX meilleures de score > 0 ; à égalité, les puces « Sur question
  * précise » d'abord, puis l'ordre de la fiche.
@@ -134,11 +146,12 @@ export function rankExcerpts(persona: NpcPersona, question: string): KnowledgeEx
   const words = significantWords(question)
   if (words.length === 0) return []
   const sequence = allWords(question)
+  const short = words.length <= SHORT_QUESTION_WORDS
 
   const candidates: KnowledgeExcerpt[] = []
   for (const entry of persona.onPreciseQuestion) {
-    const { distinct: triggered, specific } = triggersFound(entry, sequence)
-    if (!specific && triggered < PRECISE_MIN_TRIGGERS) continue
+    const { distinct: triggered, specific, phrase } = triggersFound(entry, sequence)
+    if (!specific && triggered < PRECISE_MIN_TRIGGERS && !(short && phrase)) continue
     candidates.push({
       source: 'precise',
       text: entry.text,

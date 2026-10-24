@@ -30,6 +30,9 @@ réguliers, un seul interlocuteur et des décisions argumentées.
 - [mots: décision, décider, arbitrage, autorisation, !feu vert, valider, accord, retour arrière] Vous avez mon feu vert pour toute action qui rétablit le paiement rapidement, retour arrière compris, à condition de me dire ce qu'on risque.
 - [mots: point, !prochain point, fréquence, comex, situation] Prochain point attendu par le COMEX dans 30 minutes. Sans nouvelles d'ici là, j'appelle moi-même le CTO.
 
+## Disponibilité
+- rythme: lent
+
 ## Intervient spontanément
 - [sans point: 6 min] Ça fait un moment que je n'ai rien vu passer ici. Il me faut un point de situation, même court : qui pilote, et où on en est ?
 - [après: 12 min] Je n'aime pas ce silence. Si je n'ai pas très vite un cap clair, je vais devoir monter d'un cran côté direction.

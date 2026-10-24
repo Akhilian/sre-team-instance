@@ -3,6 +3,7 @@
 // NpcResponder, et une ligne dans NPC_ENGINES. Module pur (environnement et logger injectés).
 import type { ModelCallOutcome, NpcResponder } from '../../../shared/types/npc'
 import { type Env, processEnv } from '../../utils/env'
+import { withoutRepeats } from '../anti-repeat'
 import { createKeywordsResponder } from './keywords'
 import { openAiCompatibleFromEnv } from './openai-compatible'
 import { anthropicFromEnv } from './anthropic'
@@ -20,8 +21,8 @@ export type NpcResponderFactory = (
 
 export const NPC_ENGINES: Readonly<Record<string, NpcResponderFactory>> = {
   'keywords': () => createKeywordsResponder(),
-  'openai-compatible': (env, logger, onOutcome) => openAiCompatibleFromEnv(env, logger, onOutcome),
-  'anthropic': (env, logger, onOutcome) => anthropicFromEnv(env, logger, onOutcome),
+  'openai-compatible': (env, logger, onOutcome) => withoutRepeats(openAiCompatibleFromEnv(env, logger, onOutcome), createKeywordsResponder()),
+  'anthropic': (env, logger, onOutcome) => withoutRepeats(anthropicFromEnv(env, logger, onOutcome), createKeywordsResponder()),
 }
 
 export const DEFAULT_NPC_ENGINE = 'keywords'

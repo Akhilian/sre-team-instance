@@ -39,14 +39,15 @@ redis:
 ollama:
   enabled: false
   image: ollama/ollama:0.40.10
-  # Modèle tiré par l'initContainer (alternative plus riche : qwen2.5:3b, environ 1,9 Go)
-  model: qwen2.5:1.5b
+  # Modèle tiré par l'initContainer (qwen2.5:3b, environ 1,9 Go). Le 7b (environ 4,7 Go) a mesuré 104 s au
+  # 1er appel et saturé une VM Colima de 10 Gi ; 7b possible si RAM Colima >= 14 Gi (requests 5Gi / limits 7Gi)
+  model: qwen2.5:3b
   keepAlive: 24h
-  llmTimeoutMs: 45000
+  llmTimeoutMs: 60000
   storageClass: local-path
   storageSize: 10Gi
   resources:
-    requests: { cpu: "2", memory: 2Gi }
+    requests: { cpu: "2", memory: 3Gi }
     limits: { memory: 4Gi }
 
 # NetworkPolicy en entrée : Redis et Ollama n'acceptent que les pods de l'application (même release)

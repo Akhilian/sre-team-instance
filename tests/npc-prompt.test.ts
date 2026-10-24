@@ -35,7 +35,7 @@ async function request(question: string, extra: Partial<NpcRequest> = {}): Promi
 describe('034 CA1 : auteur de la question', () => {
   it('dernier message user « Bob : … » et règle « Tu réponds à Bob » ; rien n\'attribue la question à Alice', async () => {
     const history = [message('Alice', 'Le checkout est lent'), message('Alice', 'Quelqu\'un a une idée ?')]
-    const prompt = await buildNpcPrompt(await request('Quel déploiement récent ?', { history, questionAuthor: 'Bob' }))
+    const prompt = await buildNpcPrompt(await request('Quel déploiement récent ?', { history, questionAuthor: 'Bob', excerpts: [] }))
     expect(prompt.at(-1)).toEqual({ role: 'user', content: 'Bob : Quel déploiement récent ?' })
     expect(prompt[0]!.content).toContain('Tu réponds à Bob')
     expect(prompt[0]!.content).toContain('n\'emploie jamais un autre prénom')
@@ -43,7 +43,7 @@ describe('034 CA1 : auteur de la question', () => {
   })
 
   it('sans questionAuthor : question brute, pas de règle', async () => {
-    const prompt = buildNpcPrompt(await request('Quel déploiement récent ?'))
+    const prompt = buildNpcPrompt(await request('Quel déploiement récent ?', { excerpts: [] }))
     expect(prompt.at(-1)).toEqual({ role: 'user', content: 'Quel déploiement récent ?' })
     expect(prompt[0]!.content).not.toContain('Tu réponds à')
   })
@@ -57,8 +57,8 @@ describe('020 CA8 : ton de collègue', () => {
     expect(system).not.toContain('2 à 4 phrases')
     expect(system).toMatch(/jamais d'excuses/)
     expect(system).toContain('Comment puis-je vous aider')
-    expect(system).toContain('Exemples de ton (style seulement')
-    expect(system).toContain('Ça fait 20 minutes, il me faut un point clair : qui pilote ?')
+    // 040 CA3 : plus d'exemples de ton à recopier
+    expect(system).not.toContain('Exemples de ton')
   })
 })
 
@@ -67,7 +67,7 @@ describe('020 CA10 : contexte de lecture du canal', () => {
     const channel = Array.from({ length: 45 }, (_, index) => message(index % 2 === 0 ? 'Alice' : 'Bob', `ligne numéro ${index}`))
     const channelContext = channel.slice(-NPC_CHANNEL_CONTEXT_MAX)
     const thread = [message('Alice', 'racine du fil'), message('Bob', 'réponse du fil')]
-    const prompt = buildNpcPrompt(await request('Quel déploiement ?', { history: thread, channelContext, questionAuthor: 'Bob' }))
+    const prompt = buildNpcPrompt(await request('Quel déploiement ?', { history: thread, channelContext, questionAuthor: 'Bob', excerpts: [] }))
     const system = prompt[0]!.content
     expect(system).toContain('Conversation récente du canal (lecture seule)')
     for (let index = 15; index < 45; index++) expect(system).toMatch(new RegExp(`ligne numéro ${index}$`, 'm'))

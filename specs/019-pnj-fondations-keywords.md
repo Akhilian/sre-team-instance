@@ -135,3 +135,11 @@ Retour d'essai réel : « Claire, tu es là ? » doit faire réagir la CEO, comm
   - au plafond, la réponse « sollicité » est publiée comme pour une mention.
 - [x] CA12 — `npm run test:http` (build, scénario `panne-checkout` lancé) : `POST` de « Claire, tu es là ? » dans `incident-en-cours` → réponse `npc.id = "ceo"` dans le fil en moins de 5 s ; « Claireval est en panne » → aucune réponse de PNJ au bout de 3 s.
 - [x] CA13 — Le HTML SSR de `/channels/incident-en-cours`, après le `POST` de « Claire, tu es là ? », ne contient pas de `data-testid="mention"` sur « Claire ». Le contrôle Chrome relève du CA5 de `specs/033-mention-prenom.md`.
+
+## Évolution 2026-10-24 — Rythme de réponse réaliste
+Constat : les PNJ répondent presque instantanément ; en vrai, quelqu'un peut mettre plusieurs secondes, voire minutes, à répondre parce qu'il est occupé ailleurs.
+- [x] CA14 — Chaque réponse de PNJ (fil, conversation directe, intervention spontanée) est publiée après un délai : indicateur de frappe immédiat, puis message au bout d'un délai tiré au hasard selon le mode de rythme. Le délai s'ajoute au temps de génération du modèle (on n'attend pas deux fois).
+- [x] CA15 — Trois modes de rythme réglables dans `/admin` et par `NPC_PACE` : `instantané` (comportement actuel, défaut des tests), `réaliste` (≈ 5 à 40 s, défaut du déploiement), `occupé` (≈ 30 s à 3 min). Une fiche peut surcharger le rythme d'un PNJ (section `## Disponibilité`, ex. Claire plus lente que Julien), sans casser les fiches existantes.
+- [x] CA16 — Un PNJ « occupé » peut afficher un accusé bref (« je regarde, je reviens vers vous ») puis répondre plus tard ; jamais deux réponses identiques.
+- [x] CA17 — Les délais sont injectables (horloge/échelle `NPC_DELAY_SCALE`, 0 en test) : Vitest sur le tirage des délais par mode et sur la surcharge de fiche ; `npm run test:http` reste rapide.
+- [x] CA18 — Chrome : en mode `réaliste`, l'indicateur de frappe apparaît tout de suite et la réponse arrive après plusieurs secondes ; en `instantané`, comme avant.

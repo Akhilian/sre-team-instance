@@ -36,6 +36,14 @@ export interface NpcSpontaneousRule {
   text: string
 }
 
+/** Surcharge de rythme d'une fiche (section « ## Disponibilité ») */
+export interface NpcAvailability {
+  /** Multiplicateur de la plage du mode (`rythme: rapide|normal|lent`) */
+  factor?: number
+  /** Plage absolue en secondes (`délai: 10-60 s`), remplace celle du mode (sauf `instantané`) */
+  rangeSeconds?: [number, number]
+}
+
 /** Fiche d'un PNJ (server/npc/personas/<scénario>/<id>.md) */
 export interface NpcPersona {
   id: string
@@ -57,6 +65,8 @@ export interface NpcPersona {
   onPreciseQuestion: NpcPreciseEntry[]
   /** Interventions spontanées (section « Intervient spontanément ») ; vide si la section est absente */
   spontaneous: NpcSpontaneousRule[]
+  /** Rythme de réponse propre au PNJ (section « Disponibilité ») ; absent : celui du mode */
+  availability?: NpcAvailability
 }
 
 /** Extrait de la fiche retenu pour répondre à une question */
@@ -133,6 +143,8 @@ export interface NpcAdminState extends NpcsResponse {
   scenarioId: string
   /** Interrupteur « Interventions spontanées » (actif par défaut) */
   spontaneous: boolean
+  /** Mode de rythme de réponse (NPC_PACE, réglable dans /admin) */
+  pace: 'instant' | 'realistic' | 'busy'
 }
 
 /** Source des fiches : dossier NPC_PERSONAS_DIR ou fiches embarquées au build */

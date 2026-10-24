@@ -90,7 +90,7 @@ describe('toAnthropicMessages (CA1)', () => {
   })
 
   it('historique qui commence par le PNJ : précédé d\'un message user', async () => {
-    const req = await request('Quel déploiement récent ?', [fromRelease('Je regarde.'), message('Alice', 'Merci')])
+    const req = { ...await request('Quel déploiement récent ?', [fromRelease('Je regarde.'), message('Alice', 'Merci')]), excerpts: [] }
     const { system, messages } = toAnthropicMessages(buildNpcPrompt(req))
     expect(system).toContain(RELEASE.name)
     expect(messages[0]).toEqual({ role: 'user', content: '(Début de la conversation)' })
@@ -102,6 +102,7 @@ describe('toAnthropicMessages (CA1)', () => {
   it('034 CA3 : le dernier message user commence par l\'auteur de la question, alternance valide', async () => {
     const req = {
       ...await request('Quel déploiement récent ?', [message('Alice', 'Le checkout est lent'), fromRelease('Je regarde.'), message('Alice', 'Merci')]),
+      excerpts: [],
       questionAuthor: 'Bob',
     }
     const { system, messages } = toAnthropicMessages(buildNpcPrompt(req))
@@ -112,7 +113,7 @@ describe('toAnthropicMessages (CA1)', () => {
   })
 
   it('sans historique : un seul message user, la question', async () => {
-    const { messages } = toAnthropicMessages(buildNpcPrompt(await request('Quel déploiement récent ?')))
+    const { messages } = toAnthropicMessages(buildNpcPrompt({ ...await request('Quel déploiement récent ?'), excerpts: [] }))
     expect(messages).toEqual([{ role: 'user', content: 'Quel déploiement récent ?' }])
   })
 })

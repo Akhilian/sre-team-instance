@@ -35,11 +35,14 @@ spec:
           readinessProbe:
             httpGet: { path: /api/health, port: http }
             periodSeconds: 5
+            timeoutSeconds: 5
             failureThreshold: 6
           livenessProbe:
             httpGet: { path: /api/health, port: http }
             initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 6
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           {{- if include "sre-teams.hasPersonas" . }}

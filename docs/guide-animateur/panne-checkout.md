@@ -53,7 +53,7 @@ L'horloge part du lancement. Toutes ces lignes sont publiées par le serveur. En
 
 ## PNJ
 
-Six personnages. Sarah Benali, Claire Dumont, Inès Garnier et Marc Lefort parlent d'eux-mêmes par les étapes ci-dessus. Julien Moreau ne dit rien tant qu'on ne l'interroge pas, et Thomas Keller seulement quand on parle du prestataire : ce sont eux qui détiennent la cause. Un PNJ répond aux mentions (`@Julien`, `@Julien Moreau`), à son nom écrit en clair et en conversation directe.
+Six personnages. Sarah Benali, Claire Dumont, Inès Garnier et Marc Lefort parlent d'eux-mêmes par les étapes ci-dessus. Julien Moreau ne dit rien tant qu'on ne l'interroge pas, et Thomas Keller seulement quand on parle du prestataire : ce sont eux qui détiennent la cause. Un PNJ répond aux mentions (`@Julien`, `@Julien Moreau`), à son nom écrit en clair et en conversation directe. Un message sans mention ni nom dans un canal d'incident ne reçoit aucune réponse ; mentionner un personnage absent du scénario affiche « X n'est pas dans ce scénario. ». Le rythme de réponse (instantané, réaliste, occupé) se règle dans `/admin`.
 
 | Nom | Rôle | Ce qu'il sait | Bonnes questions | Ne livre que sur question précise | Interventions spontanées |
 | --- | --- | --- | --- | --- | --- |
@@ -126,7 +126,7 @@ Questions ouvertes : qu'est-ce qui a aidé ou gêné la circulation de l'informa
 
 **Choix du moteur des PNJ** (`NPC_ENGINE`) :
 - `keywords` (défaut, sans clé ni réseau) : réponse déterministe, la phrase de ton du PNJ suivie de deux extraits de sa fiche. Une section « Sur question précise » ne sort que si la question contient au moins deux de ses mots-clés, ou un mot-clé spécifique. Une question vague reçoit la réponse de repli du PNJ. Limite : ton moins naturel, il faut des questions précises, d'où l'intérêt de la colonne « Bonnes questions ».
-- `openai-compatible` (modèle local Ollama avec `k8s:up:ollama`, `qwen2.5:1.5b` par défaut, ou tout serveur compatible) : réponses naturelles en 1 à 3 phrases. Limites : un petit modèle peut inventer un détail ou le prénom de l'interlocuteur, et la première réponse sur CPU est lente ; en cas d'échec, repli sur `keywords`, signalé dans le panneau « Architecture ».
+- `openai-compatible` (modèle local Ollama avec `k8s:up:ollama`, `qwen2.5:7b` par défaut, ou tout serveur compatible) : réponses naturelles en 1 à 3 phrases. Limites : un petit modèle peut inventer un détail ou le prénom de l'interlocuteur, et la première réponse sur CPU est lente ; en cas d'échec, repli sur `keywords`, signalé dans le panneau « Architecture ».
 - `anthropic` (API Claude, clé `ANTHROPIC_API_KEY`) : réponses plus fiables. Limites : clé et accès réseau requis, coût par message ; même repli sur `keywords`.
 
 **Interventions spontanées.** Les PNJ peuvent relancer l'équipe sans être interrogés (colonne de droite du tableau PNJ). L'interrupteur « Interventions spontanées » est dans la section « Personnages (PNJ) » de `/admin`, actif par défaut. Désactivez-le pour une séance calme ou pour juger l'équipe sans pression. Chaque règle part une fois par lancement, et un PNJ attend 4 minutes entre deux interventions.

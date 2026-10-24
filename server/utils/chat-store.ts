@@ -355,6 +355,29 @@ export function addNpcMessage(
   return copyMessage(message)
 }
 
+export const SYSTEM_AUTHOR = 'Système'
+
+/** Avis court du serveur (ex. « X n'est pas dans ce scénario »), dans un fil ou à la racine ; jamais posé par le corps HTTP. */
+export function addSystemMessage(channelId: string, input: { text: string, parentId?: string }): Message {
+  const messages = messagesByChannel.get(channelId)
+  if (!messages) throw new ChannelNotFoundError(channelId)
+  const text = requireText(truncateText(input.text.trim(), TEXT_MAX_LENGTH), 'text', TEXT_MAX_LENGTH)
+  const parentId = input.parentId === undefined ? undefined : requireParentId(input.parentId, messages)
+  const message: Message = {
+    id: crypto.randomUUID(),
+    channelId,
+    author: SYSTEM_AUTHOR,
+    text,
+    createdAt: new Date().toISOString(),
+    rev: 0,
+    kind: 'system',
+  }
+  if (parentId !== undefined) message.parentId = parentId
+  pushMessage(messages, message)
+  notifyChange()
+  return copyMessage(message)
+}
+
 export const ANNOUNCEMENT_AUTHOR = 'Animateur'
 
 /** Annonce de l'animateur : message racine signé « Animateur », mêmes règles de texte que addMessage. */

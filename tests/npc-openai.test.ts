@@ -86,7 +86,7 @@ describe('buildNpcPrompt (CA1)', () => {
       message(CFO.name, 'Ça coûte cher.', { id: CFO.id, name: CFO.name, role: CFO.role }),
       message('Bob', 'On rollback ?'),
     ]
-    const prompt = buildNpcPrompt(await request('Quel déploiement récent ?', history))
+    const prompt = buildNpcPrompt({ ...await request('Quel déploiement récent ?', history), excerpts: [] })
     expect(prompt.slice(1)).toEqual([
       { role: 'user', content: 'Alice : Le checkout est lent' },
       { role: 'assistant', content: 'Je regarde.' },

@@ -21,6 +21,9 @@ services:
       # Saisi dans le tableau de bord : un blueprint ne réécrase pas le choix fait avant l'atelier.
       - key: NPC_ENGINE
         sync: false
+      # Rythme de réponse des PNJ : instant, realistic (défaut du code si vide) ou busy ; réglable aussi dans /admin
+      - key: NPC_PACE
+        sync: false
       # openai-compatible : URL publique ou auto-hébergée de l'API (/v1 compris), modèle et clé éventuelle
       - key: NPC_LLM_BASE_URL
         sync: false

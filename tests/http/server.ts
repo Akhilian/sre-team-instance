@@ -8,7 +8,7 @@ import { resolve } from 'node:path'
 const ENTRY = resolve(import.meta.dirname, '../../.output/server/index.mjs')
 
 // Variables héritées qui changeraient le comportement testé (Vitest fixe NODE_ENV=test)
-const CLEARED = ['NODE_ENV', 'FACILITATOR_CODE', 'REDIS_URL', 'CHAT_DATA_DIR', 'PORT', 'NITRO_PORT', 'HOST', 'NITRO_HOST', 'NPC_ENGINE', 'NPC_REPLY_DELAY_MS',
+const CLEARED = ['NODE_ENV', 'FACILITATOR_CODE', 'REDIS_URL', 'CHAT_DATA_DIR', 'PORT', 'NITRO_PORT', 'HOST', 'NITRO_HOST', 'NPC_ENGINE', 'NPC_REPLY_DELAY_MS', 'NPC_PACE', 'NPC_DELAY_SCALE',
   'NPC_LLM_BASE_URL', 'NPC_LLM_MODEL', 'NPC_LLM_API_KEY', 'NPC_LLM_TIMEOUT_MS', 'ANTHROPIC_API_KEY', 'NPC_ANTHROPIC_MODEL', 'NPC_ANTHROPIC_BASE_URL', 'NPC_PERSONAS_DIR', 'NPC_SPONTANEOUS_MINUTE_MS',
   'RENDER', 'KUBERNETES_SERVICE_HOST']
 
@@ -50,7 +50,8 @@ export async function startServer(env: Record<string, string> = {}): Promise<Tes
   const port = await freePort()
   const childEnv: Record<string, string | undefined> = { ...process.env }
   for (const key of CLEARED) delete childEnv[key]
-  Object.assign(childEnv, { PORT: String(port), NITRO_PORT: String(port), HOST: '127.0.0.1' }, env)
+  // Rythme instantané par défaut (le défaut du déploiement est « réaliste ») ; un test peut le surcharger
+  Object.assign(childEnv, { NPC_PACE: 'instant', PORT: String(port), NITRO_PORT: String(port), HOST: '127.0.0.1' }, env)
 
   const child = spawn(process.execPath, [ENTRY], { env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] })
   let stdout = ''

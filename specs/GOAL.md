@@ -103,3 +103,7 @@ Lors d'un scénario lancé par l'animateur, le lanceur d'alerte ouvre l'incident
 
 ## Définition de « terminé » (phase 3)
 Depuis un clone propre : une commande (script ou cible `make`/npm) construit l'image et installe le chart dans Colima ; l'application répond sur `http://localhost:<port>` ; un message survit à `kubectl rollout restart` (Redis) ; un scénario se joue avec ses PNJ ; une fiche modifiée dans la ConfigMap est prise en compte par « Recharger » ; Ollama est activable par une valeur du chart et les PNJ répondent via `openai-compatible` ; le README documente installation, accès, désinstallation.
+
+## Qualité et réalisme des PNJ (2026-10-24)
+Retour de test d'un scénario : les PNJ répondent à côté (ex. Julien Moreau répond « Je m'occupe du système de paiement » à « quelle version a été déployée ? » alors que sa fiche le dit), certaines questions n'ont aucune réponse (@PNJ d'un autre scénario, message sans mention), et les réponses arrivent presque instantanément, ce qui est irréaliste. Souhait de l'utilisateur : un meilleur modèle quitte à être plus lent, et des délais de réponse crédibles (quelques secondes à quelques minutes : le PNJ travaille sur autre chose).
+Terminé : spec 040 (qualité des réponses, bug) et évolution de la spec 019 (rythme de réponse), vérifiées dans Chrome sur Colima. Contexte plus large : `specs/ROADMAP.md`.

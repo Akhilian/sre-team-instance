@@ -9,6 +9,7 @@ import type { Message } from '../../shared/types/chat'
 import type { NpcPersona, NpcSpontaneousRule } from '../../shared/types/npc'
 import { NPC_SPONTANEOUS_GAP_MINUTES, NPC_SPONTANEOUS_PER_MINUTE } from '../../shared/utils/limits'
 import { namedPersons, splitMentions } from '../../shared/utils/mentions'
+import { isNearDuplicate } from './anti-repeat'
 import { allWords, triggerWordMatches } from './lexical-retriever'
 
 /** Durée d'une « minute » des règles et des délais, par défaut (NPC_SPONTANEOUS_MINUTE_MS la fixe pour les tests) */
@@ -41,8 +42,13 @@ export interface SpontaneousDeps<Handle = unknown> {
   formulateTimeoutMs?: number
   /** Réserve une place dans le plafond global d'appels au modèle ; faux : la règle attend */
   takeSlot?: () => boolean
-  /** Délai simulé entre le déclenchement (début de frappe) et la publication (défaut 0) */
-  delayMs?: () => number
+  /**
+   * Délai entre le déclenchement (début de frappe) et la publication (défaut 0). Il court en même temps que
+   * la formulation par le modèle : la publication attend le plus long des deux.
+   */
+  delayMs?: (persona: NpcPersona) => number
+  /** Messages récents (texte) que ce PNJ a déjà publiés dans le canal : une reformulation quasi identique n'est pas publiée */
+  recentTexts?: (persona: NpcPersona, channelId: string) => string[]
   /** Début (true) et fin (false) de frappe : exactement une fin par début */
   onTyping?: (persona: NpcPersona, channelId: string, typing: boolean) => void
   /** Échec de publication (défaut : une ligne sur console.error) */
@@ -166,25 +172,38 @@ export function createSpontaneousEngine<Handle>(deps: SpontaneousDeps<Handle>): 
   function launch(persona: NpcPersona, rule: NpcSpontaneousRule) {
     const startGeneration = generation
     const token = startTyping(persona)
+    let delayDone = false
+    let text: string | undefined
+    let done = false
+    const finish = () => {
+      if (done || !delayDone || text === undefined) return
+      done = true
+      stopTyping(token)
+      // Coupé, arrêté ou réinitialisé pendant la formulation : rien n'est publié
+      if (generation !== startGeneration || !isActive(persona)) return
+      // Même reformulation (ou quasi) qu'un message récent du PNJ : pas de doublon dans le canal
+      if (isNearDuplicate(text, deps.recentTexts?.(persona, channelId) ?? [])) return
+      try {
+        deps.publish(persona, channelId, text)
+      }
+      catch (error) {
+        onError(error)
+      }
+    }
     const handle: Handle = deps.schedule(() => {
       pending.delete(handle)
+      delayDone = true
       if (generation !== startGeneration) {
         stopTyping(token)
         return
       }
-      void textFor(persona, rule.text).then((text) => {
-        stopTyping(token)
-        // Coupé, arrêté ou réinitialisé pendant la formulation : rien n'est publié
-        if (generation !== startGeneration || !isActive(persona)) return
-        try {
-          deps.publish(persona, channelId, text)
-        }
-        catch (error) {
-          onError(error)
-        }
-      })
-    }, deps.delayMs?.() ?? 0)
+      finish()
+    }, deps.delayMs?.(persona) ?? 0)
     pending.add(handle)
+    void textFor(persona, rule.text).then((value) => {
+      text = value
+      finish()
+    })
   }
 
   /** Déclenche la règle si les garde-fous le permettent ; faux : elle reste en attente */

@@ -6,6 +6,7 @@ import type { Message } from '../../shared/types/chat'
 import type { LastModelCall, NpcAdminState, NpcPersona, NpcPersonaFileSummary, NpcPersonasAdminState } from '../../shared/types/npc'
 import { createNpcDispatcher, NPC_RESPOND_TIMEOUT_MS, type NpcDispatcher } from '../npc/dispatcher'
 import { type ResolvedNpcEngine, resolveNpcEngine } from '../npc/engines'
+import { delayScaleFromEnv, DEFAULT_NPC_PACE, type NpcPaceMode, parsePaceMode, pickAcknowledgement, pickDelayMs } from '../npc/pace'
 import { createLexicalRetriever } from '../npc/lexical-retriever'
 import { createSpontaneousEngine, NPC_SPONTANEOUS_MINUTE_MS, type SpontaneousEngine } from '../npc/spontaneous'
 import { createPersonaLayer, type PersonaLayerResult } from '../npc/persona-overrides'
@@ -21,7 +22,7 @@ import {
   readPersonaDir,
 } from '../npc/persona-source'
 import { INCIDENT_CHANNEL_ID, npcScenarioIdFor, SCENARIOS } from '../scenarios'
-import { addNpcMessage, getChannel, listMessages } from './chat-store'
+import { addNpcMessage, addSystemMessage, getChannel, listMessages } from './chat-store'
 import { NPC_CHANNEL_CONTEXT_MAX } from '../../shared/utils/limits'
 import { dispatcherTimeoutMs } from '../npc/engines/openai-compatible'
 import { processEnv } from './env'
@@ -29,10 +30,6 @@ import { setNpcTyping } from './presence-store'
 
 /** Base unstorage des fiches : server/npc/personas/<scénario>/<id>.md */
 const NPC_ASSETS_BASE = 'assets:npc'
-/** Sans NPC_REPLY_DELAY_MS : délai tiré entre 1 et 2 s (1,5 s en moyenne) */
-const NPC_REPLY_DELAY_MIN_MS = 1000
-const NPC_REPLY_DELAY_SPREAD_MS = 1000
-
 let engine: ResolvedNpcEngine | undefined
 /** Dernier appel au modèle (moteurs anthropic et openai-compatible), en mémoire ; null avant tout appel */
 let lastModelCall: LastModelCall | null = null
@@ -106,12 +103,38 @@ async function loadInitialPersonas(): Promise<{ source: PersonaSourceKind, files
   return { source: 'embedded', files: result.files }
 }
 
-/** Délai simulé : NPC_REPLY_DELAY_MS (entier ≥ 0) s'il est défini, sinon entre 1 et 2 s */
-function replyDelayMs(): number {
+/**
+ * Mode de rythme : réglé dans /admin (en mémoire), sinon NPC_PACE (instantané, réaliste, occupé), sinon le
+ * défaut du déploiement (réaliste). Les tests HTTP fixent NPC_PACE=instant.
+ */
+let paceOverride: NpcPaceMode | undefined
+
+export function npcPace(): NpcPaceMode {
+  return paceOverride ?? parsePaceMode(processEnv().NPC_PACE) ?? DEFAULT_NPC_PACE
+}
+
+/** Règle le rythme depuis /admin ; renvoie false si le mode est inconnu */
+export function setNpcPace(raw: unknown): boolean {
+  const mode = parsePaceMode(raw)
+  if (mode === undefined) return false
+  paceOverride = mode
+  return true
+}
+
+/** NPC_REPLY_DELAY_MS (entier ≥ 0) : délai fixe du mode instantané, sinon tirage de 1 à 2 s */
+function fixedInstantDelayMs(): number | undefined {
   const raw = processEnv().NPC_REPLY_DELAY_MS?.trim() ?? ''
   const configured = Number(raw)
-  if (raw !== '' && Number.isSafeInteger(configured) && configured >= 0) return configured
-  return NPC_REPLY_DELAY_MIN_MS + Math.floor(Math.random() * NPC_REPLY_DELAY_SPREAD_MS)
+  return raw !== '' && Number.isSafeInteger(configured) && configured >= 0 ? configured : undefined
+}
+
+/** Délai avant la publication d'une réponse de persona, selon le mode, la fiche et NPC_DELAY_SCALE (0 en test) */
+function replyDelayMs(persona?: NpcPersona): number {
+  return pickDelayMs(persona, {
+    mode: npcPace(),
+    scale: delayScaleFromEnv(processEnv().NPC_DELAY_SCALE),
+    fixedInstantMs: fixedInstantDelayMs(),
+  })
 }
 
 /** Fil du message s'il est en fil, sinon fin du canal ; vide si le canal a disparu */
@@ -161,6 +184,8 @@ export function useNpcDispatcher(): Promise<NpcDispatcher> {
       // Sans lancement, les PNJ proposés sont ceux du premier scénario de /admin, pas ceux de la première fiche par chemin
       initialScenarioId: SCENARIOS[0]?.id,
       delayMs: replyDelayMs,
+      ack: (persona, delayMs, already) => pickAcknowledgement(npcPace(), delayMs, already, { scale: delayScaleFromEnv(processEnv().NPC_DELAY_SCALE) }),
+      notice: (channelId, parentId, text) => { addSystemMessage(channelId, { text, parentId }) },
       history: recentHistory,
       channelContext: channelToRead,
       directNpcId: channelId => getChannel(channelId)?.direct?.npcId,
@@ -180,6 +205,7 @@ export function useNpcDispatcher(): Promise<NpcDispatcher> {
       personas: () => created.activePersonas(),
       takeSlot: () => created.takeGlobalSlot(),
       delayMs: replyDelayMs,
+      recentTexts: (persona, channelId) => listMessages(channelId).filter(message => message.npc?.id === persona.id).slice(-10).map(message => message.text),
       formulateTimeoutMs: Math.max(NPC_RESPOND_TIMEOUT_MS, respondTimeoutMs),
       // Texte de base tel quel avec keywords ; reformulé par le moteur à modèle, qui retombe lui-même sur le texte de base
       formulate: (persona, base, channelId) => npcEngine().responder.respond({
@@ -263,6 +289,7 @@ export async function resetNpcs(): Promise<void> {
   (await useNpcDispatcher()).resetScenario()
   spontaneous?.stop()
   spontaneous?.setEnabled(true)
+  paceOverride = undefined
   lastModelCall = null
 }
 
@@ -286,6 +313,7 @@ export async function npcAdminState(): Promise<NpcAdminState> {
     lastModelCall,
     scenarioId: current.scenarioId(),
     spontaneous: spontaneous?.isEnabled() ?? true,
+    pace: npcPace(),
   }
 }
 

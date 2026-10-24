@@ -18,11 +18,14 @@
 // - [mots: rollback, retour arrière, !v2.40.3] information livrée seulement si la question contient au
 //   moins 2 de ces déclencheurs, ou un déclencheur spécifique (préfixé de !) ; une entrée qui n'a ni
 //   déclencheur spécifique ni au moins 2 déclencheurs est refusée
+// ## Disponibilité   (facultative : rythme de réponse propre au PNJ)
+// - rythme: lent          (rapide = ×0,5, normal = ×1, lent = ×2 sur la plage du mode de rythme)
+// - délai: 10-60 s        (plage absolue en secondes, remplace celle du mode ; ignorée en mode instantané)
 // ## Intervient spontanément   (facultative)
 // - [mots: newsletter, black friday] texte : un de ces mots apparaît dans un message humain du canal d'incident
 // - [après: 8 min] texte : 8 minutes écoulées depuis le lancement du scénario
 // - [sans point: 6 min] texte : aucun point de situation dans le canal depuis 6 minutes
-import type { NpcPersona, NpcPreciseEntry, NpcSpontaneousRule } from '../../shared/types/npc'
+import type { NpcAvailability, NpcPersona, NpcPreciseEntry, NpcSpontaneousRule } from '../../shared/types/npc'
 
 export class PersonaParseError extends Error {
   /** Ligne fautive (à partir de 1, dans le texte d'origine), si l'erreur porte sur une ligne précise */
@@ -43,11 +46,15 @@ const SECTIONS = {
   'sait': 'knows',
   'ignore': 'ignores',
   'sur question précise': 'precise',
+  'disponibilité': 'availability',
+  'disponibilite': 'availability',
   'intervient spontanément': 'spontaneous',
   'intervient spontanement': 'spontaneous',
 } as const
 type SectionKey = typeof SECTIONS[keyof typeof SECTIONS]
 
+const PACE_FACTORS: Readonly<Record<string, number>> = { rapide: 0.5, normal: 1, lent: 2 }
+const RANGE_RE = /^(\d{1,4})\s*(?:-|à|a)\s*(\d{1,4})\s*s(?:ec(?:ondes?)?)?$/i
 const PRECISE_RE = /^\[mots\s*:\s*([^\]]*)\]\s*(.*)$/i
 const SPONTANEOUS_RE = /^\[\s*([^\]:]*?)\s*:\s*([^\]]*)\]\s*(.*)$/
 const MINUTES_RE = /^(\d{1,3})\s*min(?:utes?)?$/i
@@ -86,6 +93,34 @@ function parsePrecise(text: string, source: string, line: number): NpcPreciseEnt
     throw new PersonaParseError(source, `puce « Sur question précise » avec un seul déclencheur, non spécifique (au moins 2, ou un préfixé de !) : « ${text} »`, line)
   }
   return { triggers, text: entry }
+}
+
+/** Puces de « ## Disponibilité » : `rythme: …` et `délai: min-max s` ; une puce inconnue est refusée */
+function parseAvailability(items: readonly string[], lines: readonly number[], source: string): NpcAvailability | undefined {
+  if (items.length === 0) return undefined
+  const availability: NpcAvailability = {}
+  items.forEach((item, index) => {
+    const line = lines[index]!
+    const colon = item.indexOf(':')
+    const key = colon < 0 ? '' : item.slice(0, colon).trim().toLowerCase()
+    const value = colon < 0 ? '' : item.slice(colon + 1).trim()
+    if (key === 'rythme') {
+      const factor = PACE_FACTORS[value.toLowerCase()]
+      if (factor === undefined) throw new PersonaParseError(source, `« Disponibilité » : rythme inconnu « ${value} » (attendu rapide, normal ou lent)`, line)
+      availability.factor = factor
+    }
+    else if (key === 'délai' || key === 'delai') {
+      const range = RANGE_RE.exec(value)
+      const min = range ? Number(range[1]) : 0
+      const max = range ? Number(range[2]) : 0
+      if (!range || min < 0 || max < min || max < 1) {
+        throw new PersonaParseError(source, `« Disponibilité » : délai invalide « ${value} » (attendu min-max s, ex. 10-60 s)`, line)
+      }
+      availability.rangeSeconds = [min, max]
+    }
+    else throw new PersonaParseError(source, `« Disponibilité » : puce inconnue « ${item} » (attendu rythme: … ou délai: … s)`, line)
+  })
+  return availability
 }
 
 /** line : ligne de début de la puce (à partir de 1), reprise dans les erreurs */
@@ -129,10 +164,11 @@ export function parsePersona(markdown: string, source = 'sans nom'): NpcPersona 
   }
   const head = Object.fromEntries(REQUIRED_FIELDS.map(field => [field, value(field)])) as Record<RequiredField, string>
 
-  const bullets: Record<SectionKey, string[]> = { knows: [], ignores: [], precise: [], spontaneous: [] }
+  const bullets: Record<SectionKey, string[]> = { knows: [], ignores: [], precise: [], spontaneous: [], availability: [] }
   /** Ligne de début (à partir de 1) de chaque puce « Sur question précise » et « Intervient spontanément » */
   const preciseLines: number[] = []
   const spontaneousLines: number[] = []
+  const availabilityLines: number[] = []
   let section: SectionKey | null = null
   for (let index = bodyStart; index < lines.length; index++) {
     const line = lines[index]!
@@ -148,6 +184,7 @@ export function parsePersona(markdown: string, source = 'sans nom'): NpcPersona 
       list.push(bullet[1]!.trim())
       if (section === 'precise') preciseLines.push(index + 1)
       if (section === 'spontaneous') spontaneousLines.push(index + 1)
+      if (section === 'availability') availabilityLines.push(index + 1)
     }
     // Ligne indentée : suite de la puce précédente
     else if (/^\s+\S/.test(line) && list.length > 0) list[list.length - 1] += ` ${line.trim()}`
@@ -157,6 +194,7 @@ export function parsePersona(markdown: string, source = 'sans nom'): NpcPersona 
   if (bullets.ignores.length === 0) throw new PersonaParseError(source, 'section « ## Ignore » absente ou vide')
   if (bullets.precise.length === 0) throw new PersonaParseError(source, 'section « ## Sur question précise » absente ou vide')
 
+  const availability = parseAvailability(bullets.availability, availabilityLines, source)
   return {
     id: head.id,
     name: head.name,
@@ -169,5 +207,6 @@ export function parsePersona(markdown: string, source = 'sans nom'): NpcPersona 
     ignores: bullets.ignores,
     onPreciseQuestion: bullets.precise.map((text, index) => parsePrecise(text, source, preciseLines[index]!)),
     spontaneous: bullets.spontaneous.map((text, index) => parseSpontaneous(text, source, spontaneousLines[index]!)),
+    ...(availability ? { availability } : {}),
   }
 }

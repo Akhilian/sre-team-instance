@@ -6,8 +6,8 @@ import { AUTHOR_MAX_LENGTH, PRESENCE_ENTRIES_MAX } from '../../shared/utils/limi
 export const PRESENCE_TTL_MS = 15_000
 /** En train d'écrire si le dernier `typing: true` date de moins de 5 s */
 export const TYPING_TTL_MS = 5_000
-/** Filet de la frappe d'un PNJ : effacée au bout de 20 s même si la fin n'a jamais été signalée */
-export const NPC_TYPING_TTL_MS = 20_000
+/** Filet de la frappe d'un PNJ : effacée au bout de 5 min (délai « occupé » de 3 min + génération) même si la fin n'a jamais été signalée */
+export const NPC_TYPING_TTL_MS = 300_000
 
 export class PresenceValidationError extends Error {
   constructor(message: string) {

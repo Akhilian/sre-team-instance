@@ -387,6 +387,33 @@ function setSpontaneous(event: Event) {
   })
 }
 
+/** Rythme de réponse des PNJ : l'état affiché est celui renvoyé par le serveur */
+const PACE_OPTIONS: { value: NpcAdminState['pace'], label: string }[] = [
+  { value: 'instant', label: 'Instantané (1 à 2 s)' },
+  { value: 'realistic', label: 'Réaliste (5 à 40 s)' },
+  { value: 'busy', label: 'Occupé (30 s à 3 min, avec accusé)' },
+]
+
+function setPace(event: Event) {
+  const select = event.target as HTMLSelectElement
+  const pace = select.value
+  return run(async () => {
+    try {
+      npcState.value = await $fetch<NpcAdminState>('/api/admin/npcs', {
+        method: 'POST',
+        headers: { 'x-facilitator-code': code.value },
+        body: { pace },
+      })
+    }
+    catch (error) {
+      await loadNpcs()
+      select.value = npcState.value?.pace ?? 'realistic'
+      throw error
+    }
+    return `Rythme des PNJ : ${PACE_OPTIONS.find(option => option.value === pace)?.label ?? pace}.`
+  })
+}
+
 /** Lancement refusé (409 messages-exist) en attente de la décision de l'animateur */
 const pendingStart = ref<{ scenario: ScenarioSummary, messageCount: number } | null>(null)
 /** Case « Couper aussi les PNJ » du bouton « Arrêter » */
@@ -716,7 +743,7 @@ function reset(scope: ResetScope) {
           <h2>Personnages (PNJ)</h2>
           <p v-if="!npcState">Saisissez et validez le code animateur pour afficher les PNJ.</p>
           <template v-else>
-            <p>Mentionnés par <strong>@Nom</strong>, ils répondent dans le fil après quelques secondes (moteur {{ npcState.engine }}). Lancer un scénario les active (sauf la démo), « Arrêter » (case cochée) et « Tout réinitialiser » les coupent.</p>
+            <p>Mentionnés par <strong>@Nom</strong>, ils répondent dans le fil après un délai qui dépend du rythme choisi ci-dessous (moteur {{ npcState.engine }}). Lancer un scénario les active (sauf la démo), « Arrêter » (case cochée) et « Tout réinitialiser » les coupent.</p>
             <p v-if="lastModelCallText" data-testid="npc-last-model-call" :class="`model-call model-call--${npcState.lastModelCall?.ok ? 'ok' : 'failed'}`">{{ lastModelCallText }}</p>
             <label class="switch">
               <input
@@ -737,6 +764,12 @@ function reset(scope: ResetScope) {
                 @change="setSpontaneous"
               >
               Interventions spontanées
+            </label>
+            <label class="pace">
+              Rythme de réponse
+              <select data-testid="npc-pace" :value="npcState.pace" :disabled="busy || code === ''" @change="setPace">
+                <option v-for="option in PACE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
             </label>
             <ul class="npcs" data-testid="npc-list">
               <li v-for="npc in npcState.npcs" :key="npc.id"><strong>{{ npc.name }}</strong> · {{ npc.role }}</li>
@@ -1035,6 +1068,17 @@ function reset(scope: ResetScope) {
 .card .switch input {
   width: auto;
   accent-color: var(--teams-purple);
+}
+
+.card .pace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.card .pace select {
+  width: auto;
 }
 
 .npcs {

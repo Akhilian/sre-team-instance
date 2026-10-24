@@ -31,6 +31,10 @@ quoi leur répondre.
 - [mots: double, !en double, deux fois, débit, remboursement, prélevé, prélèvement, !doublon] Trois clients disent avoir été débités deux fois pour la même commande. Je n'ai pas pu vérifier, mais leurs captures montrent deux lignes à quelques secondes d'écart.
 - [mots: !moyen de paiement, carte, cadeau, paypal, !mode de paiement, !carte cadeau, !carte bancaire] Les paiements par carte cadeau passent normalement. Ce sont les paiements par carte bancaire qui échouent ou tournent dans le vide.
 - [mots: répondre, réponse, !macro, message, communication, !quoi dire, clients] Pour l'instant, on répond avec une macro générique « incident en cours, réessayez plus tard ». Il me faut un message validé et une heure de retour estimée pour les clients qui relancent.
+- [mots: ensemble, partie, tous, utilisateurs, concerne, concernés, périmètre, étendue, mobile, ordinateur, navigateur] Les plaintes viennent de partout, ordinateur comme mobile : ce n'est pas lié à un navigateur ou à une application, ça touche tous les clients qui paient.
+
+## Disponibilité
+- rythme: rapide
 
 ## Intervient spontanément
 - [sans point: 7 min] Les clients relancent toutes les minutes et je n'ai toujours rien de neuf à leur dire. Vous avez une idée du retour ?

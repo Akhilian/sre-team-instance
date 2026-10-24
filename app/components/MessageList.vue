@@ -50,7 +50,7 @@ function mentionsMe(message: Message): boolean {
 
 /** Badge de rôle d'un message de participant : jamais pour Alerting, l'Animateur ni les collègues joués par l'outil */
 function authorRoleBadge(message: Message): string {
-  if (message.kind === 'alert' || message.kind === 'announcement' || message.npc) return ''
+  if (message.kind === 'alert' || message.kind === 'announcement' || message.kind === 'system' || message.npc) return ''
   return roleBadge(props.roles?.[message.author])
 }
 
