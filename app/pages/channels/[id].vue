@@ -4,6 +4,7 @@ import type { NpcsResponse } from '~~/shared/types/npc'
 import type { MentionCandidate } from '~~/shared/utils/mentions'
 import { CHANNEL_MESSAGES_MAX } from '~~/shared/utils/limits'
 import { mergeMessages } from '~/utils/messages'
+import { isRoleId, roleBadge, roleLabel, type RoleId } from '~~/shared/onboarding/roles'
 
 const POLL_INTERVAL_MS = 3000
 /** Plafond de l'intervalle après des échecs successifs (doublé à chaque échec) */
@@ -19,6 +20,7 @@ const route = useRoute()
 const channelId = computed(() => String(route.params.id))
 
 const { displayName, loaded, setDisplayName } = useDisplayName()
+const { role: localRole, roleLoaded, onboardingSeen, setRole: setLocalRole, markOnboardingSeen } = useRole()
 
 // Conversations directes listées pour le nom d'affichage ; au SSR (nom inconnu, lu dans le localStorage),
 // pour le propriétaire de la conversation ouverte, déduit de son id dm-<slug>--<npcId>
@@ -124,9 +126,61 @@ function saveName(name: string) {
   editingName.value = false
 }
 
+// Parcours d'accueil : ouvert après le choix du nom tant qu'il n'a pas été suivi, rejouable par « Aide »
+const helpOpen = ref(false)
+const showOnboarding = computed(() => loaded.value && roleLoaded.value && !showNameDialog.value && displayName.value !== ''
+  && (helpOpen.value || !onboardingSeen.value))
+
+async function finishOnboarding(chosen: RoleId) {
+  markOnboardingSeen()
+  helpOpen.value = false
+  await chooseRole(chosen)
+}
+
 // Présence et frappe : client uniquement, vides au SSR et avant montage (pas d'écart d'hydratation)
-interface ChannelPresence { present: string[], typing: string[] }
+interface ChannelPresence { present: string[], typing: string[], roles?: Record<string, string> }
 const presence = ref<ChannelPresence>({ present: [], typing: [] })
+
+// Rôles des présents (tous canaux) renvoyés par le serveur, qui fait foi
+const roles = computed<Record<string, string>>(() => presence.value.roles ?? {})
+const myRole = computed(() => (displayName.value ? roles.value[displayName.value] : undefined) ?? localRole.value)
+// Choix ou envoi du rôle en cours : la réponse d'un battement parti avant ne doit pas l'écraser
+let roleRequests = 0
+
+async function pushRole(name: string, role: RoleId) {
+  roleRequests++
+  try {
+    await $fetch('/api/roles', { method: 'POST', body: { name, role } })
+  }
+  catch {
+    // Le battement suivant constatera l'absence du rôle et réessaiera
+  }
+  finally {
+    roleRequests--
+  }
+}
+
+async function chooseRole(role: RoleId) {
+  if (!displayName.value) return
+  setLocalRole(role)
+  presence.value = { ...presence.value, roles: { ...roles.value, [displayName.value]: role } }
+  await pushRole(displayName.value, role)
+  heartbeat()
+}
+
+// Le rôle du serveur fait foi (réattribution par l'animateur) ; s'il n'en a pas pour soi (redémarrage,
+// changement de nom), le rôle local lui est renvoyé
+function syncRole(received: Record<string, string> | undefined) {
+  const name = displayName.value
+  if (!name || roleRequests > 0) return
+  const serverRole = received?.[name]
+  if (isRoleId(serverRole)) {
+    if (serverRole !== localRole.value) setLocalRole(serverRole)
+  }
+  else if (localRole.value) {
+    pushRole(name, localRole.value)
+  }
+}
 let lastTypingSentAt = 0
 
 async function heartbeat(typing?: boolean) {
@@ -139,6 +193,7 @@ async function heartbeat(typing?: boolean) {
     })
     // Réponse d'un canal quitté entre-temps : ignorée
     if (targetChannel === channelId.value) presence.value = result
+    syncRole(result.roles)
   }
   catch {
     // Battement perdu : le suivant (≤ 3 s) rattrape, rien à signaler
@@ -164,6 +219,11 @@ watch(channelId, () => {
 })
 // Nom choisi ou modifié après le montage
 watch(displayName, () => heartbeat())
+
+function presenceLabel(name: string): string {
+  const role = roles.value[name]
+  return role ? `${name} — ${roleLabel(role)}` : name
+}
 
 const presenceAvatars = computed(() => presence.value.present.slice(0, PRESENCE_MAX_AVATARS))
 const presenceOverflow = computed(() => Math.max(0, presence.value.present.length - PRESENCE_MAX_AVATARS))
@@ -380,12 +440,26 @@ onBeforeUnmount(() => {
       </div>
       <button
         type="button"
+        class="top-bar__help"
+        data-testid="help"
+        aria-label="Aide"
+        title="Aide"
+        @click="helpOpen = true"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.7" />
+          <path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.8M12 16.5v.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </svg>
+      </button>
+      <button
+        type="button"
         class="top-bar__user"
         data-testid="display-name"
         :title="displayName ? 'Modifier votre nom d\'affichage' : 'Choisir un nom d\'affichage'"
         @click="editingName = true"
       >
         <span v-if="displayName" class="top-bar__name">{{ displayName }}</span>
+        <span v-if="displayName && myRole" class="role-badge role-badge--bar" data-testid="my-role">{{ roleBadge(myRole) }}</span>
         <span class="avatar" :style="{ background: displayName ? avatarColor(displayName) : '#8b8cc7' }">{{ displayName ? initials(displayName) : '?' }}</span>
       </button>
     </header>
@@ -436,7 +510,9 @@ onBeforeUnmount(() => {
               :key="name"
               class="avatar presence__avatar"
               data-testid="presence-avatar"
-              :title="name"
+              role="img"
+              :title="presenceLabel(name)"
+              :aria-label="presenceLabel(name)"
               :style="{ background: avatarColor(name) }"
             >{{ initials(name) }}</span>
             <span
@@ -450,7 +526,7 @@ onBeforeUnmount(() => {
           {{ directNpc.name }} n'est pas disponible pour le moment.
         </p>
 
-        <MessageList :messages="messages ?? []" :me="displayName" :npc-names="npcNames" :mention-candidates="mentionCandidates" :reply="reply" :react="react" :set-alert-status="setAlertStatus" @typing="onTyping" />
+        <MessageList :messages="messages ?? []" :me="displayName" :npc-names="npcNames" :mention-candidates="mentionCandidates" :roles="roles" :reply="reply" :react="react" :set-alert-status="setAlertStatus" @typing="onTyping" />
         <p class="typing-indicator" data-testid="typing-indicator" aria-live="polite">{{ typingText }}</p>
         <p v-if="npcNotice" class="npc-notice" data-testid="npc-notice" role="status">{{ npcNotice }}</p>
         <Composer
@@ -465,6 +541,14 @@ onBeforeUnmount(() => {
         />
       </main>
     </div>
+
+    <OnboardingDialog
+      v-if="showOnboarding"
+      :current-role="localRole"
+      :closable="onboardingSeen"
+      @done="finishOnboarding"
+      @close="helpOpen = false"
+    />
 
     <DisplayNameDialog
       v-if="showNameDialog"
@@ -550,6 +634,35 @@ onBeforeUnmount(() => {
 
 .top-bar__user:hover {
   background: rgba(255, 255, 255, 0.12);
+}
+
+.top-bar__help {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.top-bar__help:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.top-bar__help + .top-bar__user {
+  margin-left: 0;
+}
+
+.role-badge--bar {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 .top-bar__name {

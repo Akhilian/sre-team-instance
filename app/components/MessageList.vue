@@ -4,6 +4,7 @@ import type { AlertStatus } from '~~/shared/utils/alerts'
 import { ALERT_SEVERITY_COLORS } from '~~/shared/utils/alerts'
 import type { MentionCandidate } from '~~/shared/utils/mentions'
 import { mentionsName } from '~~/shared/utils/mentions'
+import { roleBadge } from '~~/shared/onboarding/roles'
 import { groupThreads } from '~/utils/threads'
 
 const props = defineProps<{
@@ -14,6 +15,8 @@ const props = defineProps<{
   npcNames?: readonly string[]
   /** Personnes proposées par l'autocomplétion des mentions dans les fils */
   mentionCandidates?: readonly MentionCandidate[]
+  /** Rôles connus des participants présents, par nom */
+  roles?: Readonly<Record<string, string>>
   /** Poste une réponse dans le fil de la racine parentId */
   reply: (parentId: string, text: string) => Promise<void>
   /** Bascule la réaction emoji du participant courant sur un message */
@@ -43,6 +46,12 @@ const mentionsMeById = computed(() => new Map(
 
 function mentionsMe(message: Message): boolean {
   return mentionsMeById.value.get(message.id) ?? false
+}
+
+/** Badge de rôle d'un message de participant : jamais pour Alerting, l'Animateur ni les collègues joués par l'outil */
+function authorRoleBadge(message: Message): string {
+  if (message.kind === 'alert' || message.kind === 'announcement' || message.npc) return ''
+  return roleBadge(props.roles?.[message.author])
 }
 
 function isAnnouncement(message: Message): boolean {
@@ -116,6 +125,7 @@ watch(
               </div>
               <div class="message__meta">
                 <span class="message__author">{{ thread.author }}</span>
+                <span v-if="authorRoleBadge(thread)" class="role-badge" data-testid="author-role">{{ authorRoleBadge(thread) }}</span>
                 <time class="message__time" :datetime="thread.createdAt">{{ formatTime(thread.createdAt) }}</time>
               </div>
               <AlertCard
@@ -145,6 +155,7 @@ watch(
                 <div class="message__bubble" :data-testid="mentionsMe(message) ? 'mentions-me' : undefined">
                   <div class="message__meta">
                     <span class="message__author">{{ message.author }}</span>
+                    <span v-if="authorRoleBadge(message)" class="role-badge" data-testid="author-role">{{ authorRoleBadge(message) }}</span>
                     <time class="message__time" :datetime="message.createdAt">{{ formatTime(message.createdAt) }}</time>
                   </div>
                   <MessageText :text="message.text" :known-names="knownNames" :me="me" />

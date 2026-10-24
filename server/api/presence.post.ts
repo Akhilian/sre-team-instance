@@ -28,5 +28,6 @@ export default defineEventHandler(async (event) => {
     }
     throw error
   }
-  return channelPresence(channelId, now)
+  const roles = rolesOf(presentParticipants(now).map(participant => participant.name))
+  return { ...channelPresence(channelId, now), roles }
 })

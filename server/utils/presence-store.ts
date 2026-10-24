@@ -134,3 +134,17 @@ export function channelPresence(channelId: string, now: number): ChannelPresence
   }
   return { present: present.sort(byName), typing: typing.sort(byName) }
 }
+
+export interface PresentParticipant {
+  name: string
+  channelId: string
+}
+
+/** Participants présents (battement de moins de 15 s), tous canaux confondus, triés par nom. */
+export function presentParticipants(now: number): PresentParticipant[] {
+  const result: PresentParticipant[] = []
+  for (const [name, entry] of entries) {
+    if (now - entry.lastSeen < PRESENCE_TTL_MS) result.push({ name, channelId: entry.channelId })
+  }
+  return result.sort((a, b) => byName(a.name, b.name))
+}

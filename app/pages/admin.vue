@@ -707,6 +707,8 @@ function reset(scope: ResetScope) {
         </div>
       </section>
 
+      <AdminParticipants :code="code" />
+
       <section class="card" data-testid="npc-panel">
         <h2>Personnages (PNJ)</h2>
         <p v-if="!npcState">Saisissez et validez le code animateur pour afficher les PNJ.</p>
