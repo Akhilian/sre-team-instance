@@ -21,7 +21,7 @@ Première tranche de la phase 2 (GOAL.md) : l'équipe peut interroger des PNJ du
   - réponse tronquée à 600 caractères ;
   - les plafonds de 016 s'appliquent (FIFO du canal, `TEXT_MAX_LENGTH`).
 - Activation : le lancement de `panne-checkout` active ses PNJ. `GET /api/admin/npcs` (état et liste) et `POST /api/admin/npcs {enabled}` sont protégés par le code animateur. Un interrupteur « PNJ actifs » apparaît dans `/admin`. `reset all` les désactive. `GET /api/npcs` (public) renvoie `{ enabled, npcs: [{ id, name, role }] }`.
-- Front : un badge « PNJ » à côté de l'auteur d'un message porteur de `npc`. Les noms des PNJ sont ajoutés aux `knownNames` pour surligner les mentions.
+- Front : un badge « PNJ » à côté de l'auteur d'un message porteur de `npc` (**retiré par l'évolution 2026-10-24 ci-dessous** : plus rien ne signale un PNJ aux participants). Les noms des PNJ sont ajoutés aux `knownNames` pour surligner les mentions.
 
 ## Hors périmètre
 - Adaptateurs `openai-compatible` et `anthropic`, retriever par embeddings ou plus fin, messages directs, lanceur d'alerte automatique (le Support ne parle que si on le mentionne), fiches des autres PNJ (Com, PSP, DPO), autocomplétion des mentions, persistance de l'état activé (mémoire seulement).
@@ -67,3 +67,71 @@ sleep 3; curl -s localhost:3000/api/channels/incident-en-cours/messages | grep -
 - Orchestrateur pur `createNpcDispatcher({ schedule, now, retriever, responder, publish, personas })`, sur le modèle de `scenario-runner.ts`. Appel depuis `messages.post.ts` après `addMessage`. Délai via `NPC_REPLY_DELAY_MS` (défaut 1500).
 - Retriever : minuscules, sans accents, mots vides FR retirés. Il score les puces `Sait` par recouvrement de mots ; une puce `Sur question précise` n'est éligible que si l'un de ses mots déclencheurs est présent. Il garde les 2 meilleures. Le responder préfixe la réponse d'une phrase de ton (`tone`) ; sans extrait, il répond par `deflection`.
 - `startScenario('panne-checkout')` active les PNJ du scénario. `resetAll` les désactive.
+
+## Évolution 2026-10-24 — personnages non signalés aux participants
+
+Retour d'essai réel : les participants ne doivent pas savoir que ces personnages sont simulés ; ils les interrogent comme des collègues. Implémentée dans le lot de `specs/033-mention-prenom.md`.
+
+### Périmètre
+- Côté participant (`app/` hors `app/pages/admin.vue`), plus aucun texte visible, infobulle ni attribut accessible contenant « PNJ » ou « personnage non joueur » :
+  - badge des messages (`MessageList.vue`, racines et réponses, `data-testid="npc-badge"` supprimé) ;
+  - badge et `title` de l'en-tête de conversation directe (`app/pages/channels/[id].vue`) ;
+  - infobulle `title="PNJ inactif"` de la liste « Conversations » (`ChannelList.vue`, 023) → « Indisponible pour le moment » ;
+  - avis local de `app/utils/npc-notice.ts` (023) → « <nom> n'est pas disponible pour le moment. » / « <noms> ne sont pas disponibles pour le moment. » (tests `tests/npc-notice.test.ts` mis à jour) ;
+  - tout autre bandeau, placeholder ou libellé trouvé par le grep du CA7.
+- Un message de PNJ s'affiche comme celui d'un participant (avatar, nom, heure) ; le rôle peut rester visible sous forme de fonction (« Release Manager »), jamais avec le mot « PNJ ».
+- `/admin` garde la notion de PNJ (interrupteur, fiches, libellés). Données et API serveur inchangées (`npc: { id, role }` sur les messages, `/api/npcs`, ids `dm-…--<npcId>`). Les commentaires de code et noms internes (`npc`, `npcNames`, classes CSS) ne sont pas concernés.
+
+### Critères d'acceptation
+- [x] CA7 — `grep -rnE 'PNJ|[Pp]ersonnage non joueur' app/ --exclude=admin.vue | grep -vE '^[^:]+:[0-9]+:\s*(//|/\*|\*|<!--)'` ne renvoie rien, et `grep -rn 'npc-badge' app/` non plus.
+- [x] CA8 — Sur le build, scénario `panne-checkout` lancé et réponse de Julien Moreau publiée dans `incident-en-cours` (et dans une conversation directe `dm-alice--release-manager`) : `curl -s` de `/channels/incident-en-cours` et de `/channels/dm-alice--release-manager` ne contient ni `PNJ` ni `non joueur` (`grep -ciE 'PNJ|non joueur'` → 0) ; `app/pages/admin.vue` contient toujours « PNJ » (`grep -c PNJ app/pages/admin.vue` ≥ 1).
+- [x] CA9 — `npm test` : `npcNoticeFor` renvoie « Julien Moreau n'est pas disponible pour le moment. » (une mention, PNJ coupés) et « Julien Moreau et Marc Lefort ne sont pas disponibles pour le moment. » (deux mentions) ; `GET /api/channels/incident-en-cours/messages` porte toujours `npc` sur la réponse (données inchangées).
+
+### Vérification
+```bash
+npm test
+grep -rnE 'PNJ|[Pp]ersonnage non joueur' app/ --exclude=admin.vue | grep -vE '^[^:]+:[0-9]+:\s*(//|/\*|\*|<!--)'   # rien
+npm run build && FACILITATOR_CODE=animateur NPC_REPLY_DELAY_MS=500 PORT=10127 node .output/server/index.mjs &
+H='x-facilitator-code: animateur'; J='content-type: application/json'; B=localhost:10127
+curl -s -X POST $B/api/admin/scenarios/panne-checkout/start -H "$H"
+curl -s -X POST $B/api/channels/incident-en-cours/messages -H "$J" -d '{"author":"Alice","text":"@Julien Moreau quel déploiement récent ?"}'
+curl -s -X POST $B/api/direct -H "$J" -d '{"participant":"Alice","npcId":"release-manager"}'
+curl -s -X POST $B/api/channels/dm-alice--release-manager/messages -H "$J" -d '{"author":"Alice","text":"Quel déploiement récent ?"}'
+sleep 3
+curl -s $B/channels/incident-en-cours | grep -ciE 'PNJ|non joueur'            # 0
+curl -s $B/channels/dm-alice--release-manager | grep -ciE 'PNJ|non joueur'    # 0
+grep -c 'PNJ' app/pages/admin.vue                                           # >= 1
+```
+
+## Évolution 2026-10-24 (bis) — PNJ interpellé par son nom, sans `@`
+
+Retour d'essai réel : « Claire, tu es là ? » doit faire réagir la CEO, comme entre collègues. Implémentée dans le lot de `specs/033-mention-prenom.md`.
+
+### Périmètre
+- Fonction pure `namedPersons(text, knownNames)` dans `shared/utils/mentions.ts`. Elle renvoie les noms complets cités **en clair**, dans l'ordre du texte et sans doublon, soit par le nom complet, soit par le prénom seul.
+  - Mot entier : frontière avant et après, comme pour une mention (« Claireval » et « Claire2 » ne comptent pas).
+  - Comparaison insensible à la casse et aux accents (« ines » → « Inès Garnier »).
+  - Le nom complet est prioritaire. Le prénom n'est accepté que s'il est non ambigu, avec la même règle et le même ensemble de personnes connues qu'en 033.
+  - Les segments déjà reconnus comme `@mention` sont ignorés.
+- Dispatcher, en canal d'équipe (racine ou fil) :
+  - si le message contient au moins une `@mention` d'une personne connue (PNJ ou participant), seuls les PNJ actifs @mentionnés répondent, comme aujourd'hui ;
+  - sinon, chaque PNJ actif nommé en clair répond, comme s'il était mentionné : même fil, même délai, même plafond `NPC_MENTIONS_PER_MESSAGE_MAX` par message, mêmes budgets et même réponse « sollicité » au plafond ;
+  - sinon, la réponse implicite de fil (H2) s'applique, inchangée.
+- Inchangés : aucune réponse à un message de PNJ ni à une annonce ou une alerte ; en conversation directe, seul le PNJ de la conversation répond ; PNJ coupés, aucune réponse. L'avis local `npcNoticeFor` reste limité aux `@mentions`.
+- Front : un nom cité en clair n'est **pas** surligné comme une mention et ne déclenche pas `mentions-me`.
+
+### Critères d'acceptation
+- [x] CA10 — Vitest `namedPersons`, avec « Claire Dumont », « Julien Moreau », « Inès Garnier » et « Bob » :
+  - « Claire, tu es là ? » → `["Claire Dumont"]` ; « claire dumont ? » → idem ; « ines tu confirmes » → `["Inès Garnier"]` ;
+  - « Claireval est en panne », « Claire2 » et « ops@claire.fr » → `[]` ;
+  - « Julien et Claire » → les deux, dans l'ordre ;
+  - avec « Claire Martin » en plus, « Claire ? » → `[]`, mais « Claire Martin ? » → `["Claire Martin"]` ;
+  - « @Bob demande à Claire » → `namedPersons` ignore « @Bob » et renvoie `["Claire Dumont"]`. Le dispatcher ne fait pourtant répondre personne, car une `@mention` est présente (CA11).
+- [x] CA11 — Vitest (dispatcher), PNJ actifs :
+  - « Claire, tu es là ? » à la racine planifie `ceo`, avec `parentId` = id du message ; en fil, la réponse va dans ce fil ;
+  - « Claire et Julien, un point ? » planifie `ceo` puis `release-manager` ;
+  - « @Julien Moreau tu as vu Claire ? » ne planifie que `release-manager` ; « @Bob demande à Claire » ne planifie rien ;
+  - un message de PNJ contenant « Claire », des PNJ coupés ou « Claireval » ne planifient rien ;
+  - au plafond, la réponse « sollicité » est publiée comme pour une mention.
+- [x] CA12 — `npm run test:http` (build, scénario `panne-checkout` lancé) : `POST` de « Claire, tu es là ? » dans `incident-en-cours` → réponse `npc.id = "ceo"` dans le fil en moins de 5 s ; « Claireval est en panne » → aucune réponse de PNJ au bout de 3 s.
+- [x] CA13 — Le HTML SSR de `/channels/incident-en-cours`, après le `POST` de « Claire, tu es là ? », ne contient pas de `data-testid="mention"` sur « Claire ». Le contrôle Chrome relève du CA5 de `specs/033-mention-prenom.md`.

@@ -220,7 +220,7 @@ async function submit() {
               'conversation--inactive': !npcsEnabled,
             }"
             data-testid="conversation-link"
-            :title="npcsEnabled ? undefined : 'PNJ inactif'"
+            :title="npcsEnabled ? undefined : 'Indisponible pour le moment'"
             @click="emit('close')"
           >
             <span class="avatar conversation__avatar" aria-hidden="true" :style="{ background: avatarColor(entry.name) }">{{ initials(entry.name) }}</span>

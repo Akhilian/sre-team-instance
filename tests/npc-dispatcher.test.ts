@@ -113,7 +113,7 @@ describe('createNpcDispatcher', () => {
     expect(dispatcher.handle(addAnnouncement(CHANNEL, { text: `@${RELEASE.name} quel déploiement ?` }))).toEqual([])
     const alert = addAlert(CHANNEL, { severity: 'SEV1', title: 't', service: 's', text: `@${RELEASE.name} quel déploiement ?` })
     expect(dispatcher.handle(alert)).toEqual([])
-    expect(dispatcher.handle(post('Julien Moreau, quel déploiement ?'))).toEqual([])
+    expect(dispatcher.handle(post('Quel déploiement récent ?'))).toEqual([])
 
     await clock.advance(10_000)
     expect(npcReplies().map(message => message.id)).toEqual([fromNpc.id])

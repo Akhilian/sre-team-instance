@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { TEXT_MAX_LENGTH } from '~~/shared/utils/limits'
+import type { MentionCandidate } from '~~/shared/utils/mentions'
 // Champ de réponse inline sous un fil : Entrée envoie, Maj+Entrée passe à la ligne, Échap ferme.
 const props = defineProps<{
   send: (text: string) => Promise<void>
+  /** Personnes proposées par l'autocomplétion des mentions */
+  mentionCandidates?: readonly MentionCandidate[]
+  /** Participant courant (jamais proposé) */
+  me?: string
 }>()
 
 const emit = defineEmits<{
@@ -15,6 +20,12 @@ const text = ref('')
 const sending = ref(false)
 const errorMessage = ref('')
 const input = ref<HTMLTextAreaElement | null>(null)
+const mentions = useMentionAutocomplete({
+  text,
+  input,
+  candidates: () => props.mentionCandidates ?? [],
+  me: () => props.me ?? '',
+})
 
 const canSend = computed(() => !sending.value && text.value.trim().length > 0)
 
@@ -39,6 +50,7 @@ async function submit() {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  if (mentions.onKeydown(event)) return
   if (event.key === 'Escape') {
     event.preventDefault()
     emit('close')
@@ -63,8 +75,24 @@ function onKeydown(event: KeyboardEvent) {
         :readonly="sending"
         placeholder="Répondre"
         aria-label="Réponse"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-autocomplete="list"
+        :aria-expanded="mentions.open.value ? 'true' : 'false'"
+        :aria-controls="mentions.listId"
+        :aria-activedescendant="mentions.activeDescendant.value"
         @keydown="onKeydown"
-        @input="emit('typing')"
+        @keyup="mentions.refresh"
+        @click="mentions.refresh"
+        @input="emit('typing'); mentions.refresh()"
+      />
+      <MentionList
+        v-if="mentions.open.value"
+        :list-id="mentions.listId"
+        :option-id="mentions.optionId"
+        :suggestions="mentions.suggestions.value"
+        :active="mentions.active.value"
+        :select="mentions.select"
       />
       <button type="submit" class="reply-composer__send" :disabled="!canSend" title="Envoyer la réponse">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
@@ -78,6 +106,7 @@ function onKeydown(event: KeyboardEvent) {
 
 <style scoped>
 .reply-composer__box {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 6px;

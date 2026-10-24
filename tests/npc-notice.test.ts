@@ -13,12 +13,12 @@ describe('npcNoticeFor', () => {
 
   it('PNJ coupés, deux mentions : les deux noms dans l\'ordre du texte', () => {
     const notice = npcNoticeFor('@Julien Moreau et @Marc Lefort ?', off)
-    expect(notice).toBe('Les PNJ ne sont pas actifs pour le moment : Julien Moreau et Marc Lefort ne répondront pas.')
+    expect(notice).toBe('Julien Moreau et Marc Lefort ne sont pas disponibles pour le moment.')
     expect(notice!.indexOf('Julien Moreau')).toBeLessThan(notice!.indexOf('Marc Lefort'))
   })
 
   it('PNJ coupés, une mention : phrase au singulier', () => {
-    expect(npcNoticeFor('@Julien Moreau tu es là ?', off)).toBe('Les PNJ ne sont pas actifs pour le moment : Julien Moreau ne répondra pas.')
+    expect(npcNoticeFor('@Julien Moreau tu es là ?', off)).toBe('Julien Moreau n\'est pas disponible pour le moment.')
   })
 
   it('PNJ coupés, sans mention de PNJ ou avec la mention d\'un participant : null', () => {
@@ -29,7 +29,7 @@ describe('npcNoticeFor', () => {
 
   it('PNJ coupés, conversation directe sans mention : le PNJ de la conversation', () => {
     expect(npcNoticeFor('Quel déploiement récent ?', { ...off, directNpcName: 'Julien Moreau' }))
-      .toBe('Les PNJ ne sont pas actifs pour le moment : Julien Moreau ne répondra pas.')
+      .toBe('Julien Moreau n\'est pas disponible pour le moment.')
   })
 
   it('même mention répétée (ou PNJ de la conversation mentionné) : nom cité une seule fois', () => {

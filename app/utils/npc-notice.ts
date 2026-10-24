@@ -33,6 +33,6 @@ export function npcNoticeFor(text: string, context: NpcNoticeContext): string | 
     if (segment.type === 'mention') add(segment.name)
   }
   if (names.length === 0) return null
-  const verb = names.length > 1 ? 'ne répondront pas' : 'ne répondra pas'
-  return `Les PNJ ne sont pas actifs pour le moment : ${joinNames(names)} ${verb}.`
+  const verb = names.length > 1 ? 'ne sont pas disponibles' : 'n\'est pas disponible'
+  return `${joinNames(names)} ${verb} pour le moment.`
 }

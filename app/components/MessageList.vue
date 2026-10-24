@@ -2,6 +2,7 @@
 import type { Message } from '~~/shared/types/chat'
 import type { AlertStatus } from '~~/shared/utils/alerts'
 import { ALERT_SEVERITY_COLORS } from '~~/shared/utils/alerts'
+import type { MentionCandidate } from '~~/shared/utils/mentions'
 import { mentionsName } from '~~/shared/utils/mentions'
 import { groupThreads } from '~/utils/threads'
 
@@ -11,6 +12,8 @@ const props = defineProps<{
   me: string
   /** Noms des PNJ du scénario, reconnus comme mentions même avant leur première réponse */
   npcNames?: readonly string[]
+  /** Personnes proposées par l'autocomplétion des mentions dans les fils */
+  mentionCandidates?: readonly MentionCandidate[]
   /** Poste une réponse dans le fil de la racine parentId */
   reply: (parentId: string, text: string) => Promise<void>
   /** Bascule la réaction emoji du participant courant sur un message */
@@ -113,7 +116,6 @@ watch(
               </div>
               <div class="message__meta">
                 <span class="message__author">{{ thread.author }}</span>
-                <span v-if="thread.npc" class="message__npc" data-testid="npc-badge" :title="thread.npc.role">PNJ</span>
                 <time class="message__time" :datetime="thread.createdAt">{{ formatTime(thread.createdAt) }}</time>
               </div>
               <AlertCard
@@ -143,7 +145,6 @@ watch(
                 <div class="message__bubble" :data-testid="mentionsMe(message) ? 'mentions-me' : undefined">
                   <div class="message__meta">
                     <span class="message__author">{{ message.author }}</span>
-                    <span v-if="message.npc" class="message__npc" data-testid="npc-badge" :title="message.npc.role">PNJ</span>
                     <time class="message__time" :datetime="message.createdAt">{{ formatTime(message.createdAt) }}</time>
                   </div>
                   <MessageText :text="message.text" :known-names="knownNames" :me="me" />
@@ -156,6 +157,8 @@ watch(
           <ReplyComposer
             v-if="replyingTo === thread.id"
             :send="text => reply(thread.id, text)"
+            :mention-candidates="mentionCandidates"
+            :me="me"
             @close="replyingTo = null"
             @typing="emit('typing')"
           />
@@ -294,20 +297,6 @@ watch(
 .message__time {
   font-size: 12px;
   color: var(--teams-text-muted);
-}
-
-/* Badge des personnages non joueurs, à côté de l'auteur ; le rôle s'affiche au survol */
-.message__npc {
-  align-self: center;
-  padding: 0 5px;
-  border-radius: 3px;
-  background: var(--teams-purple-tint);
-  color: var(--teams-purple);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  line-height: 16px;
-  cursor: default;
 }
 
 /* Réponses : plus compactes que la racine */

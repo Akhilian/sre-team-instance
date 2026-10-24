@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Channel, ChannelSummary, Message, MessagesDelta } from '~~/shared/types/chat'
 import type { NpcsResponse } from '~~/shared/types/npc'
+import type { MentionCandidate } from '~~/shared/utils/mentions'
 import { CHANNEL_MESSAGES_MAX } from '~~/shared/utils/limits'
 import { mergeMessages } from '~/utils/messages'
 
@@ -61,6 +62,12 @@ const directNpc = computed(() => {
 })
 
 // PNJ coupés par l'animateur (état connu seulement) : bandeau en conversation directe, avis après envoi
+// Candidats de l'autocomplétion : PNJ actifs et participants présents ; en conversation directe, son PNJ seul
+const mentionCandidates = computed<MentionCandidate[]>(() => {
+  if (directNpc.value) return directUnavailable.value ? [] : [{ name: directNpc.value.name, role: directNpc.value.role }]
+  const npcs = npcState.value?.enabled ? npcState.value.npcs.map(npc => ({ name: npc.name, role: npc.role })) : []
+  return [...npcs, ...presence.value.present.map(name => ({ name }))]
+})
 const npcsInactive = computed(() => !!npcState.value && !npcState.value.enabled)
 // Conversation directe sans interlocuteur (état connu seulement) : PNJ coupés, ou PNJ absent du scénario
 // courant (conversation d'un autre scénario) ; bandeau et composeur désactivé
@@ -405,7 +412,6 @@ onBeforeUnmount(() => {
           <div class="channel__title">
             <h1 class="channel__name">
               {{ directNpc.name }}
-              <span class="channel__npc" title="Personnage non joueur">PNJ</span>
             </h1>
             <span class="channel__team" data-testid="direct-role">{{ directNpc.role || 'Conversation' }}</span>
           </div>
@@ -444,7 +450,7 @@ onBeforeUnmount(() => {
           {{ directNpc.name }} n'est pas disponible pour le moment.
         </p>
 
-        <MessageList :messages="messages ?? []" :me="displayName" :npc-names="npcNames" :reply="reply" :react="react" :set-alert-status="setAlertStatus" @typing="onTyping" />
+        <MessageList :messages="messages ?? []" :me="displayName" :npc-names="npcNames" :mention-candidates="mentionCandidates" :reply="reply" :react="react" :set-alert-status="setAlertStatus" @typing="onTyping" />
         <p class="typing-indicator" data-testid="typing-indicator" aria-live="polite">{{ typingText }}</p>
         <p v-if="npcNotice" class="npc-notice" data-testid="npc-notice" role="status">{{ npcNotice }}</p>
         <Composer
@@ -453,6 +459,8 @@ onBeforeUnmount(() => {
           :placeholder="directNpc ? `Écrire à ${directNpc.name}` : undefined"
           :disabled-placeholder="displayName && directNpc && directUnavailable ? `${directNpc.name} n'est pas disponible pour le moment` : undefined"
           :send="send"
+          :mention-candidates="mentionCandidates"
+          :me="displayName"
           @typing="onTyping"
         />
       </main>
@@ -591,21 +599,6 @@ onBeforeUnmount(() => {
 
 .channel__title {
   min-width: 0;
-}
-
-/* Même badge que sur les messages de PNJ */
-.channel__npc {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 0 6px;
-  border-radius: 4px;
-  background: var(--teams-purple-tint);
-  color: var(--teams-purple);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  line-height: 16px;
-  vertical-align: middle;
 }
 
 .channel__name {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { TEXT_MAX_LENGTH } from '~~/shared/utils/limits'
+import type { MentionCandidate } from '~~/shared/utils/mentions'
 // Champ de saisie en bas du fil : Entrée envoie, Maj+Entrée passe à la ligne.
 const props = defineProps<{
   disabled: boolean
@@ -9,6 +10,10 @@ const props = defineProps<{
   /** Texte du champ désactivé ; défaut : invitation à choisir un nom d'affichage */
   disabledPlaceholder?: string
   send: (text: string) => Promise<void>
+  /** Personnes proposées par l'autocomplétion des mentions */
+  mentionCandidates?: readonly MentionCandidate[]
+  /** Participant courant (jamais proposé) */
+  me?: string
 }>()
 
 const emit = defineEmits<{
@@ -17,6 +22,13 @@ const emit = defineEmits<{
 }>()
 
 const text = ref('')
+const input = ref<HTMLTextAreaElement | null>(null)
+const mentions = useMentionAutocomplete({
+  text,
+  input,
+  candidates: () => props.mentionCandidates ?? [],
+  me: () => props.me ?? '',
+})
 const sending = ref(false)
 const errorMessage = ref('')
 
@@ -39,6 +51,7 @@ async function submit() {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  if (mentions.onKeydown(event)) return
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     submit()
@@ -50,6 +63,7 @@ function onKeydown(event: KeyboardEvent) {
   <form class="composer" @submit.prevent="submit">
     <div class="composer__box" :class="{ 'composer__box--disabled': disabled }">
       <textarea
+        ref="input"
         v-model="text"
         data-testid="composer"
         class="composer__input"
@@ -58,8 +72,24 @@ function onKeydown(event: KeyboardEvent) {
         :disabled="disabled"
         :placeholder="disabled ? disabledPlaceholder ?? 'Choisissez un nom d\'affichage pour écrire' : placeholder ?? `Écrire dans ${channelName}`"
         aria-label="Message"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-autocomplete="list"
+        :aria-expanded="mentions.open.value ? 'true' : 'false'"
+        :aria-controls="mentions.listId"
+        :aria-activedescendant="mentions.activeDescendant.value"
         @keydown="onKeydown"
-        @input="emit('typing')"
+        @keyup="mentions.refresh"
+        @click="mentions.refresh"
+        @input="emit('typing'); mentions.refresh()"
+      />
+      <MentionList
+        v-if="mentions.open.value"
+        :list-id="mentions.listId"
+        :option-id="mentions.optionId"
+        :suggestions="mentions.suggestions.value"
+        :active="mentions.active.value"
+        :select="mentions.select"
       />
       <button type="submit" class="composer__send" :disabled="!canSend" title="Envoyer">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -78,6 +108,7 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 .composer__box {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 8px;

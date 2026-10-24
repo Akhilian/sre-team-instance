@@ -7,7 +7,7 @@
 // scenario-runner.ts : planificateur, horloge et publication injectés.
 import type { Message } from '../../shared/types/chat'
 import type { KnowledgeRetriever, NpcPersona, NpcResponder, NpcSummary } from '../../shared/types/npc'
-import { splitMentions } from '../../shared/utils/mentions'
+import { namedPersons, splitMentions } from '../../shared/utils/mentions'
 import {
   NPC_DIRECT_REPLIES_GLOBAL_PER_MINUTE,
   NPC_MENTIONS_PER_MESSAGE_MAX,
@@ -203,13 +203,23 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
     return true
   }
 
-  /** PNJ actifs mentionnés, dans l'ordre du texte, sans doublon, au plus NPC_MENTIONS_PER_MESSAGE_MAX */
-  function mentioned(text: string, candidates: readonly NpcPersona[]): NpcPersona[] {
+  /**
+   * PNJ actifs interpellés, dans l'ordre du texte, sans doublon, au plus NPC_MENTIONS_PER_MESSAGE_MAX :
+   * s'il y a une @mention d'une personne connue, seuls les PNJ @mentionnés ; sinon les PNJ nommés en clair
+   * (« Claire, tu es là ? »). `others` : noms des auteurs du canal, pour détecter un prénom ambigu
+   * (« @Claire » avec une Claire Martin au canal) ; tous les PNJ du scénario courant, actifs ou non, comptent aussi.
+   */
+  function mentioned(text: string, candidates: readonly NpcPersona[], others: readonly string[]): NpcPersona[] {
     const byName = new Map(candidates.map(persona => [persona.name.toLowerCase(), persona]))
+    const scenarioNames = personas.filter(persona => persona.scenarioId === currentScenarioId).map(persona => persona.name)
+    const known = [...scenarioNames, ...others]
+    const segments = splitMentions(text, known)
+    const names = segments.some(segment => segment.type === 'mention')
+      ? segments.flatMap(segment => segment.type === 'mention' ? [segment.name] : [])
+      : namedPersons(text, known)
     const found: NpcPersona[] = []
-    for (const segment of splitMentions(text, candidates.map(persona => persona.name))) {
-      if (segment.type !== 'mention') continue
-      const persona = byName.get(segment.name.toLowerCase())
+    for (const name of names) {
+      const persona = byName.get(name.toLowerCase())
       if (persona && !found.includes(persona)) found.push(persona)
     }
     return found.slice(0, NPC_MENTIONS_PER_MESSAGE_MAX)
@@ -315,13 +325,13 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
       const directNpcId = deps.directNpcId?.(message.channelId)
       const direct = directNpcId !== undefined
       const candidates = active()
+      // Historique lu en canal d'équipe (prénom ambigu, réponse implicite) ou, plus bas, si une réponse est à planifier
+      const readHistory = () => (deps.history?.(message) ?? []).filter(candidate => candidate.id !== message.id)
+      let fullHistory = !direct && (message.parentId !== undefined || message.text.trim() !== '') ? readHistory() : []
       let targets = direct
         ? candidates.filter(persona => persona.id === directNpcId)
-        : mentioned(message.text, candidates)
-      // Historique lu seulement s'il peut servir (réponse à planifier, ou fil d'équipe sans mention de PNJ)
-      const fullHistory = targets.length > 0 || (!direct && message.parentId !== undefined)
-        ? (deps.history?.(message) ?? []).filter(candidate => candidate.id !== message.id)
-        : []
+        : mentioned(message.text, candidates, fullHistory.map(candidate => candidate.author))
+      if (targets.length > 0 && fullHistory.length === 0) fullHistory = readHistory()
       if (!direct && targets.length === 0) targets = implicitTarget(message, fullHistory, candidates)
       if (targets.length === 0) return []
 

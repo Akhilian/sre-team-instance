@@ -10,7 +10,6 @@ Point 5 de specs/GOAL.md (mentions) : pendant un incident, on interpelle quelqu'
 - Alignement : suppression du rendu « mes messages à droite » ; tous les messages, racines et réponses, sont à gauche avec avatar et nom, même bulle blanche. La règle d'auto-scroll « envoyé par soi » est conservée.
 
 ## Hors périmètre
-- Autocomplétion / liste de suggestions à la frappe de `@`.
 - Stockage des mentions côté serveur, compteur ou notification de mentions, onglet « Activité ».
 - Mention `@canal` / `@équipe`, réactions emoji.
 
@@ -41,3 +40,29 @@ grep -nE 'row-reverse|message--mine' app/components/MessageList.vue             
 - Rendu des segments via `v-for` + `<span>` / texte interpolé ; extraire au besoin un petit composant `MessageText.vue` utilisé par racines et réponses.
 - Le nom courant est vide au SSR : `mention-me` n'apparaît que côté client, c'est attendu (vérifié en CA5).
 - Garder `isMine` pour l'auto-scroll ; retirer seulement les styles et la classe `message--mine`.
+
+## Évolution 2026-10-24 — autocomplétion des mentions
+
+Retour d'essai réel : sans suggestions, il faut connaître et taper le nom exact (« Claire Dumont »). On reproduit la liste de Teams. Implémentée dans le lot de `specs/033-mention-prenom.md`.
+
+### Périmètre
+- Fonctions pures (sans auto-import, testées par Vitest), dans `shared/utils/mentions.ts` ou `app/utils/mention-suggest.ts` :
+  - `mentionQueryAt(text, caret)` : requête en cours si un `@` en frontière (début, espace, ponctuation) précède le curseur, suivi de lettres et d'au plus deux espaces jusqu'au curseur ; sinon `null`. Renvoie `{ start, query }`.
+  - `suggestMentions(query, candidates, max = 5)` : candidats dont le prénom, le nom ou le nom complet commence par `query` (insensible à la casse et aux accents : « ines » → « Inès Garnier ») ; ordre stable (correspondance sur le nom complet ou le prénom d'abord, puis alphabétique), sans doublon, sans le participant courant.
+- Candidats : PNJ actifs (`/api/npcs`, `enabled: true`) et participants présents (`presence.present`). **Conversation directe : seul le PNJ de la conversation est proposé** (les mentions d'autres PNJ y sont ignorées par le serveur, 022), et rien s'il est indisponible.
+- `Composer.vue` (racine) et `ReplyComposer.vue` (fil) : liste sous/au-dessus du champ dès que `@` + au moins une lettre donne au moins une suggestion ; avatar à initiales + nom (le rôle peut suivre, sans le mot « PNJ », cf. évolution 019).
+- Clavier : ↑/↓ déplacent la sélection (première entrée sélectionnée par défaut), Entrée ou Tab insèrent sans envoyer le message, Échap ferme sans modifier le texte ; clic souris sur une entrée insère. L'insertion remplace `@requête` par `@Nom Complet ` (espace finale) et replace le curseur après l'espace.
+- Accessibilité : champ `role="combobox"`, `aria-expanded`, `aria-controls`, `aria-autocomplete="list"`, `aria-activedescendant` = id de l'option sélectionnée ; liste `role="listbox"`, entrées `role="option"` avec `aria-selected`.
+
+### Critères d'acceptation
+- [x] CA6 — Vitest `mentionQueryAt` : `"@cl"` (curseur en fin) → `{ start: 0, query: "cl" }` ; `"salut @Claire Du"` → requête `Claire Du` ; `"ops@bo"` → `null` ; `"@"` seul → requête vide (aucune liste affichée) ; curseur avant le `@` → `null`.
+- [x] CA7 — Vitest `suggestMentions` : « cl » propose « Claire Dumont » ; « dum » (nom) aussi ; « claire d » (nom complet) aussi ; « ines » propose « Inès Garnier » ; « CL » = « cl » ; au plus `max` résultats ; le participant courant n'est jamais proposé ; aucun doublon si un nom est à la fois PNJ et présent.
+- [x] CA8 — Le HTML SSR de `/channels/incident-en-cours` contient un champ `data-testid="composer"` portant `role="combobox"` et `aria-expanded="false"`, et aucun `role="listbox"` visible.
+- [x] CA9 — Chrome (orchestrateur) : couvert par le CA Chrome unique de `specs/033-mention-prenom.md` (point « autocomplétion »).
+
+### Vérification
+```bash
+npm test -- mentions
+npm run build && PORT=10126 node .output/server/index.mjs &
+curl -s localhost:10126/channels/incident-en-cours | grep -oE '<textarea[^>]*data-testid="composer"[^>]*>' | grep -E 'role="combobox"' | grep -c 'aria-expanded="false"'   # 1
+```
