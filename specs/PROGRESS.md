@@ -83,7 +83,7 @@
 - Décisions : spec amendée pour les ajustements (007, 038), nouvelle spec pour le bug (039).
 - Dette / suite : rendu à deux colonnes vérifié par simulation (fenêtre Chrome limitée à 500 px).
 
-## 040 — Qualité et rythme des réponses des PNJ (2026-10-24, commit à renseigner)
+## 040 — Qualité et rythme des réponses des PNJ (2026-10-24, commit ff8d7bc)
 - Livré : extrait de fiche dans le tour utilisateur, `STYLE_EXAMPLES` supprimés, anti-répétition (3 dernières réponses, `server/npc/anti-repeat.ts`), synonymes dans les fiches Sarah et Julien, avis « X n'est pas dans ce scénario » pour un PNJ d'un autre scénario, « @Julien ? » reprend la dernière question, spontanées non répétées ; rythme de réponse `instantané|réaliste|occupé` (`NPC_PACE`, `/admin`, `NPC_DELAY_SCALE`, section `## Disponibilité`, accusé en mode occupé) ; modèle Ollama par défaut `qwen2.5:3b`. Vérifié dans Chrome sur Colima.
 - Décisions : le délai de réponse est un plancher (max entre délai tiré et génération, pas une somme) ; `qwen2.5:7b` rejeté sur la VM Colima de 10 Gi (104 s au 1er appel, VM saturée), possible avec ≥ 14 Gi (commande dans le README) ; sondes Ollama/app plus tolérantes, keepAlive 24 h ; seuil du retriever abaissé seulement pour les expressions de 3 mots ou plus ; l'avis « pas dans ce scénario » ne couvre que les PNJ connus d'un autre scénario ; messages `kind: 'system'` ajoutés côté serveur uniquement.
 - Dette / suite : pas de style dédié aux messages système ; PNJ hors-sujet (Thomas) ne refusent pas nettement ; seuil du retriever étroit pour les déclencheurs de 2 mots. Prochaine : dépôt voisin `platform` (hébergement avec llama.cpp), voir `specs/ROADMAP.md` (orchestrateur de scénarios en premier).
