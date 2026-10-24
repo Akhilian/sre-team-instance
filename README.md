@@ -67,6 +67,8 @@ npm run k8s:down        # supprime le namespace sre-teams, PVC compris
 
 La page `/admin` (non liée dans la navigation) permet de publier une annonce ou une carte d'alerte (SEV1 à SEV3) dans un canal et de
 réinitialiser les conversations (messages effacés, canaux conservés, scénario en cours arrêté).
+La section repliable « Architecture » (`GET /api/admin/architecture`, code animateur) dessine l'instance : hébergement,
+stockage, moteur et modèle des PNJ, fiches, scénario en cours ; actif en couleur, inactif grisé, sans secret (hôtes seulement).
 Elle permet aussi de lancer un scénario d'incident pré-écrit (`panne-checkout`, ≈ 14 min,
 `fuite-donnees`, ≈ 14 min, ou `demo-express`, 6 s) : ses alertes, annonces et messages de PNJ (étapes `npc-message`, publiées même si
 les PNJ sont coupés) sont publiés par le serveur au fil du temps, un seul

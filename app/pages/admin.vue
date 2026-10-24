@@ -836,6 +836,8 @@ function reset(scope: ResetScope) {
         </div>
       </section>
 
+      <AdminArchitecture :code="code" />
+
       <p
         v-if="status"
         class="admin__status"

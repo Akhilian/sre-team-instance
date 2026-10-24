@@ -13,7 +13,7 @@ const segments = computed(() => splitMentions(props.text, props.knownNames))
 </script>
 
 <template>
-  <!-- Texte interpolé (échappé par Vue) : jamais de v-html sur le contenu d'un message -->
+  <!-- Texte interpolé (échappé par Vue) : jamais de HTML brut sur le contenu d'un message -->
   <p class="message__text"><template v-for="(segment, index) in segments" :key="index"><span
     v-if="segment.type === 'mention' && isMe(segment.name, me)"
     class="mention mention--me"
