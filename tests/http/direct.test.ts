@@ -42,7 +42,7 @@ describe('conversations directes (022)', () => {
     const created = await openDirect({ participant: 'Alice', npcId: 'release-manager' })
     expect(created.status).toBe(201)
     const channel = await created.json()
-    expect(channel).toEqual({ id: DM, name: `Alice ↔ ${RELEASE}`, direct: { participant: 'Alice', npcId: 'release-manager' } })
+    expect(channel).toEqual({ id: DM, name: `Alice ↔ ${RELEASE}`, direct: { participant: 'Alice', npcId: 'release-manager', npcName: RELEASE } })
     const again = await openDirect({ participant: 'alice', npcId: 'release-manager' })
     expect(again.status).toBe(200)
     expect(await again.json()).toEqual(channel)

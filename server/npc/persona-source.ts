@@ -122,8 +122,9 @@ export function personaErrorMessage(path: string, error: unknown): string {
 
 /**
  * Lit, parse et valide les candidats dans l'ordre (triés par chemin) avec checkPersonaFile. Au plus
- * PERSONA_FILES_MAX fiches lues. Un id porté par plusieurs fiches valides (scénarios différents) les
- * écarte toutes, chacune avec un message qui cite l'autre : aucune ne l'emporte selon l'ordre des chemins.
+ * PERSONA_FILES_MAX fiches lues. Un id (ou un nom) porté par plusieurs fiches : la première dans l'ordre
+ * des chemins l'emporte, les suivantes sont écartées avec un message qui cite le chemin retenu (même règle
+ * qu'à l'édition en ligne, où la fiche déjà en place garde l'id).
  */
 async function validateCandidates(candidates: PersonaCandidate[], errors: PersonaLoadError[]): Promise<PersonaLoadResult> {
   const files: PersonaFile[] = []
@@ -144,23 +145,10 @@ async function validateCandidates(candidates: PersonaCandidate[], errors: Person
       failed.push({ path: candidate.path, message: personaErrorMessage(candidate.path, error) })
     }
   }
-  // Chemins des fiches valides seules, par id
-  const pathsById = new Map<string, string[]>()
   for (const { path, markdown } of read) {
     try {
-      const { id } = checkPersonaFile(path, markdown, []).persona
-      pathsById.set(id, [...pathsById.get(id) ?? [], path])
-    }
-    catch {
-      // erreur signalée ci-dessous
-    }
-  }
-  for (const { path, markdown } of read) {
-    try {
-      const file = checkPersonaFile(path, markdown, files)
-      const other = pathsById.get(file.persona.id)?.find(candidate => candidate !== path)
-      if (other !== undefined) throw new PersonaSourceError(idTakenMessage(file.persona.id, other))
-      files.push(file)
+      // files contient les fiches retenues avant celle-ci : un id ou un nom déjà pris l'écarte
+      files.push(checkPersonaFile(path, markdown, files))
     }
     catch (error) {
       failed.push({ path, message: personaErrorMessage(path, error) })

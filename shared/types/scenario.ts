@@ -41,6 +41,8 @@ export interface Scenario {
    * Un scénario sans fiches propres (demo-express) emprunte les PNJ d'un autre.
    */
   npcScenarioId?: string
+  /** false : le lancement sélectionne les PNJ de npcScenarioId mais les laisse coupés (défaut : activés) */
+  enableNpcs?: boolean
   /** Triées par at croissant */
   steps: ScenarioStep[]
 }

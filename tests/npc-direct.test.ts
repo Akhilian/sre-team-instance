@@ -50,7 +50,7 @@ describe('conversations directes (store, CA1)', () => {
   it('création idempotente, id dm-<slug>--<npcId>, nom « participant ↔ PNJ »', () => {
     const first = openDm()
     expect(first.created).toBe(true)
-    expect(first.channel).toEqual({ id: DM, name: `Alice ↔ ${RELEASE.name}`, direct: { participant: 'Alice', npcId: 'release-manager' } })
+    expect(first.channel).toEqual({ id: DM, name: `Alice ↔ ${RELEASE.name}`, direct: { participant: 'Alice', npcId: 'release-manager', npcName: RELEASE.name } })
     const second = openDm(' alice ')
     expect(second.created).toBe(false)
     expect(second.channel).toEqual(first.channel)
@@ -89,12 +89,12 @@ describe('conversations directes (store, CA1)', () => {
     expect(() => addChannel({ name: 'Canal de trop' })).toThrow(ChannelLimitError)
   })
 
-  it('resetAll les supprime, clearMessages les vide', () => {
+  it('resetAll et clearMessages (030) les suppriment', () => {
     openDm()
     addMessage(DM, { author: 'Alice', text: 'Bonjour' })
     clearMessages()
-    expect(hasChannel(DM)).toBe(true)
-    expect(listMessages(DM)).toEqual([])
+    expect(hasChannel(DM)).toBe(false)
+    openDm()
     resetAll()
     expect(hasChannel(DM)).toBe(false)
     expect(listChannelSummaries('Alice').map(summary => summary.id)).toEqual(['general', 'incident-en-cours'])
@@ -106,9 +106,16 @@ describe('conversations directes (store, CA1)', () => {
     const snapshot = JSON.parse(JSON.stringify(exportSnapshot()))
     resetChatStore()
     expect(importSnapshot(snapshot)).toBe(true)
-    expect(getChannel(DM)).toEqual({ id: DM, name: `Alice ↔ ${RELEASE.name}`, direct: { participant: 'Alice', npcId: 'release-manager' } })
+    expect(getChannel(DM)).toEqual({ id: DM, name: `Alice ↔ ${RELEASE.name}`, direct: { participant: 'Alice', npcId: 'release-manager', npcName: RELEASE.name } })
     expect(listMessages(DM).map(message => message.text)).toEqual(['Bonjour'])
     expect(listChannelSummaries().map(summary => summary.id)).not.toContain(DM)
+
+    // 030 CA3 : instantané v2 antérieur, direct sans npcName → id du PNJ
+    const legacy = JSON.parse(JSON.stringify(snapshot))
+    delete legacy.channels.find((channel: { id: string }) => channel.id === DM).direct.npcName
+    resetChatStore()
+    expect(importSnapshot(legacy)).toBe(true)
+    expect(getChannel(DM)!.direct).toEqual({ participant: 'Alice', npcId: 'release-manager', npcName: 'release-manager' })
 
     const broken = JSON.parse(JSON.stringify(snapshot))
     broken.channels.find((channel: { id: string }) => channel.id === DM).direct = { participant: '', npcId: 'cfo' }

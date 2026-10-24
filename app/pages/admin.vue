@@ -366,18 +366,51 @@ function setNpcsEnabled(event: Event) {
   })
 }
 
-function startScenario(scenario: ScenarioSummary) {
+/** Lancement refusé (409 messages-exist) en attente de la décision de l'animateur */
+const pendingStart = ref<{ scenario: ScenarioSummary, messageCount: number } | null>(null)
+/** Case « Couper aussi les PNJ » du bouton « Arrêter » */
+const stopDisablesNpcs = ref(true)
+
+/** messageCount d'un 409 messages-exist renvoyé par le lancement, sinon undefined */
+function existingMessageCount(error: unknown): number | undefined {
+  const { statusCode, data } = error as { statusCode?: number, data?: { data?: { reason?: unknown, messageCount?: unknown } } }
+  const detail = data?.data
+  if (statusCode !== 409 || detail?.reason !== 'messages-exist' || typeof detail.messageCount !== 'number') return undefined
+  return detail.messageCount
+}
+
+/**
+ * Lance scenario ; sans existingMessages, un store non vide donne 409 messages-exist et une confirmation
+ * (« Effacer et lancer », « Lancer sans effacer », « Annuler »)
+ */
+function startScenario(scenario: ScenarioSummary, existingMessages?: 'clear' | 'keep') {
   if (!canStartScenario.value) return
+  pendingStart.value = null
   return run(async () => {
-    const state = await $fetch<ScenarioRun>(`/api/admin/scenarios/${encodeURIComponent(scenario.id)}/start`, {
-      method: 'POST',
-      headers: { 'x-facilitator-code': code.value },
-    })
+    let state: ScenarioRun
+    try {
+      state = await $fetch<ScenarioRun>(`/api/admin/scenarios/${encodeURIComponent(scenario.id)}/start`, {
+        method: 'POST',
+        headers: { 'x-facilitator-code': code.value },
+        body: existingMessages ? { existingMessages } : {},
+      })
+    }
+    catch (error) {
+      const messageCount = existingMessageCount(error)
+      if (messageCount === undefined) throw error
+      pendingStart.value = { scenario, messageCount }
+      return `${messageCount} messages existent : choisissez avant de lancer « ${scenario.title} ».`
+    }
     setScenarioRun(state)
-    // Le lancement active les PNJ du scénario
+    // Le lancement sélectionne les PNJ du scénario (activés, sauf pour la démo)
     await loadNpcs()
     return `Scénario « ${scenario.title} » lancé.`
   })
+}
+
+function cancelPendingStart() {
+  pendingStart.value = null
+  status.value = null
 }
 
 function stopScenario() {
@@ -387,9 +420,13 @@ function stopScenario() {
       const state = await $fetch<ScenarioRun>('/api/admin/scenarios/stop', {
         method: 'POST',
         headers: { 'x-facilitator-code': code.value },
+        body: { disableNpcs: stopDisablesNpcs.value },
       })
       setScenarioRun(state)
-      return `Scénario « ${state.title} » arrêté.`
+      await loadNpcs()
+      return stopDisablesNpcs.value
+        ? `Scénario « ${state.title} » arrêté, PNJ coupés.`
+        : `Scénario « ${state.title} » arrêté.`
     }
     catch (error) {
       // 409 : le scénario s'est terminé entre-temps, l'état affiché est rafraîchi
@@ -591,6 +628,24 @@ function reset(scope: ResetScope) {
           </li>
         </ul>
 
+        <div v-if="pendingStart" class="scenario-confirm" data-testid="scenario-confirm" role="alertdialog" aria-labelledby="scenario-confirm-text">
+          <p id="scenario-confirm-text">
+            <strong data-testid="scenario-confirm-count">{{ pendingStart.messageCount }} messages existent.</strong>
+            Avant de lancer « {{ pendingStart.scenario.title }} » :
+          </p>
+          <div class="card__actions">
+            <button type="button" class="button button--danger" data-testid="scenario-confirm-clear" :disabled="!canStartScenario" @click="startScenario(pendingStart.scenario, 'clear')">
+              Effacer et lancer
+            </button>
+            <button type="button" class="button button--primary" data-testid="scenario-confirm-keep" :disabled="!canStartScenario" @click="startScenario(pendingStart.scenario, 'keep')">
+              Lancer sans effacer
+            </button>
+            <button type="button" class="button" data-testid="scenario-confirm-cancel" :disabled="busy" @click="cancelPendingStart">
+              Annuler
+            </button>
+          </div>
+        </div>
+
         <div v-if="scenarioRun" class="scenario-run" data-testid="scenario-run">
           <div class="scenario-run__header">
             <strong>{{ scenarioRun.title }}</strong>
@@ -623,6 +678,10 @@ function reset(scope: ResetScope) {
             <button type="button" class="button button--danger" data-testid="scenario-stop" :disabled="busy" @click="stopScenario">
               Arrêter
             </button>
+            <label class="scenario-stop__npcs">
+              <input v-model="stopDisablesNpcs" type="checkbox" data-testid="scenario-stop-npcs">
+              Couper aussi les PNJ
+            </label>
           </div>
         </div>
       </section>
@@ -631,7 +690,7 @@ function reset(scope: ResetScope) {
         <h2>Personnages (PNJ)</h2>
         <p v-if="!npcState">Saisissez et validez le code animateur pour afficher les PNJ.</p>
         <template v-else>
-          <p>Mentionnés par <strong>@Nom</strong>, ils répondent dans le fil après quelques secondes (moteur {{ npcState.engine }}). Lancer le scénario les active, « Tout réinitialiser » les coupe.</p>
+          <p>Mentionnés par <strong>@Nom</strong>, ils répondent dans le fil après quelques secondes (moteur {{ npcState.engine }}). Lancer un scénario les active (sauf la démo), « Arrêter » (case cochée) et « Tout réinitialiser » les coupent.</p>
           <p v-if="lastModelCallText" data-testid="npc-last-model-call" :class="`model-call model-call--${npcState.lastModelCall?.ok ? 'ok' : 'failed'}`">{{ lastModelCallText }}</p>
           <label class="switch">
             <input
@@ -1013,6 +1072,32 @@ function reset(scope: ResetScope) {
 .card .scenario__meta {
   margin-top: 2px;
   font-size: 12px;
+}
+
+/* Confirmation avant un lancement sur des messages existants (409 messages-exist) */
+.scenario-confirm {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #f2c94c;
+  border-radius: 4px;
+  background: #fff8e1;
+}
+
+.scenario-confirm p {
+  margin: 0;
+}
+
+/* Case « Couper aussi les PNJ » à côté du bouton « Arrêter » */
+.card .scenario-stop__npcs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.card .scenario-stop__npcs input {
+  width: auto;
+  padding: 0;
 }
 
 .scenario-run {

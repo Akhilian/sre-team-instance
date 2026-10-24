@@ -6,8 +6,10 @@ import {
   MessageValidationError,
   addAnnouncement,
   addChannel,
+  addDirectChannel,
   addMessage,
   clearMessages,
+  hasChannel,
   listChannelSummaries,
   listChannels,
   listMessages,
@@ -146,6 +148,20 @@ describe('clearMessages', () => {
     for (const { id } of channelsBefore) expect(listMessages(id)).toEqual([])
     // Le canal reste utilisable après la réinitialisation
     expect(addMessage(channel.id, { author: 'Bob', text: 'encore' }).channelId).toBe('exercice-2')
+  })
+
+  it('030 CA3 : supprime les conversations directes, garde les canaux d\'équipe et ceux des participants', () => {
+    const channel = addChannel({ name: 'Exercice 2' })
+    const { channel: dm } = addDirectChannel({ participant: 'Alice', npc: { id: 'cfo', name: 'Claire Dubois' } })
+    expect(dm.direct).toEqual({ participant: 'Alice', npcId: 'cfo', npcName: 'Claire Dubois' })
+    addMessage(dm.id, { author: 'Alice', text: 'Bonjour' })
+
+    clearMessages()
+
+    expect(hasChannel(dm.id)).toBe(false)
+    expect(() => listMessages(dm.id)).toThrow(ChannelNotFoundError)
+    expect(listChannels().map(c => c.id)).toEqual(['general', 'incident-en-cours', channel.id])
+    expect(listChannelSummaries('Alice').map(c => c.id)).toEqual(['general', 'incident-en-cours', channel.id])
   })
 })
 

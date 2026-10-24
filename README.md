@@ -41,7 +41,12 @@ réinitialiser les conversations (messages effacés, canaux conservés, scénari
 Elle permet aussi de lancer un scénario d'incident pré-écrit (`panne-checkout`, ≈ 14 min,
 `fuite-donnees`, ≈ 14 min, ou `demo-express`, 6 s) : ses alertes, annonces et messages de PNJ (étapes `npc-message`, publiées même si
 les PNJ sont coupés) sont publiés par le serveur au fil du temps, un seul
-scénario à la fois, et l'exécution est perdue si le serveur redémarre. Les routes `/api/admin/*`
+scénario à la fois, et l'exécution est perdue si le serveur redémarre. S'il reste des messages, le lancement
+(`POST /api/admin/scenarios/:id/start`) répond 409 `{ data: { reason: "messages-exist", messageCount } }`
+tant que le corps ne précise pas `existingMessages` : `"clear"` (comme « Effacer les messages ») ou `"keep"` ;
+`/admin` propose alors « Effacer et lancer », « Lancer sans effacer » ou « Annuler ». L'arrêt
+(`POST /api/admin/scenarios/stop`, corps facultatif `{ disableNpcs }`, défaut `true`) coupe aussi les PNJ,
+sauf si la case « Couper aussi les PNJ » de `/admin` est décochée. Les routes `/api/admin/*`
 exigent l'en-tête `x-facilitator-code`, comparé au code animateur résolu au démarrage :
 
 - `FACILITATOR_CODE` définie et non vide : sa valeur ;
@@ -92,12 +97,13 @@ est la décision (notification, information des personnes, préservation des pre
 le recoupement voulu est décrit en tête de `server/scenarios/fuite-donnees.ts`. Avant tout lancement, les PNJ
 proposés sont ceux de `panne-checkout` ; lancer un scénario n'active que ses PNJ (mentions, conversations
 directes et liste « Conversations »), les ids de PNJ sont donc distincts d'un scénario à l'autre (une
-fiche dont l'id existe dans un autre scénario, ou dont le nom dépasse 50 caractères, est refusée).
+fiche dont l'id est déjà porté par une fiche placée avant elle dans l'ordre des chemins, ou dont le nom dépasse 50 caractères, est refusée).
 
 - **Activation** : lancer `panne-checkout` ou `fuite-donnees` depuis `/admin` active ses PNJ ; l'interrupteur « PNJ actifs »
   de `/admin` (`POST /api/admin/npcs {enabled}`, code animateur) les coupe ou les rallume ; « Tout
-  réinitialiser » les coupe et revient aux PNJ de `panne-checkout`. `demo-express`, sans fiches propres,
-  active ceux de `panne-checkout` (champ `npcScenarioId` du scénario). L'état est en mémoire seulement (PNJ coupés au redémarrage).
+  réinitialiser » les coupe et revient aux PNJ de `panne-checkout`, « Arrêter » les coupe aussi (case cochée par défaut).
+  `demo-express`, sans fiches propres, sélectionne ceux de `panne-checkout` (champ `npcScenarioId` du scénario)
+  mais les laisse coupés (`enableNpcs: false`). L'état est en mémoire seulement (PNJ coupés au redémarrage).
   `GET /api/npcs` (public) renvoie `{ enabled, npcs: [{ id, name, role }] }`.
 - **Fiches** : un fichier Markdown par PNJ dans `server/npc/personas/<scénario>/<id>.md`, modifiable dans
   n'importe quel éditeur ; front-matter `clé: valeur` (`id`, `name`, `role`, `scenario`, `tone` = phrase
@@ -125,15 +131,17 @@ fiche dont l'id existe dans un autre scénario, ou dont le nom dépasse 50 carac
   réelle** : « privé » signifie seulement « non listé pour les autres » ; quiconque connaît l'URL peut lire
   la conversation. Seule l'écriture est gardée : un message, une réaction ou un acquittement d'alerte
   signé d'un autre nom que son propriétaire est refusé en 403 (nom vide ou invalide : 400). La chronologie de l'animateur les inclut ; « Tout réinitialiser » les supprime,
-  « Effacer les messages » les vide. Le budget de réponses des conversations directes est séparé de celui
+  « Effacer les messages » aussi. Le budget de réponses des conversations directes est séparé de celui
   des canaux d'équipe : une salle (une quinzaine de participants) qui interroge les PNJ en direct n'empêche
   pas les réponses dans `#incident-en-cours`.
 - **PNJ coupés** : un message qui mentionne un PNJ, ou envoyé dans une conversation directe, affiche
   sous le fil un avis local « Les PNJ ne sont pas actifs pour le moment : … » (calculé dans le navigateur,
-  ni envoyé ni stocké) ; une conversation directe affiche un bandeau « <nom> n'est pas disponible », et
+  ni envoyé ni stocké) ; une conversation directe affiche un bandeau « <nom> n'est pas disponible » et désactive
+  le composeur (aussi quand son PNJ n'appartient pas au scénario courant), et
   la barre latérale grise les conversations existantes. Tout disparaît dès que les PNJ sont réactivés.
 - **Délai** : `NPC_REPLY_DELAY_MS` fixe le délai avant réponse en millisecondes (défaut : tiré entre 1 et 2 s).
-- **Reset** : « Effacer les messages » (`reset {scope:"messages"}`) annule les réponses de PNJ en attente, sans couper les PNJ.
+- **Reset** : « Effacer les messages » (`reset {scope:"messages"}`) annule les réponses de PNJ en attente, sans couper les PNJ,
+  et supprime les conversations directes. « Tout réinitialiser » remet aussi `lastModelCall` à `null`.
 
 ### Fiches dans un dossier (`NPC_PERSONAS_DIR`)
 

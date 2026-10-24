@@ -219,6 +219,13 @@ function copyMessage(message: Message): Message {
   return copy
 }
 
+/** Messages présents dans tous les canaux, conversations directes comprises */
+export function countMessages(): number {
+  let count = 0
+  for (const messages of messagesByChannel.values()) count += messages.length
+  return count
+}
+
 /** Messages du canal, du plus ancien au plus récent. */
 export function listMessages(channelId: string): Message[] {
   const messages = messagesByChannel.get(channelId)
@@ -446,12 +453,15 @@ export function setAlertStatus(
 }
 
 /**
- * Vide les messages de tous les canaux ; les canaux, y compris ceux créés par les participants, restent.
- * Les compteurs totalCount ne baissent pas et rev avance (les curseurs antérieurs donnent full).
+ * Vide les messages de tous les canaux et supprime les conversations directes ; les canaux d'équipe, y
+ * compris ceux créés par les participants, restent. Les compteurs totalCount ne baissent pas et rev
+ * avance (les curseurs antérieurs donnent full).
  */
 export function clearMessages(): void {
-  for (const channelId of messagesByChannel.keys()) messagesByChannel.set(channelId, [])
-  markReset(messagesByChannel.keys())
+  const previousIds = [...messagesByChannel.keys()]
+  channels = channels.filter(channel => !channel.direct)
+  messagesByChannel = new Map(channels.map(channel => [channel.id, []]))
+  markReset(previousIds)
   notifyChange()
 }
 
@@ -583,7 +593,7 @@ export function addDirectChannel(input: {
   const channel: Channel = {
     id,
     name: `${participant} ↔ ${input.npc.name}`,
-    direct: { participant, npcId: input.npc.id },
+    direct: { participant, npcId: input.npc.id, npcName: input.npc.name },
   }
   channels.push(channel)
   messagesByChannel.set(id, [])
@@ -628,10 +638,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Conversation directe : participant et npcId en chaînes non vides */
-function isValidDirect(value: unknown): value is DirectChannel {
+/** Conversation directe : participant et npcId en chaînes non vides, npcName chaîne si présent */
+function isValidDirect(value: unknown): value is Omit<DirectChannel, 'npcName'> & { npcName?: string } {
   return isRecord(value) && typeof value.participant === 'string' && value.participant !== ''
     && typeof value.npcId === 'string' && value.npcId !== ''
+    && (value.npcName === undefined || typeof value.npcName === 'string')
+}
+
+/** Canal importé : npcName absent ou vide (instantané antérieur à 030) → id du PNJ */
+function importedChannel(channel: Channel): Channel {
+  const copy = copyChannel(channel)
+  if (copy.direct) {
+    const direct = channel.direct!
+    copy.direct = {
+      participant: direct.participant,
+      npcId: direct.npcId,
+      npcName: typeof direct.npcName === 'string' && direct.npcName !== '' ? direct.npcName : direct.npcId,
+    }
+  }
+  return copy
 }
 
 function isValidChannel(value: unknown): value is Channel {
@@ -731,7 +756,7 @@ function importValidSnapshot(data: unknown): boolean {
   }
 
   // direct conservé (conversations directes) ; tout autre champ inconnu est ignoré
-  channels = rawChannels.map(channel => copyChannel(channel))
+  channels = rawChannels.map(importedChannel)
   messagesByChannel = nextMessages
   // rev ne recule jamais dans un même processus (import après un reset, par exemple)
   rev = Math.max(rev, nextRev)

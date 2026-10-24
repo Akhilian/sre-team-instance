@@ -7,6 +7,8 @@ export const demoExpress: Scenario = {
   title: 'Démo express',
   // Pas de fiches propres : la démo publie un message de Sarah Benali, PNJ de panne-checkout
   npcScenarioId: 'panne-checkout',
+  // Démo technique : le message de Sarah est publié, mais les PNJ restent coupés
+  enableNpcs: false,
   description: 'Trois étapes en 6 secondes pour tester la publication automatique avant l\'atelier : '
     + 'message du support (PNJ), puis deux alertes.',
   steps: [

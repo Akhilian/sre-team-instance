@@ -52,7 +52,7 @@ const conversations = computed<ConversationEntry[]>(() => {
     const npc = npcs.find(candidate => candidate.id === channel.direct!.npcId)
     return {
       key: channel.id,
-      name: npc?.name ?? channel.name.split(' ↔ ').at(-1) ?? channel.name,
+      name: npc?.name ?? channel.direct!.npcName,
       role: npc?.role ?? '',
       npcId: channel.direct!.npcId,
       channel,

@@ -1,6 +1,7 @@
 // 025 CA1 et CA2 : lecture des fiches dans un dossier (temporaire, vrai fs/promises), fusion d'un
 // rechargement et remplacement à chaud dans le dispatcher ; 029 CA5 : id unique tous scénarios, nom
-// d'au plus 50 caractères (chargement, rechargement, édition), NPC_ENGINE en sync: false
+// d'au plus 50 caractères (chargement, rechargement, édition), NPC_ENGINE en sync: false ; 030 CA4 : à id
+// dupliqué, la première fiche par chemin l'emporte
 import * as fs from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -271,29 +272,28 @@ describe('dispatcher.replacePersonas (CA2)', () => {
 describe('029 CA5 : id unique tous scénarios, nom borné', () => {
   const LONG_NAME = `${'N'.repeat(AUTHOR_MAX_LENGTH)}x`
 
-  it('fuite-donnees/x.md dont l\'id existe dans panne-checkout : rejetée, le message cite l\'autre chemin', async () => {
-    await write('panne-checkout/x.md', persona('x', 'Xavier Un', 'panne-checkout'))
-    await write('panne-checkout/y.md', persona('y', 'Yves Deux', 'panne-checkout'))
-    await write('fuite-donnees/x.md', persona('x', 'Xavier Bis', 'fuite-donnees'))
+  it('030 CA4 : a/x.md et b/x.md de même id : la première par chemin est chargée, l\'autre écartée en la citant', async () => {
+    await write('b/x.md', persona('x', 'Xavier Bis', 'b'))
+    await write('a/x.md', persona('x', 'Xavier Un', 'a'))
+    await write('a/y.md', persona('y', 'Yves Deux', 'a'))
     const result = await readPersonaDir(root, fs)
-    const errors = new Map(result.errors.map(error => [error.path, error.message]))
-    expect(errors.get('fuite-donnees/x.md')).toContain('Fiche PNJ fuite-donnees/x.md')
-    expect(errors.get('fuite-donnees/x.md')).toContain('id « x » déjà utilisé par panne-checkout/x.md')
-    expect(result.files.map(file => file.path)).not.toContain('fuite-donnees/x.md')
-    // Aucune ne l'emporte selon l'ordre des chemins : l'autre est écartée aussi, en citant la première
-    expect(errors.get('panne-checkout/x.md')).toContain('déjà utilisé par fuite-donnees/x.md')
-    expect(result.files.map(file => file.path)).toEqual(['panne-checkout/y.md'])
+    expect(result.files.map(file => file.path)).toEqual(['a/x.md', 'a/y.md'])
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]!.path).toBe('b/x.md')
+    expect(result.errors[0]!.message).toContain('Fiche PNJ b/x.md')
+    expect(result.errors[0]!.message).toContain('id « x » déjà utilisé par a/x.md')
   })
 
-  it('rechargement : la version précédente de panne-checkout/x.md reste en service', async () => {
-    await write('panne-checkout/x.md', persona('x', 'Xavier Un', 'panne-checkout'))
-    await write('panne-checkout/y.md', persona('y', 'Yves Deux', 'panne-checkout'))
+  it('rechargement : une fiche déjà en service garde l\'id face à une nouvelle fiche plus loin par chemin', async () => {
+    await write('a/x.md', persona('x', 'Xavier Un', 'a'))
+    await write('a/y.md', persona('y', 'Yves Deux', 'a'))
     const before = await readPersonaDir(root, fs)
-    await write('fuite-donnees/x.md', persona('x', 'Xavier Bis', 'fuite-donnees'))
+    await write('b/x.md', persona('x', 'Xavier Bis', 'b'))
     const outcome = mergePersonaReload(before.files, await readPersonaDir(root, fs), 'dir')
-    expect(outcome.files.map(file => file.path)).toEqual(['panne-checkout/x.md', 'panne-checkout/y.md'])
-    expect(outcome.report.kept).toEqual(['panne-checkout/x.md'])
-    expect(outcome.report.errors.map(error => error.path)).toContain('fuite-donnees/x.md')
+    expect(outcome.files.map(file => file.path)).toEqual(['a/x.md', 'a/y.md'])
+    expect(outcome.report.loaded).toEqual(['a/x.md', 'a/y.md'])
+    expect(outcome.report.errors.map(error => error.path)).toEqual(['b/x.md'])
+    expect(outcome.report.errors[0]!.message).toContain('déjà utilisé par a/x.md')
   })
 
   it(`nom de ${AUTHOR_MAX_LENGTH + 1} caractères : rejetée ; ${AUTHOR_MAX_LENGTH} : acceptée`, async () => {

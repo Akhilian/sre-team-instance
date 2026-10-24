@@ -13,6 +13,8 @@ export interface DirectChannel {
   /** Nom du participant tel qu'à la création ; comparé par slug (casse et accents ignorés) */
   participant: string
   npcId: string
+  /** Nom du PNJ à la création (affichage) ; l'id du PNJ pour un instantané antérieur à 030 */
+  npcName: string
 }
 
 /** Canal avec de quoi calculer les non-lus côté client (GET /api/channels) */

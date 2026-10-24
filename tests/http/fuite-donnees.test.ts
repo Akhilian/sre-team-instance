@@ -26,8 +26,9 @@ async function messages(): Promise<Message[]> {
   return (await fetch(`${server.url}/api/channels/${CHANNEL}/messages`)).json()
 }
 
-function start(id: string): Promise<Response> {
-  return postJson(`${server.url}/api/admin/scenarios/${id}/start`, {}, ADMIN)
+/** existingMessages requis dès qu'un message existe (030) : sans lui, 409 messages-exist */
+function start(id: string, existingMessages?: 'clear' | 'keep'): Promise<Response> {
+  return postJson(`${server.url}/api/admin/scenarios/${id}/start`, existingMessages ? { existingMessages } : {}, ADMIN)
 }
 
 function openDirect(npcId: string): Promise<Response> {
@@ -100,21 +101,22 @@ describe('scénario fuite-donnees (027)', () => {
   it('CA5 : relancer panne-checkout ramène ses 6 PNJ et refuse dpo (404)', async () => {
     // Un seul scénario à la fois : arrêter fuite-donnees d'abord
     expect((await postJson(`${server.url}/api/admin/scenarios/stop`, {}, ADMIN)).status).toBe(200)
-    expect((await start('panne-checkout')).status).toBe(201)
+    expect((await start('panne-checkout', 'keep')).status).toBe(201)
     const state = await npcs()
     expect(state.enabled).toBe(true)
     expect(state.npcs.map(npc => npc.id)).toEqual(PANNE_IDS)
     expect((await openDirect('dpo')).status).toBe(404)
   })
 
-  it('demo-express après fuite-donnees : les 6 PNJ de panne-checkout (Sarah répond)', async () => {
+  it('demo-express après fuite-donnees : les 6 PNJ de panne-checkout, coupés (030), Sarah répond une fois activés', async () => {
     expect((await postJson(`${server.url}/api/admin/reset`, { scope: 'all' }, ADMIN)).status).toBe(200)
     expect((await start('fuite-donnees')).status).toBe(201)
     expect((await postJson(`${server.url}/api/admin/scenarios/stop`, {}, ADMIN)).status).toBe(200)
-    expect((await start('demo-express')).status).toBe(201)
+    expect((await start('demo-express', 'keep')).status).toBe(201)
     const state = await npcs()
-    expect(state.enabled).toBe(true)
+    expect(state.enabled).toBe(false)
     expect(state.npcs.map(npc => npc.id)).toEqual(PANNE_IDS)
+    expect((await postJson(`${server.url}/api/admin/npcs`, { enabled: true }, ADMIN)).status).toBe(200)
     const root = await ask('@Sarah Benali depuis quand ?')
     const [reply] = await npcReplies(root.id, 5000)
     expect(reply).toMatchObject({ author: 'Sarah Benali', npc: { id: 'support-n1' } })

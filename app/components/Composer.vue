@@ -6,6 +6,8 @@ const props = defineProps<{
   channelName: string
   /** Remplace « Écrire dans <canal> » (conversation directe : « Écrire à <PNJ> ») */
   placeholder?: string
+  /** Texte du champ désactivé ; défaut : invitation à choisir un nom d'affichage */
+  disabledPlaceholder?: string
   send: (text: string) => Promise<void>
 }>()
 
@@ -54,7 +56,7 @@ function onKeydown(event: KeyboardEvent) {
         rows="1"
         :maxlength="TEXT_MAX_LENGTH"
         :disabled="disabled"
-        :placeholder="disabled ? 'Choisissez un nom d\'affichage pour écrire' : placeholder ?? `Écrire dans ${channelName}`"
+        :placeholder="disabled ? disabledPlaceholder ?? 'Choisissez un nom d\'affichage pour écrire' : placeholder ?? `Écrire dans ${channelName}`"
         aria-label="Message"
         @keydown="onKeydown"
         @input="emit('typing')"

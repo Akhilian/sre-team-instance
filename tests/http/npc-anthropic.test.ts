@@ -1,5 +1,6 @@
 // 024 CA4 : moteur anthropic sur le build, branché sur un faux serveur Anthropic (node:http) ;
-// 029 CA2 : faux serveur strict (temperature refusée), réflexion, max_tokens et lastModelCall
+// 029 CA2 : faux serveur strict (temperature refusée), réflexion, max_tokens et lastModelCall ; 030 CA4 :
+// lastModelCall remis à null par « Tout réinitialiser »
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { Message } from '../../shared/types/chat'
 import type { NpcAdminState } from '../../shared/types/npc'
@@ -147,6 +148,14 @@ describe('faux serveur strict et lastModelCall (029 CA2)', () => {
     const { lastModelCall } = await adminState()
     expect(lastModelCall).toMatchObject({ ok: false, reason: 'max_tokens sans texte' })
     expect(server.stdout() + server.stderr()).toContain('[npc] anthropic indisponible (max_tokens sans texte) : repli keywords')
+  })
+
+  it('030 CA4 : après un appel réussi, reset { scope: all } remet lastModelCall à null', async () => {
+    const root = await ask(`@${RELEASE} quel déploiement récent ?`)
+    expect((await waitForNpcReply(root.id, 5000))?.text.startsWith(FAKE_CLAUDE_PREFIX)).toBe(true)
+    expect((await adminState()).lastModelCall).toMatchObject({ ok: true })
+    expect((await postJson(`${server.url}/api/admin/reset`, { scope: 'all' }, ADMIN)).status).toBe(200)
+    expect((await adminState()).lastModelCall).toBeNull()
   })
 
   it('POST /__mode change le mode à chaud ; mode inconnu : 400', async () => {

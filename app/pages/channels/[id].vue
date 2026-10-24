@@ -56,12 +56,19 @@ const directNpc = computed(() => {
   const direct = channel.value?.direct
   if (!direct) return undefined
   const npc = npcState.value?.npcs.find(candidate => candidate.id === direct.npcId)
-  // PNJ d'un autre scénario : nom tiré du nom de la conversation « participant ↔ PNJ »
-  return npc ?? { id: direct.npcId, name: channel.value!.name.split(' ↔ ').at(-1) ?? direct.npcId, role: '' }
+  // PNJ d'un autre scénario : nom enregistré avec la conversation
+  return npc ?? { id: direct.npcId, name: direct.npcName, role: '' }
 })
 
 // PNJ coupés par l'animateur (état connu seulement) : bandeau en conversation directe, avis après envoi
 const npcsInactive = computed(() => !!npcState.value && !npcState.value.enabled)
+// Conversation directe sans interlocuteur (état connu seulement) : PNJ coupés, ou PNJ absent du scénario
+// courant (conversation d'un autre scénario) ; bandeau et composeur désactivé
+const directUnavailable = computed(() => {
+  const direct = channel.value?.direct
+  if (!direct || !npcState.value) return false
+  return npcsInactive.value || !npcState.value.npcs.some(npc => npc.id === direct.npcId)
+})
 
 // Avis local « PNJ coupés » du dernier envoi : jamais envoyé ni stocké, effacé à l'envoi suivant sans avis,
 // à la navigation et dès que les PNJ sont réactivés
@@ -433,7 +440,7 @@ onBeforeUnmount(() => {
             >+{{ presenceOverflow }}</span>
           </div>
         </header>
-        <p v-if="directNpc && npcsInactive" class="direct-inactive" data-testid="direct-inactive" role="status">
+        <p v-if="directNpc && directUnavailable" class="direct-inactive" data-testid="direct-inactive" role="status">
           {{ directNpc.name }} n'est pas disponible pour le moment.
         </p>
 
@@ -441,9 +448,10 @@ onBeforeUnmount(() => {
         <p class="typing-indicator" data-testid="typing-indicator" aria-live="polite">{{ typingText }}</p>
         <p v-if="npcNotice" class="npc-notice" data-testid="npc-notice" role="status">{{ npcNotice }}</p>
         <Composer
-          :disabled="!displayName"
+          :disabled="!displayName || directUnavailable"
           :channel-name="channel?.name ?? ''"
           :placeholder="directNpc ? `Écrire à ${directNpc.name}` : undefined"
+          :disabled-placeholder="displayName && directNpc && directUnavailable ? `${directNpc.name} n'est pas disponible pour le moment` : undefined"
           :send="send"
           @typing="onTyping"
         />

@@ -182,14 +182,22 @@ export async function isNpcName(name: unknown): Promise<boolean> {
   return typeof name === 'string' && (await useNpcDispatcher()).findByName(name) !== undefined
 }
 
-/** Active les PNJ du scénario lancé (ceux de son npcScenarioId), s'il en a. */
-export async function activateScenarioNpcs(scenarioId: string): Promise<void> {
-  (await useNpcDispatcher()).activateScenario(npcScenarioIdFor(scenarioId))
+/**
+ * Sélectionne les PNJ du scénario lancé (ceux de son npcScenarioId), s'il en a, et les active ; avec
+ * enable faux (enableNpcs: false, demo-express), ils sont sélectionnés mais laissés coupés.
+ */
+export async function activateScenarioNpcs(scenarioId: string, enable = true): Promise<void> {
+  const current = await useNpcDispatcher()
+  if (current.activateScenario(npcScenarioIdFor(scenarioId)) && !enable) current.setEnabled(false)
 }
 
-/** « Tout réinitialiser » : PNJ coupés et ramenés au scénario du démarrage (le premier de /admin) */
+/**
+ * « Tout réinitialiser » : PNJ coupés et ramenés au scénario du démarrage (le premier de /admin), dernier
+ * appel au modèle oublié
+ */
 export async function resetNpcs(): Promise<void> {
   (await useNpcDispatcher()).resetScenario()
+  lastModelCall = null
 }
 
 export async function setNpcsEnabled(enabled: boolean): Promise<void> {
