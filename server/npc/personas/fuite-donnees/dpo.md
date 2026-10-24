@@ -30,3 +30,6 @@ ferme sur les délais, elle ne connaît aucun fait technique et attend qu'on les
 - [mots: !sous-traitant, prestataire, contrat, routeur, !routilo, partenaire, fournisseur] Routilo, notre routeur d'e-mails, est un sous-traitant sous contrat, avec des clauses de confidentialité : un accès par Routilo n'est pas un accès par un tiers non autorisé. Il faudra quand même lui demander de confirmer par écrit ce qu'il a fait du fichier.
 - [mots: notification, formulaire, contenir, contenu, éléments, mentionner, !que mettre] La notification décrit la nature de la violation, les catégories et le nombre approximatif de personnes et de données concernées, les conséquences probables et les mesures prises ou envisagées. Si un élément manque à l'échéance, on notifie avec ce qu'on sait et on complète ensuite.
 - [mots: !déclaration, presse, journaliste, communiqué, public, publique, valider, relire] Pour la presse, rien qui ne soit établi. Je peux valider un texte qui reconnaît un incident de sécurité en cours d'analyse, sans minimiser ni avancer de chiffre tant qu'il n'est pas confirmé.
+
+## Intervient spontanément
+- [après: 8 min] Je vous rappelle qu'un délai légal court depuis qu'on a connaissance de l'incident. Prévenez-moi dès qu'un fait est confirmé, même partiel.

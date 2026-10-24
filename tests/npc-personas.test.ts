@@ -1,7 +1,7 @@
 // 019 CA1, 021 CA3 : fiches de panne-checkout, parseur et répartition de l'information
 import { describe, expect, it } from 'vitest'
 import { PersonaParseError, parsePersona } from '../server/npc/persona-parser'
-import { loadPersonas, personaFiles, readPersonaSource } from './npc-helpers'
+import { loadPersonas, personaById, personaFiles, readPersonaSource } from './npc-helpers'
 
 const VALID = `---
 id: test
@@ -85,6 +85,7 @@ describe('parsePersona', () => {
       knows: ['Une information qui continue sur deux lignes.'],
       ignores: ['Le reste.'],
       onPreciseQuestion: [{ triggers: [{ text: 'rollback', specific: false }, { text: 'retour arrière', specific: false }], text: 'Le détail.' }],
+      spontaneous: [],
     })
   })
 
@@ -129,5 +130,72 @@ describe('parsePersona', () => {
   it('rejette une puce précise sans [mots: …]', () => {
     expect(() => parsePersona(VALID.replace('[mots: rollback, retour arrière] ', ''))).toThrow(/sans \[mots: …\]/)
     expect(() => parsePersona(VALID.replace('[mots: rollback, retour arrière]', '[mots: ]'))).toThrow(/sans mot déclencheur/)
+  })
+})
+
+describe('035 CA1 : section « Intervient spontanément »', () => {
+  const WITH_RULES = `${VALID}## Intervient spontanément
+- [mots: newsletter, black friday] La newsletter, on en est où ?
+- [après: 8 min] Ça fait un moment, quelqu'un a des nouvelles ?
+- [sans point: 6 min] J'ai besoin d'un point de situation.
+`
+
+  it('lit les trois formes de règle', () => {
+    expect(parsePersona(WITH_RULES).spontaneous).toEqual([
+      { trigger: { type: 'keywords', words: ['newsletter', 'black friday'] }, text: 'La newsletter, on en est où ?' },
+      { trigger: { type: 'after', minutes: 8 }, text: 'Ça fait un moment, quelqu\'un a des nouvelles ?' },
+      { trigger: { type: 'no-status', minutes: 6 }, text: 'J\'ai besoin d\'un point de situation.' },
+    ])
+  })
+
+  it('une fiche sans la section a spontaneous: []', () => {
+    expect(parsePersona(VALID).spontaneous).toEqual([])
+  })
+
+  it.each([
+    ['[après: abc] texte', /durée invalide « abc »/],
+    ['[après: 0 min] texte', /durée invalide/],
+    ['[après: 8] texte', /durée invalide/],
+    ['[sans point: dix min] texte', /durée invalide/],
+    ['[jamais: 8 min] texte', /condition inconnue « jamais »/],
+    ['[mots: ] texte', /sans mot/],
+    ['[après: 8 min]', /sans texte/],
+    ['texte sans condition', /sans condition/],
+  ])('règle invalide %s : fiche invalide, message explicite', (rule, message) => {
+    const source = `${VALID}## Intervient spontanément\n- ${rule}\n`
+    expect(() => parsePersona(source, 'rule.md')).toThrow(PersonaParseError)
+    expect(() => parsePersona(source, 'rule.md')).toThrow(message)
+    expect(() => parsePersona(source, 'rule.md')).toThrow(/Fiche PNJ rule\.md : ligne \d+ :/)
+  })
+
+  it('fiches livrées valides ; ≥ 5 fiches de panne-checkout et ≥ 3 de fuite-donnees ont une règle, le Release Manager aucune', () => {
+    const withRules = (scenario: string) => loadPersonas(scenario).filter(persona => persona.spontaneous.length > 0)
+    expect(withRules('panne-checkout').length).toBeGreaterThanOrEqual(5)
+    expect(withRules('fuite-donnees').length).toBeGreaterThanOrEqual(3)
+    expect(personaById('release-manager').spontaneous).toEqual([])
+    for (const persona of [...loadPersonas('panne-checkout'), ...loadPersonas('fuite-donnees')]) {
+      expect(persona.spontaneous.length).toBeLessThanOrEqual(3)
+    }
+  })
+})
+
+describe('035 CA2 : une intervention spontanée ne fuit aucune information de « Sur question précise »', () => {
+  const normalize = (text: string) => text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+  it.each(['panne-checkout', 'fuite-donnees'])('%s', (scenario) => {
+    for (const persona of loadPersonas(scenario)) {
+      for (const rule of persona.spontaneous) {
+        const text = normalize(rule.text)
+        // Aucune version, aucun nombre de la fiche, aucun déclencheur spécifique
+        expect(text).not.toMatch(/v2\.4[01]\.\d/)
+        expect(rule.text).not.toMatch(/\d/)
+        for (const entry of persona.onPreciseQuestion) {
+          for (const number of entry.text.match(/\d+(?:[.,]\d+)?/g) ?? []) expect(rule.text).not.toContain(number)
+          for (const trigger of entry.triggers.filter(candidate => candidate.specific)) {
+            expect(text, `${persona.id} : « ${trigger.text} »`).not.toContain(normalize(trigger.text))
+          }
+        }
+      }
+    }
   })
 })

@@ -6,6 +6,8 @@ export function createKeywordsResponder(): NpcResponder {
   return {
     respond(request: NpcRequest): Promise<string> {
       const { persona, excerpts } = request
+      // Intervention spontanée : le message de base de la règle, tel quel
+      if (request.spontaneous) return Promise.resolve(request.spontaneous.base)
       if (excerpts.length === 0) return Promise.resolve(persona.deflection)
       return Promise.resolve([persona.tone, ...excerpts.map(excerpt => excerpt.text)].join(' '))
     },

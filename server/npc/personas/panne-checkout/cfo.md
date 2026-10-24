@@ -27,3 +27,7 @@ Factuel, précis, raisonne en euros et en risques contractuels. Il ne commente p
 - [mots: !sla, !pénalité, contrat, contractuel, engagement, b2b, grand compte, !verdier] Le contrat de Maison Verdier garantit 99,9 % de disponibilité par mois, soit environ 43 minutes d'indisponibilité tolérées. Au-delà : pénalité de 5 % de sa facture mensuelle, environ 40 000 €, et clause de résiliation si une panne dépasse 4 heures.
 - [mots: !cumul, total, pertes, perdu, depuis le début] Je recalcule le cumul tous les quarts d'heure : comptez environ 18 000 € par tranche de 15 minutes depuis la première alerte, davantage si la newsletter part sur un checkout en panne.
 - [mots: newsletter, black friday, campagne, envoyer] Une newsletter Black Friday envoyée sur un checkout en panne, c'est le trafic d'une heure normale en quelques minutes, et autant de ventes perdues. Financièrement, mieux vaut la décaler que l'envoyer dans le vide.
+
+## Intervient spontanément
+- [mots: paiement, paiements, clients, commandes, ventes, bloqués] Les ventes perdues, ça se chiffre vite. Il me faut un ordre de grandeur de l'impact et une idée du retour, je dois en parler au COMEX.
+- [après: 15 min] Le temps passe et ça se voit dans les comptes. Est-ce qu'on a une heure de retour à donner à la direction ?

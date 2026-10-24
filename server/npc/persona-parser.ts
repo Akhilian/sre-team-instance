@@ -18,7 +18,11 @@
 // - [mots: rollback, retour arrière, !v2.40.3] information livrée seulement si la question contient au
 //   moins 2 de ces déclencheurs, ou un déclencheur spécifique (préfixé de !) ; une entrée qui n'a ni
 //   déclencheur spécifique ni au moins 2 déclencheurs est refusée
-import type { NpcPersona, NpcPreciseEntry } from '../../shared/types/npc'
+// ## Intervient spontanément   (facultative)
+// - [mots: newsletter, black friday] texte : un de ces mots apparaît dans un message humain du canal d'incident
+// - [après: 8 min] texte : 8 minutes écoulées depuis le lancement du scénario
+// - [sans point: 6 min] texte : aucun point de situation dans le canal depuis 6 minutes
+import type { NpcPersona, NpcPreciseEntry, NpcSpontaneousRule } from '../../shared/types/npc'
 
 export class PersonaParseError extends Error {
   /** Ligne fautive (à partir de 1, dans le texte d'origine), si l'erreur porte sur une ligne précise */
@@ -39,10 +43,16 @@ const SECTIONS = {
   'sait': 'knows',
   'ignore': 'ignores',
   'sur question précise': 'precise',
+  'intervient spontanément': 'spontaneous',
+  'intervient spontanement': 'spontaneous',
 } as const
 type SectionKey = typeof SECTIONS[keyof typeof SECTIONS]
 
 const PRECISE_RE = /^\[mots\s*:\s*([^\]]*)\]\s*(.*)$/i
+const SPONTANEOUS_RE = /^\[\s*([^\]:]*?)\s*:\s*([^\]]*)\]\s*(.*)$/
+const MINUTES_RE = /^(\d{1,3})\s*min(?:utes?)?$/i
+/** Durée maximale d'une règle spontanée (minutes) : au-delà, la règle ne se déclencherait jamais pendant un atelier */
+const SPONTANEOUS_MAX_MINUTES = 180
 
 function parseFrontMatter(lines: string[], source: string): { fields: Map<string, string>, bodyStart: number } {
   let start = 0
@@ -78,6 +88,33 @@ function parsePrecise(text: string, source: string, line: number): NpcPreciseEnt
   return { triggers, text: entry }
 }
 
+/** line : ligne de début de la puce (à partir de 1), reprise dans les erreurs */
+function parseSpontaneous(text: string, source: string, line: number): NpcSpontaneousRule {
+  const match = SPONTANEOUS_RE.exec(text)
+  if (!match) {
+    throw new PersonaParseError(source, `règle « Intervient spontanément » sans condition ([mots: …], [après: N min] ou [sans point: N min]) : « ${text} »`, line)
+  }
+  const kind = match[1]!.toLowerCase()
+  const condition = match[2]!.trim()
+  const message = match[3]!.trim()
+  if (message === '') throw new PersonaParseError(source, `règle « Intervient spontanément » sans texte : « ${text} »`, line)
+
+  if (kind === 'mots') {
+    const words = condition.split(',').map(word => word.trim()).filter(word => word !== '')
+    if (words.length === 0) throw new PersonaParseError(source, `règle « Intervient spontanément » sans mot : « ${text} »`, line)
+    return { trigger: { type: 'keywords', words }, text: message }
+  }
+  if (kind === 'après' || kind === 'apres' || kind === 'sans point') {
+    const minutes = MINUTES_RE.exec(condition)
+    const value = minutes ? Number(minutes[1]) : 0
+    if (value < 1 || value > SPONTANEOUS_MAX_MINUTES) {
+      throw new PersonaParseError(source, `règle « Intervient spontanément » : durée invalide « ${condition} » (attendu un nombre entier de minutes entre 1 et ${SPONTANEOUS_MAX_MINUTES}, ex. 8 min) : « ${text} »`, line)
+    }
+    return { trigger: { type: kind === 'sans point' ? 'no-status' : 'after', minutes: value }, text: message }
+  }
+  throw new PersonaParseError(source, `règle « Intervient spontanément » : condition inconnue « ${match[1]} » (attendu mots, après ou sans point) : « ${text} »`, line)
+}
+
 /**
  * Lit une fiche ; lève PersonaParseError (message explicite, préfixé de source) si un champ obligatoire
  * manque ou si une section obligatoire est vide. source sert seulement aux messages d'erreur.
@@ -92,9 +129,10 @@ export function parsePersona(markdown: string, source = 'sans nom'): NpcPersona 
   }
   const head = Object.fromEntries(REQUIRED_FIELDS.map(field => [field, value(field)])) as Record<RequiredField, string>
 
-  const bullets: Record<SectionKey, string[]> = { knows: [], ignores: [], precise: [] }
-  /** Ligne de début (à partir de 1) de chaque puce « Sur question précise » */
+  const bullets: Record<SectionKey, string[]> = { knows: [], ignores: [], precise: [], spontaneous: [] }
+  /** Ligne de début (à partir de 1) de chaque puce « Sur question précise » et « Intervient spontanément » */
   const preciseLines: number[] = []
+  const spontaneousLines: number[] = []
   let section: SectionKey | null = null
   for (let index = bodyStart; index < lines.length; index++) {
     const line = lines[index]!
@@ -109,6 +147,7 @@ export function parsePersona(markdown: string, source = 'sans nom'): NpcPersona 
     if (bullet) {
       list.push(bullet[1]!.trim())
       if (section === 'precise') preciseLines.push(index + 1)
+      if (section === 'spontaneous') spontaneousLines.push(index + 1)
     }
     // Ligne indentée : suite de la puce précédente
     else if (/^\s+\S/.test(line) && list.length > 0) list[list.length - 1] += ` ${line.trim()}`
@@ -129,5 +168,6 @@ export function parsePersona(markdown: string, source = 'sans nom'): NpcPersona 
     knows: bullets.knows,
     ignores: bullets.ignores,
     onPreciseQuestion: bullets.precise.map((text, index) => parsePrecise(text, source, preciseLines[index]!)),
+    spontaneous: bullets.spontaneous.map((text, index) => parseSpontaneous(text, source, spontaneousLines[index]!)),
   }
 }

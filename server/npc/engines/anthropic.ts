@@ -10,13 +10,14 @@ import { NPC_REPLY_MAX_LENGTH } from '../../../shared/utils/limits'
 import type { Env } from '../../utils/env'
 import { truncateText } from '../../utils/chat-store'
 import { buildNpcPrompt, type NpcPromptMessage } from '../prompt'
+import { cleanModelOutput } from '../service-tone'
 import { createKeywordsResponder } from './keywords'
 import { timeoutFromEnv } from './openai-compatible'
 
 export const ANTHROPIC_DEFAULT_BASE_URL = 'https://api.anthropic.com'
 export const ANTHROPIC_DEFAULT_MODEL = 'claude-haiku-5-5'
 const ANTHROPIC_VERSION = '2023-06-01'
-/** La réflexion (active par défaut) compte dans max_tokens : marge pour elle et 2 à 4 phrases de réponse */
+/** La réflexion (active par défaut) compte dans max_tokens : marge pour elle et 1 à 3 phrases de réponse */
 const MAX_TOKENS = 1024
 /** Réflexion courte : la fiche suffit à répondre */
 const OUTPUT_CONFIG = { effort: 'low' } as const
@@ -124,7 +125,7 @@ export function createAnthropicResponder(options: AnthropicOptions): NpcResponde
     }
     const stopReason = (body as { stop_reason?: unknown } | null)?.stop_reason
     if (stopReason === 'refusal') throw new ModelUnavailable('refus')
-    const text = textOf(body)
+    const text = cleanModelOutput(textOf(body), { personaName: request.persona.name, spontaneous: request.spontaneous !== undefined, base: request.spontaneous?.base })
     if (text === '') throw new ModelUnavailable(stopReason === 'max_tokens' ? 'max_tokens sans texte' : 'réponse vide')
     return truncateText(text, NPC_REPLY_MAX_LENGTH)
   }

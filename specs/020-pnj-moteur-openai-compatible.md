@@ -65,3 +65,33 @@ grep -n 'NPC_LLM' render.yaml README.md
 - `scripts/fake-openai.mjs` (port configurable par argument ou par `PORT`) : la même logique que le faux serveur de `tests/http` peut être partagée. Ajouter `NPC_LLM_*` et `NPC_LLM_TIMEOUT_MS` à la liste `CLEARED` de `tests/http/server.ts`, et capter stderr en plus de stdout pour les vérifications de journaux.
 - Plafonds : clé `channelId` et `channelId:personaId` dans `takeRateSlot`. Ajouter `NPC_REPLIES_GLOBAL_PER_MINUTE = 60` à `shared/utils/limits.ts`. Exposer `cancelPending()` sur `NpcDispatcher`, avec un helper dans `server/utils/npc.ts`.
 - La CSP n'est pas concernée : l'appel au modèle part du serveur.
+
+## Évolution 2026-10-24 — ton de collègue et lecture du canal d'incident
+
+Retour d'essai avec Ollama (`qwen2.5:1.5b`) : réponses au ton de service client (« Je suis désolé pour les perturbations ») et PNJ qui ne voient que 10 messages. Vaut pour tous les moteurs à modèle (`openai-compatible` et `anthropic`, même `buildNpcPrompt`) ; `keywords` inchangé. Implémentée dans le lot de `specs/035-pnj-interventions-spontanees.md`.
+
+### Périmètre
+- **Règles du prompt réécrites** (remplacent « 2 à 4 phrases ») : tu es un collègue qui écrit dans le canal d'incident ; 1 à 3 phrases courtes et directes ; pas de formule de service client, pas d'excuses (« Je suis désolé pour les perturbations »), pas de « Comment puis-je vous aider », pas de remerciement ni de salutation systématique ; ton et priorités de ta fonction ; émotion plausible selon la situation (stress, agacement, inquiétude). Les règles existantes (information précise seulement si visée, rien d'inventé, anti-injection, orienter si on ne sait pas) restent.
+- **Few-shot court** dans le `system` : 3 répliques d'exemple de ton, génériques, sans fait du scénario (ex. « Ok, je regarde côté facturation et je reviens vers vous dans 5 min. », « Ça fait 20 minutes, il me faut un point clair : qui pilote ? », « Aucune idée, c'est pas mon périmètre. Voyez avec l'équipe release. »), annoncées comme « style seulement ».
+- **Filtre de sortie déterministe** `stripServiceTone(text)` (module pur, appliqué par les deux adaptateurs à modèle avant la troncature) : retire en tête une ou plusieurs phrases d'excuse, de remerciement ou de salutation de service client, et en fin de texte une phrase « N'hésitez pas… » / « Comment puis-je vous aider ? ». Liste de motifs (minuscules, accents tolérés) : `je suis (vraiment |sincèrement )?désolé(e)?`, `nous sommes désolés`, `(toutes )?(mes|nos) excuses`, `je comprends (votre|ta) (frustration|inquiétude|préoccupation)`, `merci (pour|de) (votre|ton) (message|question|patience)`, `bonjour( à tous| tout le monde)?`, `comment puis-je (vous|t')aider`, `n'hésitez pas`. Texte vide après filtrage : traité comme un `content` vide (repli `keywords` existant).
+- **Contexte de lecture du canal** : le PNJ lit la conversation, pas seulement 10 messages.
+  - `NpcRequest` gagne `channelContext: Message[]` : les `NPC_CHANNEL_CONTEXT_MAX = 30` derniers messages du canal (racines et réponses, tous auteurs, annonces et alertes comprises), ordre chronologique, hors messages du fil courant et hors question. En conversation directe, c'est le canal d'incident du scénario (`incident-en-cours`) qui est lu.
+  - Dans le `system`, section « Conversation récente du canal (lecture seule) », une ligne par message : `[HH:MM] Auteur : texte` (heure Europe/Paris, messages du PNJ marqués `(toi)`, alertes `[alerte]`), chaque texte coupé à 280 caractères, la section entière bornée à 6 000 caractères en retirant les plus anciens.
+  - Le fil courant reste en messages de chat (`assistant` / `user` préfixés de l'auteur, au plus 10), puis la question.
+
+### Critères d'acceptation
+- [x] CA8 — Vitest (`buildNpcPrompt`) : le `system` contient « canal d'incident », « 1 à 3 phrases », une règle interdisant les excuses et « Comment puis-je vous aider », et le bloc d'exemples ; il ne contient plus « 2 à 4 phrases ».
+- [x] CA9 — Vitest (`stripServiceTone`) : au moins 8 cas, dont « Je suis désolé pour les perturbations. On regarde le pool. » → « On regarde le pool. », « Bonjour à tous ! Merci pour votre message. Le coût est de 1 200 €/min. » → « Le coût est de 1 200 €/min. », une fin « N'hésitez pas si besoin. » retirée, un texte sans motif inchangé, « désolé » au milieu d'une phrase utile conservé, et un texte entièrement formule → vide. Vitest (adaptateurs `openai-compatible` et `anthropic`, `fetch` simulé) : une réponse « Je suis désolé pour les perturbations. X. » est renvoyée « X. » ; une réponse réduite à une excuse donne la réponse `keywords`.
+- [x] CA10 — Vitest (contexte) : avec un canal de 45 messages hors fil (racines et réponses d'autres fils) plus un fil de 3 messages où arrive la mention, le `system` contient les 30 derniers des 45, au format `[HH:MM] Auteur : …`, et aucun des 15 plus anciens ; le fil est en messages de chat ; avec 30 messages de 600 caractères, la longueur totale du prompt (somme des `content`) reste ≤ 12 000 caractères. En conversation directe, le contexte est celui de `incident-en-cours`.
+- [x] CA11 — `npm run test:http` (faux serveur OpenAI-compatible) : la requête reçue pour une mention en fil contient, dans le `system`, un message racine du canal posté avant le fil ; avec le faux serveur réglé pour préfixer « Je suis désolé pour les perturbations. », le message publié ne contient pas « désolé ».
+
+### Vérification
+```bash
+npm test -- prompt service-tone npc-openai npc-anthropic
+npm run build && npm run test:http
+```
+
+### Notes d'implémentation
+- `server/npc/service-tone.ts` (pur) ; appel dans `openai-compatible.ts` et `anthropic.ts` après le retrait de `<think>`.
+- `server/utils/npc.ts` : fournir `channelContext` au dispatcher (nouvelle dépendance `channelContext(message)`), heure formatée comme `shared/utils/timeline.ts`.
+- `scripts/fake-openai.mjs` : `state.apologize` (et `FAKE_OPENAI_APOLOGY=1` en ligne de commande) préfixe la réponse d'une excuse.

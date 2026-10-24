@@ -140,7 +140,8 @@ fiche dont l'id est déjà porté par une fiche placée avant elle dans l'ordre 
   par les moteurs à modèle et obligatoire, `deflection` = réponse quand il n'a rien d'utile), puis les sections `## Sait`, `## Ignore`
   et `## Sur question précise` (puces `- [mots: rollback, revenir, !v2.40.3] texte`, livrées seulement si
   la question contient au moins 2 de ces déclencheurs, ou un déclencheur spécifique préfixé de `!` ; une
-  puce sans déclencheur spécifique et avec un seul déclencheur est refusée). Par défaut, les fiches sont embarquées au build : relancer `npm run build`
+  puce sans déclencheur spécifique et avec un seul déclencheur est refusée) ; section facultative
+  `## Intervient spontanément` (voir « Interventions spontanées »). Par défaut, les fiches sont embarquées au build : relancer `npm run build`
   après une modification. Une fiche invalide est écartée avec une erreur dans les logs. Pour les retoucher
   sans rebuild, voir « Fiches dans un dossier ».
 - **Moteur** (`NPC_ENGINE`, défaut `keywords`) : `keywords` répond sans modèle, de façon déterministe, par
@@ -168,6 +169,22 @@ fiche dont l'id est déjà porté par une fiche placée avant elle dans l'ordre 
   ni envoyé ni stocké) ; une conversation directe affiche un bandeau « <nom> n'est pas disponible » et désactive
   le composeur (aussi quand son PNJ n'appartient pas au scénario courant), et
   la barre latérale grise les conversations existantes. Tout disparaît dès que les PNJ sont réactivés.
+- **Interventions spontanées** : pendant un scénario, un PNJ peut intervenir sans être sollicité, en
+  message racine du canal d'incident (pression, inquiétude, demande de point, jamais une information de
+  `Sur question précise`). Règles de la section `## Intervient spontanément` de la fiche, une par puce :
+  `- [mots: newsletter, black friday] texte` (un des mots dans un message humain du canal),
+  `- [après: 8 min] texte` (depuis le lancement), `- [sans point: 6 min] texte` (aucun message humain
+  contenant point, statut, status, update, situation, eta ou mise à jour depuis 6 min). Une règle
+  invalide rend la fiche invalide. Garde-fous : une fois par règle et par lancement, 4 min entre deux
+  interventions d'un même PNJ, 2 par minute au total, jamais déclenchée par un PNJ, une annonce, une
+  alerte ni une conversation directe, ni par un message qui mentionne déjà ce PNJ. Avec `keywords` le
+  texte de la règle est publié tel quel ; avec un modèle il est reformulé (texte de base en cas d'échec).
+  Interrupteur « Interventions spontanées » dans `/admin` (actif par défaut, `POST /api/admin/npcs
+  {spontaneous}`, remis à actif par « Tout réinitialiser »). `NPC_SPONTANEOUS_MINUTE_MS` (facultative,
+  défaut 60000) fixe la durée d'une « minute » des règles et des délais, pour les tests.
+- **Ton et lecture du canal** (moteurs à modèle) : les PNJ répondent en collègue (1 à 3 phrases, sans
+  formule de service client ; un filtre de sortie retire excuses, remerciements et salutations), connaissent
+  l'auteur de la question et lisent les 30 derniers messages du canal d'incident (y compris en conversation directe).
 - **Délai** : `NPC_REPLY_DELAY_MS` fixe le délai avant réponse en millisecondes (défaut : tiré entre 1 et 2 s).
 - **Reset** : « Effacer les messages » (`reset {scope:"messages"}`) annule les réponses de PNJ en attente, sans couper les PNJ,
   et supprime les conversations directes. « Tout réinitialiser » remet aussi `lastModelCall` à `null`.
@@ -198,7 +215,7 @@ Sur Render, le système de fichiers du service est effacé à chaque déploiemen
 
 Le moteur `openai-compatible` appelle `POST {NPC_LLM_BASE_URL}/chat/completions` depuis le serveur
 (jamais depuis le navigateur), avec un prompt construit à partir de la fiche du PNJ, des extraits retenus
-et de l'historique du fil. Réponses courtes (2 à 4 phrases, tronquées à 600 caractères).
+et de l'historique du fil. Réponses courtes (1 à 3 phrases, tronquées à 600 caractères).
 
 | Variable | Rôle |
 | --- | --- |

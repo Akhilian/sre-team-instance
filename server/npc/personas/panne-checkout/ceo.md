@@ -29,3 +29,7 @@ réguliers, un seul interlocuteur et des décisions argumentées.
 - [mots: newsletter, décaler, reporter, report, envoi, campagne, !heure limite] On peut décaler la newsletter sans frais jusqu'à 14h15. Après, l'agence facture le report et on perd le créneau négocié avec nos partenaires. Je tranche dès que vous me donnez une heure de retour crédible.
 - [mots: décision, décider, arbitrage, autorisation, !feu vert, valider, accord, retour arrière] Vous avez mon feu vert pour toute action qui rétablit le paiement rapidement, retour arrière compris, à condition de me dire ce qu'on risque.
 - [mots: point, !prochain point, fréquence, comex, situation] Prochain point attendu par le COMEX dans 30 minutes. Sans nouvelles d'ici là, j'appelle moi-même le CTO.
+
+## Intervient spontanément
+- [sans point: 6 min] Ça fait un moment que je n'ai rien vu passer ici. Il me faut un point de situation, même court : qui pilote, et où on en est ?
+- [après: 12 min] Je n'aime pas ce silence. Si je n'ai pas très vite un cap clair, je vais devoir monter d'un cran côté direction.

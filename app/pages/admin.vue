@@ -366,6 +366,27 @@ function setNpcsEnabled(event: Event) {
   })
 }
 
+/** Interrupteur « Interventions spontanées » : l'état affiché est celui renvoyé par le serveur */
+function setSpontaneous(event: Event) {
+  const input = event.target as HTMLInputElement
+  const spontaneous = input.checked
+  return run(async () => {
+    try {
+      npcState.value = await $fetch<NpcAdminState>('/api/admin/npcs', {
+        method: 'POST',
+        headers: { 'x-facilitator-code': code.value },
+        body: { spontaneous },
+      })
+    }
+    catch (error) {
+      await loadNpcs()
+      input.checked = npcState.value?.spontaneous ?? !spontaneous
+      throw error
+    }
+    return spontaneous ? 'Interventions spontanées activées.' : 'Interventions spontanées coupées.'
+  })
+}
+
 /** Lancement refusé (409 messages-exist) en attente de la décision de l'animateur */
 const pendingStart = ref<{ scenario: ScenarioSummary, messageCount: number } | null>(null)
 /** Case « Couper aussi les PNJ » du bouton « Arrêter » */
@@ -701,6 +722,16 @@ function reset(scope: ResetScope) {
               @change="setNpcsEnabled"
             >
             PNJ actifs
+          </label>
+          <label class="switch">
+            <input
+              type="checkbox"
+              data-testid="npc-spontaneous-toggle"
+              :checked="npcState.spontaneous"
+              :disabled="busy || code === ''"
+              @change="setSpontaneous"
+            >
+            Interventions spontanées
           </label>
           <ul class="npcs" data-testid="npc-list">
             <li v-for="npc in npcState.npcs" :key="npc.id"><strong>{{ npc.name }}</strong> · {{ npc.role }}</li>

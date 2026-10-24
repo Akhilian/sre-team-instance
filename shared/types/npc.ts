@@ -20,6 +20,22 @@ export interface NpcPreciseEntry {
   text: string
 }
 
+/** Condition de déclenchement d'une intervention spontanée (section « Intervient spontanément ») */
+export type NpcSpontaneousTrigger =
+  /** Un des mots apparaît dans un message humain du canal d'incident */
+  | { type: 'keywords', words: string[] }
+  /** Minutes écoulées depuis le lancement du scénario */
+  | { type: 'after', minutes: number }
+  /** Minutes sans message humain contenant un mot de point de situation (depuis le lancement ou le dernier tel message) */
+  | { type: 'no-status', minutes: number }
+
+/** Règle d'intervention spontanée : publiée au plus une fois par lancement de scénario */
+export interface NpcSpontaneousRule {
+  trigger: NpcSpontaneousTrigger
+  /** Message de base : publié tel quel (keywords) ou reformulé par le modèle */
+  text: string
+}
+
 /** Fiche d'un PNJ (server/npc/personas/<scénario>/<id>.md) */
 export interface NpcPersona {
   id: string
@@ -39,6 +55,8 @@ export interface NpcPersona {
   ignores: string[]
   /** Ce qu'il ne livre qu'à une question précise (section « Sur question précise ») */
   onPreciseQuestion: NpcPreciseEntry[]
+  /** Interventions spontanées (section « Intervient spontanément ») ; vide si la section est absente */
+  spontaneous: NpcSpontaneousRule[]
 }
 
 /** Extrait de la fiche retenu pour répondre à une question */
@@ -55,10 +73,19 @@ export interface NpcRequest {
   persona: NpcPersona
   /** Extraits pertinents, du plus au moins pertinent ; vide si rien ne correspond */
   excerpts: KnowledgeExcerpt[]
-  /** Messages récents du fil ou du canal (au plus 10), du plus ancien au plus récent, question exclue */
+  /** Messages du fil courant (au plus 10), du plus ancien au plus récent, question exclue */
   history: Message[]
-  /** Texte du message qui mentionne le PNJ */
+  /** Texte du message qui mentionne le PNJ (vide pour une intervention spontanée) */
   question: string
+  /** Auteur du message qui sollicite le PNJ ; renseigné par le dispatcher pour une réponse, absent pour une intervention spontanée */
+  questionAuthor?: string
+  /**
+   * Derniers messages du canal d'incident (NPC_CHANNEL_CONTEXT_MAX au plus, racines et réponses, tous
+   * auteurs), ordre chronologique, hors fil courant et hors question ; absent = vide
+   */
+  channelContext?: Message[]
+  /** Intervention spontanée : reformuler ce message de base, sans ajouter d'information */
+  spontaneous?: { base: string }
 }
 
 /** Sélection des extraits de la fiche pertinents pour une question (asynchrone : embeddings ou index distant possibles) */
@@ -104,6 +131,8 @@ export interface NpcAdminState extends NpcsResponse {
   lastModelCall: LastModelCall | null
   /** Scénario dont les PNJ sont proposés */
   scenarioId: string
+  /** Interrupteur « Interventions spontanées » (actif par défaut) */
+  spontaneous: boolean
 }
 
 /** Source des fiches : dossier NPC_PERSONAS_DIR ou fiches embarquées au build */

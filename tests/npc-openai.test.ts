@@ -67,7 +67,8 @@ describe('buildNpcPrompt (CA1)', () => {
     expect(system).toContain(RELEASE.ignores[0]!)
     expect(system).toContain('v2.41.0')
     expect(system).toContain('français')
-    expect(system).toContain('2 à 4 phrases')
+    expect(system).toContain('1 à 3 phrases')
+    expect(system).not.toContain('2 à 4 phrases')
   })
 
   it('banalité : aucune entrée précise non retenue, ni v2.40.3', async () => {

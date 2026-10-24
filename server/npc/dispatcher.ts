@@ -9,6 +9,7 @@ import type { Message } from '../../shared/types/chat'
 import type { KnowledgeRetriever, NpcPersona, NpcResponder, NpcSummary } from '../../shared/types/npc'
 import { namedPersons, splitMentions } from '../../shared/utils/mentions'
 import {
+  NPC_CHANNEL_CONTEXT_MAX,
   NPC_DIRECT_REPLIES_GLOBAL_PER_MINUTE,
   NPC_MENTIONS_PER_MESSAGE_MAX,
   NPC_REPLIES_GLOBAL_PER_MINUTE,
@@ -57,6 +58,11 @@ export interface NpcDispatcherDeps<Handle = unknown> {
   delayMs?: () => number
   /** Messages récents du fil ou du canal, question comprise ou non (elle est retirée) */
   history?: (message: Message) => Message[]
+  /**
+   * Messages du canal lu par le PNJ (en conversation directe : le canal d'incident), du plus ancien au
+   * plus récent, question et fil courant compris ou non (ils sont retirés) ; les NPC_CHANNEL_CONTEXT_MAX derniers sont transmis
+   */
+  channelContext?: (message: Message) => Message[]
   /** Échecs du moteur ou de la publication (défaut : une ligne sur console.error, sans trace de pile) */
   onError?: (error: unknown) => void
   /** Délai maximal du moteur (défaut NPC_RESPOND_TIMEOUT_MS) */
@@ -85,6 +91,13 @@ export interface NpcDispatcher {
   resetScenario: () => void
   /** PNJ du scénario courant, dans l'ordre des fiches */
   list: () => NpcSummary[]
+  /** Fiches des PNJ actifs (activés, scénario courant), dans l'ordre des fiches ; vide s'ils sont coupés */
+  activePersonas: () => NpcPersona[]
+  /**
+   * Réserve une place dans le plafond global d'appels au modèle (NPC_REPLIES_GLOBAL_PER_MINUTE, canaux
+   * d'équipe) pour une publication hors réponse, comme une intervention spontanée ; faux s'il est atteint
+   */
+  takeGlobalSlot: () => boolean
   /**
    * Remplace les fiches (rechargement à chaud) : l'état activé ou coupé est conservé, ainsi que le
    * scénario courant s'il a encore des fiches (sinon celui de la première fiche). Les réponses déjà
@@ -270,11 +283,27 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
     })
   }
 
+  /** Contexte de lecture : derniers messages du canal, hors fil courant (celui de l'historique transmis) et hors question */
+  function readChannel(message: Message, history: readonly Message[]): Message[] {
+    const rootId = message.parentId ?? message.id
+    const inHistory = new Set(history.map(candidate => candidate.id))
+    return (deps.channelContext?.(message) ?? [])
+      .filter(candidate => candidate.id !== message.id && candidate.id !== rootId && candidate.parentId !== rootId && !inHistory.has(candidate.id))
+      .slice(-NPC_CHANNEL_CONTEXT_MAX)
+  }
+
   async function reply(persona: NpcPersona, message: Message, parentId: string | undefined, history: Message[]): Promise<NpcReply> {
     // Récupération et formulation sous le même délai maximal (retriever ou moteur distants possibles)
     const text = await withTimeout(
       deps.retriever.retrieve(persona, message.text)
-        .then(excerpts => deps.responder.respond({ persona, excerpts, history, question: message.text })),
+        .then(excerpts => deps.responder.respond({
+          persona,
+          excerpts,
+          history,
+          question: message.text,
+          questionAuthor: message.author,
+          channelContext: readChannel(message, history),
+        })),
       deps.respondTimeoutMs ?? NPC_RESPOND_TIMEOUT_MS,
     )
     const result: NpcReply = { persona, channelId: message.channelId, text }
@@ -306,6 +335,16 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
     },
 
     list: () => personas.filter(persona => persona.scenarioId === currentScenarioId).map(summary),
+
+    activePersonas: active,
+
+    takeGlobalSlot() {
+      const now = deps.now()
+      allReplies = allReplies.filter(at => at > now - RATE_WINDOW_MS)
+      if (allReplies.length >= NPC_REPLIES_GLOBAL_PER_MINUTE) return false
+      allReplies.push(now)
+      return true
+    },
 
     replacePersonas(next) {
       personas = next

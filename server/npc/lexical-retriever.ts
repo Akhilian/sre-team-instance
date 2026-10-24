@@ -39,7 +39,7 @@ export function normalizeText(text: string): string {
 }
 
 /** Tous les mots, mots vides compris : lettres, chiffres et points internes (v2.41.0 reste un mot) */
-function allWords(text: string): string[] {
+export function allWords(text: string): string[] {
   return normalizeText(text).match(/[a-z0-9]+(?:\.[a-z0-9]+)*/g) ?? []
 }
 

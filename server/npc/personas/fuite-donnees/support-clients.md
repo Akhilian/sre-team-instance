@@ -28,3 +28,6 @@ elle veut surtout un message validé à leur donner.
 - [mots: !contenu du sms, !dans le sms, sms, mentionne, exactement, texte, lien, site, cite, contient, contiennent, information, informations, !capture, détail, précisément] Les captures que les clients nous envoient montrent un SMS qui cite leur prénom et leur date de naissance, pour paraître crédible, avec un lien vers un faux site de remboursement aux couleurs de notre boutique. Aucun client ne nous dit y avoir saisi sa carte pour l'instant.
 - [mots: répondre, réponse, !macro, message, dire, consigne, conseil] Pour l'instant, on répond : « nous vérifions, ne cliquez pas sur le lien ». Il me faut une réponse validée : leurs données sont-elles concernées, et que doivent-ils faire ?
 - [mots: combien, !signalements, nombre, plaintes, appels, tickets, profil] Les signalements arrivent par le chat et par téléphone, de toute la France, de clients récents comme de clients anciens. Le nombre augmente à chaque point : je vous donne le décompte quand vous voulez.
+
+## Intervient spontanément
+- [après: 5 min] Les appels continuent d'arriver et mon équipe attend une consigne claire. On leur dit quoi pour l'instant ?

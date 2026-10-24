@@ -8,12 +8,13 @@ import type { Env } from '../../utils/env'
 import { truncateText } from '../../utils/chat-store'
 import { NPC_RESPOND_TIMEOUT_MS } from '../dispatcher'
 import { buildNpcPrompt } from '../prompt'
+import { cleanModelOutput } from '../service-tone'
 import { createKeywordsResponder } from './keywords'
 
 /** Délai maximal d'un appel au modèle, ; le délai du dispatcher s'y adapte pour laisser place au repli */
 export const NPC_LLM_TIMEOUT_DEFAULT_MS = 8000
 const NPC_LLM_TIMEOUT_MAX_MS = 60_000
-/** Réponses courtes et peu créatives : 2 à 4 phrases fidèles à la fiche */
+/** Réponses courtes et peu créatives : 1 à 3 phrases fidèles à la fiche */
 const TEMPERATURE = 0.3
 const MAX_TOKENS = 300
 
@@ -40,12 +41,12 @@ function stripThinking(text: string): string {
   return text.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').trim()
 }
 
-function contentOf(body: unknown): string {
+function contentOf(body: unknown, request: NpcRequest): string {
   const choices = (body as { choices?: unknown } | null)?.choices
   const content = Array.isArray(choices)
     ? (choices[0] as { message?: { content?: unknown } } | undefined)?.message?.content
     : undefined
-  return typeof content === 'string' ? stripThinking(content) : ''
+  return typeof content === 'string' ? cleanModelOutput(stripThinking(content), { personaName: request.persona.name, spontaneous: request.spontaneous !== undefined, base: request.spontaneous?.base }) : ''
 }
 
 export function createOpenAiCompatibleResponder(options: OpenAiCompatibleOptions): NpcResponder {
@@ -86,7 +87,7 @@ export function createOpenAiCompatibleResponder(options: OpenAiCompatibleOptions
       const name = (error as { name?: unknown } | null)?.name
       throw new ModelUnavailable(name === 'TimeoutError' || name === 'AbortError' ? 'délai dépassé' : 'erreur réseau')
     }
-    const text = contentOf(body)
+    const text = contentOf(body, request)
     if (text === '') throw new ModelUnavailable('réponse vide')
     return truncateText(text, NPC_REPLY_MAX_LENGTH)
   }

@@ -4,6 +4,9 @@ import { demoExpress } from './demo-express'
 import { fuiteDonnees } from './fuite-donnees'
 import { panneCheckout } from './panne-checkout'
 
+/** Canal d'incident des scénarios : celui qui reçoit les alertes, que suivent les PNJ */
+export const INCIDENT_CHANNEL_ID = 'incident-en-cours'
+
 export const SCENARIOS: readonly Scenario[] = [panneCheckout, fuiteDonnees, demoExpress]
 
 /** Scénario de PNJ activé au lancement de scenario : npcScenarioId, sinon son propre id */

@@ -28,3 +28,7 @@ l'échéance du journaliste, il refuse pourtant d'écrire ce qui n'est pas confi
 - [mots: !journaliste, !gazette, extrait, article, reçu, source, publier] Je connais Rémi Vasseur, de « La Gazette du Code » : il est sérieux et vérifie ses sources. Il dit que l'extrait compte une dizaine de lignes avec des noms, des e-mails et des téléphones de clients, mais refuse de me l'envoyer. Il publiera avant 17h, avec ou sans notre réaction.
 - [mots: !déclaration, !brouillon, texte, message, communiqué, formulation, attente] Mon brouillon : « Nous avons été informés ce matin d'un incident de sécurité concernant un fichier de données clients. Nous avons pris des mesures et analysons la situation ; nous informerons les personnes concernées si nécessaire. » Il me faut les faits confirmés et la validation d'Élise Marchand avant de l'envoyer.
 - [mots: direction, !comex, dirigeants, décision, demande, veut] La direction veut savoir trois choses avant la déclaration : si l'accès au fichier est fermé, si des clients sont concernés, et si on doit les prévenir. Elle veut aussi savoir qui pilote l'incident.
+
+## Intervient spontanément
+- [sans point: 6 min] Si la presse me rappelle, je n'ai rien de solide à dire pour l'instant. Quelqu'un peut me dire où on en est ?
+- [après: 12 min] Plus on attend, plus on subit. J'ai besoin de savoir ce qu'on peut affirmer avant de prendre la parole.

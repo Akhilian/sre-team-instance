@@ -99,6 +99,18 @@ describe('toAnthropicMessages (CA1)', () => {
     expectAlternating(messages)
   })
 
+  it('034 CA3 : le dernier message user commence par l\'auteur de la question, alternance valide', async () => {
+    const req = {
+      ...await request('Quel déploiement récent ?', [message('Alice', 'Le checkout est lent'), fromRelease('Je regarde.'), message('Alice', 'Merci')]),
+      questionAuthor: 'Bob',
+    }
+    const { system, messages } = toAnthropicMessages(buildNpcPrompt(req))
+    expect(system).toContain('Tu réponds à Bob')
+    expectAlternating(messages)
+    expect(messages.at(-1)!.content.endsWith('Bob : Quel déploiement récent ?')).toBe(true)
+    expect(messages.at(-1)!.content).toBe('Alice : Merci\n\nBob : Quel déploiement récent ?')
+  })
+
   it('sans historique : un seul message user, la question', async () => {
     const { messages } = toAnthropicMessages(buildNpcPrompt(await request('Quel déploiement récent ?')))
     expect(messages).toEqual([{ role: 'user', content: 'Quel déploiement récent ?' }])

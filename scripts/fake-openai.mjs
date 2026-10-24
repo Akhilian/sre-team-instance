@@ -1,6 +1,7 @@
 // Faux serveur OpenAI-compatible (node:http, sans dépendance), pour essayer le moteur openai-compatible
 // sans modèle : POST /v1/chat/completions répond « [faux modèle] … ». Partagé par tests/http.
 //   node scripts/fake-openai.mjs [port]     (ou PORT=…, défaut 11999, sur 127.0.0.1)
+//   FAKE_OPENAI_APOLOGY=1 : chaque réponse commence par « Je suis désolé pour les perturbations. »
 import { createServer } from 'node:http'
 import { pathToFileURL } from 'node:url'
 
@@ -8,10 +9,12 @@ export const FAKE_MODEL_PREFIX = '[faux modèle]'
 
 /**
  * Démarre le faux serveur. Réglages modifiables à chaud : status (200 par défaut ; autre valeur → erreur
- * renvoyée telle quelle), delayMs (attente avant de répondre). requests garde les appels reçus.
+ * renvoyée telle quelle), delayMs (attente avant de répondre), apologize (la réponse commence par une excuse
+ * de service client, que le filtre de sortie doit retirer). requests garde les appels reçus ; la réponse cite
+ * le début du dernier message user, ce qui rend visibles l'auteur de la question (034) et la consigne.
  */
-export function startFakeOpenAi({ port = 0, host = '127.0.0.1' } = {}) {
-  const state = { status: 200, delayMs: 0, requests: [] }
+export function startFakeOpenAi({ port = 0, host = '127.0.0.1', apologize = false } = {}) {
+  const state = { status: 200, delayMs: 0, apologize, requests: [] }
   const server = createServer((req, res) => {
     let raw = ''
     req.on('data', (chunk) => { raw += chunk })
@@ -36,7 +39,8 @@ export function startFakeOpenAi({ port = 0, host = '127.0.0.1' } = {}) {
         }
         const messages = Array.isArray(body?.messages) ? body.messages : []
         const question = String(messages.at(-1)?.content ?? '').slice(0, 80)
-        const content = `${FAKE_MODEL_PREFIX} Bien reçu : « ${question} ». Je regarde de mon côté.`
+        const excuse = state.apologize ? 'Je suis désolé pour les perturbations. ' : ''
+        const content = `${excuse}${FAKE_MODEL_PREFIX} Bien reçu : « ${question} ». Je regarde de mon côté.`
         res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({
           id: 'fake-1',
           object: 'chat.completion',
@@ -70,7 +74,7 @@ export function startFakeOpenAi({ port = 0, host = '127.0.0.1' } = {}) {
 // Lancé directement : écoute jusqu'à SIGINT / SIGTERM
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = Number(process.argv[2] ?? process.env.PORT ?? 11999)
-  const fake = await startFakeOpenAi({ port })
+  const fake = await startFakeOpenAi({ port, apologize: process.env.FAKE_OPENAI_APOLOGY === '1' })
   console.log(`faux serveur OpenAI-compatible sur ${fake.baseUrl}`)
   const shutdown = () => fake.stop().then(() => process.exit(0))
   process.on('SIGINT', shutdown)

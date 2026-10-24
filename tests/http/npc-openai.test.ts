@@ -112,3 +112,44 @@ describe('PNJ openai-compatible (020)', () => {
     expect(logs).not.toContain('réponse abandonnée')
   })
 })
+
+describe('034 CA4 et 020 CA11 : auteur de la question, contexte du canal, filtre de sortie', () => {
+  beforeEach(async () => {
+    fake.state.status = 200
+    fake.state.delayMs = 0
+    fake.state.apologize = false
+    fake.state.requests.length = 0
+    expect((await postJson(`${server.url}/api/admin/reset`, { scope: 'all' }, ADMIN)).status).toBe(200)
+    expect((await postJson(`${server.url}/api/admin/npcs`, { enabled: true }, ADMIN)).status).toBe(200)
+  })
+
+  it('une mention de Bob après un message d\'Alice : le dernier message user commence par « Bob : »', async () => {
+    await ask('Le checkout est lent depuis ce matin')
+    const response = await postJson(`${server.url}/api/channels/${CHANNEL}/messages`, { author: 'Bob', text: `@${RELEASE} quel déploiement récent ?` })
+    const root: Message = await response.json()
+    expect(await waitForNpcReply(root.id, 5000)).toBeDefined()
+    const sent = fake.state.requests[0]!.body.messages as { role: string, content: string }[]
+    expect(sent.at(-1)).toMatchObject({ role: 'user' })
+    expect(sent.at(-1)!.content.startsWith('Bob : ')).toBe(true)
+    expect(sent[0]!.content).toContain('Tu réponds à Bob')
+  })
+
+  it('mention en fil : le system contient un message racine du canal posté avant le fil ; l\'excuse de service client est retirée', async () => {
+    fake.state.apologize = true
+    await ask('Le paiement est en erreur depuis dix minutes')
+    const thread = await ask('Autre sujet : le café')
+    const response = await postJson(`${server.url}/api/channels/${CHANNEL}/messages`, {
+      author: 'Bob',
+      text: `@${RELEASE} quel déploiement récent ?`,
+      parentId: thread.id,
+    })
+    expect(response.status).toBe(201)
+    const reply = await waitForNpcReply(thread.id, 5000)
+    expect(reply).toBeDefined()
+    expect(reply!.text).not.toContain('désolé')
+    expect(reply!.text.startsWith(FAKE_MODEL_PREFIX)).toBe(true)
+    const system = (fake.state.requests[0]!.body.messages as { role: string, content: string }[])[0]!.content
+    expect(system).toContain('Le paiement est en erreur depuis dix minutes')
+    expect(system).toMatch(/\[\d{2}:\d{2}\] Alice : Le paiement est en erreur/)
+  })
+})

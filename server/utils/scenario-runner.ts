@@ -9,9 +9,9 @@ import type {
   ScenarioSummary,
 } from '../../shared/types/scenario'
 import { scenarioStepLabel } from '../../shared/utils/scenarios'
-import { SCENARIOS } from '../scenarios'
+import { INCIDENT_CHANNEL_ID, SCENARIOS } from '../scenarios'
 import { addAlert, addAnnouncement, addNpcMessage } from './chat-store'
-import { findLoadedNpcPersona } from './npc'
+import { findLoadedNpcPersona, startSpontaneousInterventions, stopSpontaneousInterventions } from './npc'
 
 /** Scénario inconnu : 404 */
 export class ScenarioNotFoundError extends Error {
@@ -43,6 +43,10 @@ export interface ScenarioRunnerDeps<Handle = unknown> {
   /** Fiche de PNJ d'id npcId (synchrone : fiches déjà chargées) ; absente → étapes npc-message failed */
   findNpc?: (npcId: string) => NpcPersona | undefined
   scenarios?: readonly Scenario[]
+  /** Appelé quand un scénario est lancé (après la publication des étapes à at <= 0) */
+  onStart?: (run: ScenarioRun) => void
+  /** Appelé quand le scénario en cours est arrêté (stop) */
+  onStop?: (run: ScenarioRun) => void
 }
 
 export interface ScenarioRunner {
@@ -133,6 +137,7 @@ export function createScenarioRunner<Handle>(deps: ScenarioRunnerDeps<Handle>): 
         else handles.push(deps.schedule(() => publishStep(current, step, index), step.at * 1000))
       })
       finishIfDone(current)
+      deps.onStart?.(copyRun(current))
       return copyRun(current)
     },
 
@@ -144,6 +149,7 @@ export function createScenarioRunner<Handle>(deps: ScenarioRunnerDeps<Handle>): 
       for (const step of run.steps) {
         if (step.status === 'pending') step.status = 'cancelled'
       }
+      deps.onStop?.(copyRun(run))
       return copyRun(run)
     },
   }
@@ -166,6 +172,9 @@ const defaultRunner = createScenarioRunner({
   publish: publishScenarioStep,
   // Fiches chargées par useNpcDispatcher(), attendu par la route de lancement avant startScenario
   findNpc: findLoadedNpcPersona,
+  // Interventions spontanées des PNJ : actives du lancement à l'arrêt (stop, reset) du scénario
+  onStart: () => startSpontaneousInterventions(INCIDENT_CHANNEL_ID),
+  onStop: () => stopSpontaneousInterventions(),
 })
 
 export function listScenarioSummaries(): ScenarioSummary[] {

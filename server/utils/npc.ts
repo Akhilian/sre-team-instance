@@ -4,9 +4,10 @@
 // et publication dans le store des canaux. La logique pure vit dans server/npc/.
 import type { Message } from '../../shared/types/chat'
 import type { LastModelCall, NpcAdminState, NpcPersona, NpcPersonaFileSummary, NpcPersonasAdminState } from '../../shared/types/npc'
-import { createNpcDispatcher, type NpcDispatcher } from '../npc/dispatcher'
+import { createNpcDispatcher, NPC_RESPOND_TIMEOUT_MS, type NpcDispatcher } from '../npc/dispatcher'
 import { type ResolvedNpcEngine, resolveNpcEngine } from '../npc/engines'
 import { createLexicalRetriever } from '../npc/lexical-retriever'
+import { createSpontaneousEngine, NPC_SPONTANEOUS_MINUTE_MS, type SpontaneousEngine } from '../npc/spontaneous'
 import { createPersonaLayer, type PersonaLayerResult } from '../npc/persona-overrides'
 import {
   mergePersonaReload,
@@ -19,8 +20,9 @@ import {
   readEmbeddedPersonas,
   readPersonaDir,
 } from '../npc/persona-source'
-import { npcScenarioIdFor, SCENARIOS } from '../scenarios'
+import { INCIDENT_CHANNEL_ID, npcScenarioIdFor, SCENARIOS } from '../scenarios'
 import { addNpcMessage, getChannel, listMessages } from './chat-store'
+import { NPC_CHANNEL_CONTEXT_MAX } from '../../shared/utils/limits'
 import { dispatcherTimeoutMs } from '../npc/engines/openai-compatible'
 import { processEnv } from './env'
 import { setNpcTyping } from './presence-store'
@@ -35,6 +37,8 @@ let engine: ResolvedNpcEngine | undefined
 /** Dernier appel au modèle (moteurs anthropic et openai-compatible), en mémoire ; null avant tout appel */
 let lastModelCall: LastModelCall | null = null
 let dispatcher: Promise<NpcDispatcher> | undefined
+/** Interventions spontanées, créées avec le dispatcher (leur moteur de réponse et leurs plafonds sont communs) */
+let spontaneous: SpontaneousEngine | undefined
 /** Fiches chargées par useNpcDispatcher(), pour les recherches synchrones (étapes de scénario) */
 let loadedPersonas: readonly NpcPersona[] = []
 /** Fiches lues à la source et fiches modifiées depuis /admin (en mémoire), gardées séparées */
@@ -122,6 +126,23 @@ function recentHistory(message: Message): Message[] {
   }
 }
 
+/** Canal lu par les PNJ : celui de la conversation, ou le canal d'incident pour une conversation directe */
+function channelToRead(message: Message): Message[] {
+  try {
+    return listMessages(getChannel(message.channelId)?.direct ? INCIDENT_CHANNEL_ID : message.channelId)
+  }
+  catch {
+    return []
+  }
+}
+
+/** NPC_SPONTANEOUS_MINUTE_MS : durée d'une « minute » des interventions spontanées (entier > 0), pour les tests HTTP */
+function spontaneousMinuteMs(): number {
+  const raw = processEnv().NPC_SPONTANEOUS_MINUTE_MS?.trim() ?? ''
+  const value = Number(raw)
+  return raw !== '' && Number.isSafeInteger(value) && value > 0 ? value : NPC_SPONTANEOUS_MINUTE_MS
+}
+
 /** Orchestrateur du processus, créé au premier appel une fois les fiches chargées */
 export function useNpcDispatcher(): Promise<NpcDispatcher> {
   dispatcher ??= loadInitialPersonas().then(({ source, files }) => {
@@ -129,7 +150,7 @@ export function useNpcDispatcher(): Promise<NpcDispatcher> {
     personaLayer.setSource(files)
     refreshLoadedPersonas()
     const personas = loadedPersonas
-    return createNpcDispatcher({
+    const created = createNpcDispatcher({
       schedule: (fn, delayMs) => setTimeout(fn, delayMs),
       cancel: handle => clearTimeout(handle),
       now: () => Date.now(),
@@ -141,6 +162,7 @@ export function useNpcDispatcher(): Promise<NpcDispatcher> {
       initialScenarioId: SCENARIOS[0]?.id,
       delayMs: replyDelayMs,
       history: recentHistory,
+      channelContext: channelToRead,
       directNpcId: channelId => getChannel(channelId)?.direct?.npcId,
       onTyping: (persona, channelId, typing) => setNpcTyping({ channelId, name: persona.name, typing }, Date.now()),
       publish: reply => addNpcMessage(reply.channelId, {
@@ -149,6 +171,29 @@ export function useNpcDispatcher(): Promise<NpcDispatcher> {
         parentId: reply.parentId,
       }),
     })
+    const respondTimeoutMs = dispatcherTimeoutMs(npcEngine().name, processEnv())
+    spontaneous = createSpontaneousEngine({
+      schedule: (fn, delayMs) => setTimeout(fn, delayMs),
+      cancel: handle => clearTimeout(handle),
+      now: () => Date.now(),
+      minuteMs: spontaneousMinuteMs(),
+      personas: () => created.activePersonas(),
+      takeSlot: () => created.takeGlobalSlot(),
+      delayMs: replyDelayMs,
+      formulateTimeoutMs: Math.max(NPC_RESPOND_TIMEOUT_MS, respondTimeoutMs),
+      // Texte de base tel quel avec keywords ; reformulé par le moteur à modèle, qui retombe lui-même sur le texte de base
+      formulate: (persona, base, channelId) => npcEngine().responder.respond({
+        persona,
+        excerpts: [],
+        history: [],
+        question: '',
+        channelContext: listMessages(channelId).slice(-NPC_CHANNEL_CONTEXT_MAX),
+        spontaneous: { base },
+      }),
+      onTyping: (persona, channelId, typing) => setNpcTyping({ channelId, name: persona.name, typing }, Date.now()),
+      publish: (persona, channelId, text) => addNpcMessage(channelId, { npc: persona, text }),
+    })
+    return created
   })
   return dispatcher
 }
@@ -174,9 +219,26 @@ export async function currentScenarioNpc(npcId: string): Promise<{ persona: NpcP
   }
 }
 
-/** Planifie les réponses des PNJ mentionnés dans message (sans effet s'ils sont coupés). */
+/** Planifie les réponses des PNJ mentionnés dans message (sans effet s'ils sont coupés), puis évalue les interventions spontanées. */
 export async function dispatchNpcReplies(message: Message): Promise<void> {
   (await useNpcDispatcher()).handle(message)
+  spontaneous?.onMessage(message)
+}
+
+/** Lancement d'un scénario : les interventions spontanées suivent channelId jusqu'à l'arrêt (sans effet avant le chargement des fiches). */
+export function startSpontaneousInterventions(channelId: string): void {
+  spontaneous?.start(channelId)
+}
+
+/** Arrêt ou reset du scénario : plus aucune intervention spontanée. */
+export function stopSpontaneousInterventions(): void {
+  spontaneous?.stop()
+}
+
+/** Interrupteur « Interventions spontanées » (actif par défaut). */
+export async function setSpontaneousEnabled(enabled: boolean): Promise<void> {
+  await useNpcDispatcher()
+  spontaneous?.setEnabled(enabled)
 }
 
 /** Vrai si name est le nom d'un PNJ (casse ignorée), activé ou non : réservé aux PNJ. */
@@ -199,6 +261,8 @@ export async function activateScenarioNpcs(scenarioId: string, enable = true): P
  */
 export async function resetNpcs(): Promise<void> {
   (await useNpcDispatcher()).resetScenario()
+  spontaneous?.stop()
+  spontaneous?.setEnabled(true)
   lastModelCall = null
 }
 
@@ -209,6 +273,7 @@ export async function setNpcsEnabled(enabled: boolean): Promise<void> {
 /** Annule les réponses en attente sans couper les PNJ (reset des messages : leurs fils ont disparu). */
 export async function cancelPendingNpcReplies(): Promise<void> {
   (await useNpcDispatcher()).cancelPending()
+  spontaneous?.cancelPending()
 }
 
 /** État complet pour /admin */
@@ -220,6 +285,7 @@ export async function npcAdminState(): Promise<NpcAdminState> {
     engine: npcEngineName(),
     lastModelCall,
     scenarioId: current.scenarioId(),
+    spontaneous: spontaneous?.isEnabled() ?? true,
   }
 }
 

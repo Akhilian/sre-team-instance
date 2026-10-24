@@ -32,3 +32,6 @@ texte validé et se méfie des promesses.
 - [mots: !journaliste, presse, !média, article, interview, déclaration] La journaliste attend une déclaration courte avant 15 h. Je propose : « Un incident technique perturbe une partie des paiements, nos équipes y travaillent et nous reviendrons vers vous à [heure]. » Je ne l'envoie qu'avec le feu vert de Claire Dumont.
 - [mots: réseau, réseaux sociaux, influenceur, influent, compte, tweet, mention, !bad buzz] Sur les réseaux, je peux faire patienter les clients un par un, mais la première prise de parole officielle doit être la même partout : page de statut, réseaux et presse. Le compte influent attend une réponse publique, idéalement dans la demi-heure.
 - [mots: newsletter, pause, envoi, campagne, !suspendre, décaler, reporter] Je peux mettre l'envoi de la newsletter en pause en un clic. Si vous me prévenez avant 14h15, le report ne coûte rien ; après, il est facturé. Il me faut l'accord écrit de Claire Dumont.
+
+## Intervient spontanément
+- [après: 9 min] Les mentions continuent de monter sur les réseaux et les gens se plaignent de ne pas avoir de réponse. J'aimerais un cap avant que ça enfle davantage.

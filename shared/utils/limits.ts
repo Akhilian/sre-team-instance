@@ -72,3 +72,14 @@ export const NPC_REPLIES_GLOBAL_PER_MINUTE = 60
  * NPC_REPLIES_PER_NPC_PER_MINUTE (un seul PNJ par conversation). Pire cas : 60 + 120 appels au modèle par minute.
  */
 export const NPC_DIRECT_REPLIES_GLOBAL_PER_MINUTE = 120
+
+/** Messages du canal lus par un PNJ à modèle (contexte de lecture), hors fil courant et hors question */
+export const NPC_CHANNEL_CONTEXT_MAX = 30
+/** Longueur maximale d'un message dans le contexte de lecture du prompt : coupé au-delà */
+export const NPC_CONTEXT_LINE_MAX_LENGTH = 280
+/** Taille maximale de la section « conversation récente » du prompt : les plus anciens messages sont retirés au-delà */
+export const NPC_CONTEXT_SECTION_MAX_LENGTH = 6000
+/** Écart minimal, en minutes, entre deux interventions spontanées d'un même PNJ */
+export const NPC_SPONTANEOUS_GAP_MINUTES = 4
+/** Interventions spontanées par minute, tous PNJ confondus */
+export const NPC_SPONTANEOUS_PER_MINUTE = 2
