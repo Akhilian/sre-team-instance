@@ -47,7 +47,7 @@ npm run k8s:up:ollama   # idem avec Ollama (modèle local pour les PNJ), jusqu'�
 npm run k8s:down        # supprime le namespace sre-teams, PVC compris
 ```
 
-- **Accès** : `http://localhost:8088` ; code animateur de démonstration `demo-animateur`
+- **Accès** : `http://localhost:8088` ; code animateur de démonstration `demo-animateur`, remplaçable au déploiement : `FACILITATOR_CODE=mon-code npm run k8s:up` (ou `k8s:up:ollama`)
   (`deploy/values-local.yaml`, aucun secret réel).
 - **Fiches de PNJ** : `up` copie `server/npc/personas/` dans `deploy/chart/files/personas/` (gitignoré) et le
   chart en fait la ConfigMap `sre-teams-personas`, montée sur `/etc/sre-teams/personas` (`NPC_PERSONAS_DIR`).

@@ -27,8 +27,11 @@ case "${1:-}" in
     rm -rf deploy/chart/files/personas
     mkdir -p deploy/chart/files
     cp -R server/npc/personas deploy/chart/files/personas
+    # Code animateur : FACILITATOR_CODE de l'environnement, sinon celui de démonstration de values-local.yaml
+    code_args=()
+    if [ -n "${FACILITATOR_CODE:-}" ]; then code_args=(--set-string "facilitatorCode=$FACILITATOR_CODE"); fi
     helm upgrade --install "$RELEASE" deploy/chart -n "$NS" --create-namespace -f deploy/values-local.yaml \
-      --set "ollama.enabled=$OLLAMA" --force-conflicts --wait --timeout "$TIMEOUT"
+      --set "ollama.enabled=$OLLAMA" ${code_args[@]+"${code_args[@]}"} --force-conflicts --wait --timeout "$TIMEOUT"
     # L'image :local peut avoir été reconstruite : on relance l'application pour la prendre en compte
     kubectl -n "$NS" rollout restart "deployment/$RELEASE"
     kubectl -n "$NS" rollout status "deployment/$RELEASE" --timeout=3m
@@ -39,7 +42,7 @@ case "${1:-}" in
     fi
     for _ in $(seq 1 60); do
       if curl -fs "$URL/api/health" | grep -q '"status":"ok"'; then
-        echo "Instance prête sur $URL"
+        echo "Instance prête sur $URL (animateur : $URL/admin, code ${FACILITATOR_CODE:-de deploy/values-local.yaml})"
         exit 0
       fi
       sleep 2
