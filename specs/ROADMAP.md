@@ -35,7 +35,7 @@ Communication de crise (page de statut, parties prenantes) ; revue de postmortem
 ## Décisions ouvertes
 1. Cible : un atelier unique multi-paliers ou des modules indépendants (une demi-journée par palier) ?
 2. Public : niveau d'entrée, nombre d'équipes (le `workshop` en gère 4), durée par palier.
-3. Licence : le dépôt `workshop` n'a pas de LICENSE et appartient à un tiers ; droits de réutilisation à clarifier avant d'en dépendre.
+3. ~~Licence~~ — close (2026-10-24) : le dépôt `workshop` et les images `akhilian/*` appartiennent à l'utilisateur ; réutilisation libre, pas de contrainte de licence. L'infra est centralisée dans le dépôt `platform`.
 4. Alertmanager : palier 4 seulement, ou jamais ? (optionnel par défaut)
 5. `/admin/faults` sans authentification : à sécuriser avant tout accès distant par l'orchestrateur.
 
@@ -53,4 +53,4 @@ Communication de crise (page de statut, parties prenantes) ; revue de postmortem
 - **Pannes** (`app/adapters/faults.py`, état dans le hash Redis `faults`, isolées par équipe) : `upload_latency`, `upload_error_rate`, `worker_slow`, `stale_index`, `notifier_drop`, `consumer_lag`.
 - **Trafic** : Job k6 à débit constant (≈1 upload/s, 2 recherches/s, 3 h).
 - **Observabilité** : métriques `/metrics`, 4 dashboards Grafana générés (`observability/grafana/generate.py`), SLO Sloth (1 complet + 5 squelettes avec solutions). Alertmanager désactivé.
-- **Points d'attention** : `/admin/faults` sans auth ; ajouter une panne touche faults.py, chart, doc, generate.py et specs ; pas de LICENSE ; ~30 fichiers modifiés non commités dans `workshop` (touchent les pannes, non inspectés) ; dimensionnement ≈ 4 vCPU / 7 Gi pour 4 équipes ; images publiées sous le compte Docker Hub `akhilian`.
+- **Points d'attention** : `/admin/faults` sans auth ; ajouter une panne touche faults.py, chart, doc, generate.py et specs ; ~30 fichiers modifiés non commités dans `workshop` (touchent les pannes, non inspectés) ; dimensionnement ≈ 4 vCPU / 7 Gi pour 4 équipes ; images publiées sous le compte Docker Hub `akhilian` (compte de l'utilisateur).
