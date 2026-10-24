@@ -23,19 +23,16 @@ Pour toute tâche longue confiée par l'utilisateur, l'agent principal **orchest
 1. **Spec** : agent `feature-spec` (circuit complet seulement). Le prompt liste les fichiers utiles à lire, plutôt que tout le dépôt. Il produit `specs/NNN-<slug>.md`. S'il remonte une question bloquante, la poser à l'utilisateur avant de continuer.
 2. **Implémentation** : agent `feature-implementer`, avec le chemin de la spec.
 3. **Vérification** : agent `spec-verifier`, avec le chemin de la spec.
-   - Les critères Chrome sont faits par l'orchestrateur, d'abord en texte (`javascript_tool`, `find`, `read_console_messages`) ; une capture d'écran seulement pour juger un rendu visuel.
+   - Les critères Chrome sont délégués à l'agent `chrome-checker` (spec, critères, URL de l'instance), après le redéploiement de l'instance si besoin. L'orchestrateur ne fait pas lui-même de contrôles Chrome ni de captures d'écran. Un FAIL compte comme un FAIL du vérificateur.
    - **FAIL** : relancer `feature-implementer` avec le rapport, puis `spec-verifier`. Au bout de 3 FAIL sur la même spec, arrêter et demander à l'utilisateur.
    - **PASS** : passer à l'étape 4.
-4. **Clôture** :
-   - Cocher les critères dans la spec et ajouter une entrée à `specs/PROGRESS.md` (format ci-dessous).
-   - Compacter `specs/PROGRESS.md` : garder les 3 dernières boucles en détail, résumer les plus anciennes en une ligne chacune.
-   - `git add -A && git commit -m "NNN — <titre>"` puis `git push origin main`. Le push passe par la deploy key, configurée dans `core.sshCommand`.
-   - Résumer la boucle à l'utilisateur en 3 lignes, puis enchaîner la boucle suivante, sauf si l'objectif est atteint.
+4. **Clôture** : agent `loop-closer`, avec le numéro, le titre, les specs (et la section d'évolution), les éléments clés des rapports (livré, décisions, dette), le pied de commit et la consigne de redéploiement. Il coche les critères, ajoute et compacte l'entrée de `specs/PROGRESS.md` (format ci-dessous), commite, pousse sur `main` (deploy key via `core.sshCommand`) et renseigne le sha.
+   - L'orchestrateur résume ensuite la boucle à l'utilisateur en 3 lignes, puis enchaîne la boucle suivante, sauf si l'objectif est atteint.
 
-Après la clôture, `specs/` doit suffire pour reprendre le travail : objectif, état, décisions, prochaine étape. Proposer alors à l'utilisateur `/clear` (de préférence à `/compact`) : la session suivante repart de `specs/GOAL.md`, `specs/PROGRESS.md` et de la prochaine étape notée dans PROGRESS.
+Après la clôture, `specs/` doit suffire pour reprendre le travail : objectif, état, décisions, prochaine étape. La conversation est compactée automatiquement tôt (`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` dans `.claude/settings.json`) : après une compaction, repartir de `specs/GOAL.md`, `specs/PROGRESS.md` et de la prochaine étape notée dans PROGRESS. Pas besoin de demander `/clear` à l'utilisateur.
 
 ### Économie de tokens
-- L'orchestrateur ne fait que router, cocher, commiter : il peut tourner en Sonnet (`/model sonnet`) ; Opus pour les échanges de conception avec l'utilisateur.
+- L'orchestrateur ne fait que router : spec, implémentation, vérification, Chrome et clôture sont délégués. Il ne lit pas le code ni les fichiers produits ; il peut tourner en Sonnet (`/model sonnet`) ; Opus pour les échanges de conception avec l'utilisateur.
 - Prompts aux sous-agents courts et ciblés (spec, fichiers concernés, contraintes) ; ne pas recopier le contexte de la conversation.
 - Ne pas relire un fichier que l'on vient de faire écrire par un sous-agent : son rapport suffit, le vérificateur fait le contrôle.
 
