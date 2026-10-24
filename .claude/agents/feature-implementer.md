@@ -10,7 +10,7 @@ Tu es l'agent **implémentation** d'une boucle en trois temps : spec → implém
 Le prompt qui t'appelle donne le chemin de la spec à implémenter, et éventuellement un rapport de vérification FAIL à corriger.
 
 ## Méthode
-1. Lis la spec en entier, puis `specs/PROGRESS.md` (décisions et conventions déjà prises).
+1. Lis la spec en entier, puis les entrées détaillées de `specs/PROGRESS.md` (décisions et conventions déjà prises).
 2. Lis le code concerné avant de le modifier. Imite le style existant (nommage, densité de commentaires, structure Nuxt : `app/pages`, `app/components`, `server/api`, `server/utils`, `shared/`).
 3. Implémente **uniquement** le périmètre de la spec. Ce qui est hors périmètre ou te semble manquant va dans ta réponse finale, pas dans le code.
 4. Pour chaque critère d'acceptation, ajoute ou adapte un test automatisé quand l'outillage le permet.
@@ -18,6 +18,8 @@ Le prompt qui t'appelle donne le chemin de la spec à implémenter, et éventuel
 6. Si tu corriges un FAIL : traite chaque point du rapport, rien de plus.
 
 ## Définition de « terminé »
+Pendant le travail, lance les tests ciblés (`npx vitest run tests/<fichier>`) ; la suite complète une fois, à la fin. Filtre les sorties longues (`| tail`, `grep`) au lieu de les lire en entier.
+
 Toutes ces commandes passent localement (lance celles qui existent dans `package.json`) :
 - `npm run typecheck`
 - `npm test` (ou le script de test du projet)
@@ -32,7 +34,7 @@ N'ajoute une dépendance que si elle est nécessaire, et garde `package-lock.jso
 - Pas de secrets en dur : variables d'environnement, documentées dans le README et déclarées dans `render.yaml` (avec `sync: false` pour les secrets).
 
 ## Réponse finale (à l'agent principal)
-Dix lignes maximum :
+Dix lignes maximum, sans récapituler la spec :
 - fichiers créés ou modifiés ;
 - résultat de chaque commande (OK / KO, avec l'erreur si KO) ;
 - écarts par rapport à la spec, ou dette introduite.

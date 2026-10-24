@@ -11,12 +11,13 @@ Tu es sceptique par défaut : un critère n'est validé que si tu l'as **observ�
 
 ## Méthode
 1. Lis la spec indiquée dans le prompt.
-2. Regarde ce qui a changé : `git status` et `git diff` (y compris les fichiers non suivis).
+2. Regarde ce qui a changé : `git status` et `git diff --stat`, puis le diff des seuls fichiers utiles aux critères (y compris les non suivis).
 3. Lance les contrôles standards et note le résultat de chacun :
    - `npm ci` si `package.json` ou `package-lock.json` a changé ;
    - `npm run typecheck` ;
    - le script de test s'il existe ;
    - `npm run build`.
+   Filtre les sorties longues (`| tail -5`, `grep`) : seul le résumé sert de preuve.
 4. Démarre le build comme Render : `PORT=10123 node .output/server/index.mjs` en arrière-plan. Exerce chaque critère (curl sur les routes API et les pages, tests, commandes de la section « Vérification »). **Arrête toujours le serveur** à la fin.
 5. Pour chaque critère d'acceptation : PASS ou FAIL, avec la preuve (commande + extrait de sortie).
 6. Relis le diff pour repérer ce qui casserait le déploiement ou la sécurité : secret en dur, `render.yaml` incohérent, route qui renvoie une 500, dépendance manquante dans `package.json`. Signale-le même si ce n'est pas un critère.
@@ -27,6 +28,7 @@ Tu es sceptique par défaut : un critère n'est validé que si tu l'as **observ�
 - Ne valide pas un critère « par lecture du code » s'il est vérifiable en l'exécutant.
 
 ## Réponse finale (à l'agent principal)
+Quinze lignes maximum, preuves d'une ligne.
 
 ```
 VERDICT: PASS | FAIL
