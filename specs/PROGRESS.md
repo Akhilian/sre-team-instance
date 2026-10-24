@@ -81,7 +81,7 @@
 - Décisions : le serveur fait foi pour le rôle ; textes d'onboarding sans « PNJ » ni information de scénario (test).
 - Dette / suite : échec du POST de rôle → l'ancien rôle serveur écrase en silence le choix local ; texte « nom en clair suffit » à nuancer (pas si une @mention connue est présente) ; section « Conversations » présentée comme toujours visible. Prochaine : `/admin` sur deux colonnes (demande de l'utilisateur).
 
-## 039 — Bug rôle écrasé ; évolutions 007 (`/admin` deux colonnes) et 038 (textes) (2026-10-24, commit à renseigner)
+## 039 — Bug rôle écrasé ; évolutions 007 (`/admin` deux colonnes) et 038 (textes) (2026-10-24, commit 4db86ab)
 - Livré : circuit court. `/admin` ≥ 1100 px : code en haut, colonne pilotage (scénario, participants, annonce, alerte) et colonne suivi (PNJ, chronologie, entre deux groupes, architecture), guide pleine largeur dessous ; une colonne en dessous (`display: contents`). Choix de rôle local conservé et renvoyé tant que le serveur ne l'a pas confirmé (`shared/onboarding/role-sync.ts`, `decideRoleSync`). Textes d'onboarding nuancés (nom en clair sans @mention, section « Conversations »). PASS, deux colonnes contrôlées dans Chrome.
 - Décisions : spec amendée pour les ajustements (007, 038), nouvelle spec pour le bug (039).
 - Dette / suite : rendu à deux colonnes vérifié par simulation (fenêtre Chrome limitée à 500 px).
