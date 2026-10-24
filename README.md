@@ -34,6 +34,35 @@ Le fichier [`render.yaml`](./render.yaml) décrit un *Web Service* Node (Bluepri
 - démarrage : `node .output/server/index.mjs` (écoute sur le `PORT` fourni par Render)
 - health check : `/api/health`
 
+## Kubernetes local (Colima)
+
+Le chart `deploy/chart/` installe l'application et Redis dans le namespace `sre-teams` d'un cluster Colima
+(k3s). Tout reste dans ce namespace : aucune ressource à portée cluster.
+
+**Prérequis** : Colima avec Kubernetes (contexte `kubectl` `colima`, vérifié par le script), Docker, `kubectl`, `helm`.
+
+```bash
+npm run k8s:up          # build de l'image sre-teams:local, copie des fiches, helm upgrade --install
+npm run k8s:up:ollama   # idem avec Ollama (modèle local pour les PNJ), jusqu'à 20 min la première fois
+npm run k8s:down        # supprime le namespace sre-teams, PVC compris
+```
+
+- **Accès** : `http://localhost:8088` ; code animateur de démonstration `demo-animateur`
+  (`deploy/values-local.yaml`, aucun secret réel).
+- **Fiches de PNJ** : `up` copie `server/npc/personas/` dans `deploy/chart/files/personas/` (gitignoré) et le
+  chart en fait la ConfigMap `sre-teams-personas`, montée sur `/etc/sre-teams/personas` (`NPC_PERSONAS_DIR`).
+  Pour en modifier une : `kubectl -n sre-teams edit configmap sre-teams-personas` (clé
+  `<scénario>_<id>.md`), attendre la synchronisation du kubelet (environ 1 min), puis « Recharger » dans
+  `/admin`. La modification est écrasée au prochain `up`. Sans fiches copiées, les fiches embarquées sont utilisées.
+- **Ollama** : `ollama.enabled=true` (ce que fait `k8s:up:ollama`) ajoute un Deployment `ollama/ollama`, un
+  PVC de 10 Gi et un Service ; un initContainer tire le modèle `ollama.model` (`qwen2.5:1.5b` par défaut,
+  environ 1 Go). Les PNJ passent en `openai-compatible` (`NPC_LLM_TIMEOUT_MS=45000`). Pour un modèle plus
+  riche, `--set ollama.model=qwen2.5:3b` (environ 1,9 Go) dans `deploy/local.sh`. Sur CPU, la première réponse
+  charge le modèle : le script fait un appel de chauffe. Sans `--ollama`, `up` repasse en `keywords`.
+- **NetworkPolicy** (`networkPolicy.enabled`, entrée seulement) : Redis et Ollama n'acceptent que les pods de
+  l'application. Pas de règle de sortie (le pull du modèle a besoin d'Internet). k3s les applique : depuis un pod
+  hors application, la connexion à `sre-teams-redis:6379` est refusée.
+
 ## Outils d'animateur
 
 La page `/admin` (non liée dans la navigation) permet de publier une annonce ou une carte d'alerte (SEV1 à SEV3) dans un canal et de
@@ -177,7 +206,7 @@ et de l'historique du fil. Réponses courtes (2 à 4 phrases, tronquées à 600 
 | `NPC_LLM_BASE_URL` | URL de base de l'API, `/v1` compris (slash final toléré) |
 | `NPC_LLM_MODEL` | nom du modèle tel que le serveur le connaît |
 | `NPC_LLM_API_KEY` | facultative : envoyée en `Authorization: Bearer …` si elle est définie |
-| `NPC_LLM_TIMEOUT_MS` | délai maximal d'un appel (défaut 8000, plafonné à 14000) |
+| `NPC_LLM_TIMEOUT_MS` | délai maximal d'un appel (défaut 8000, plafonné à 60000) ; le délai du dispatcher devient `max(15 s, ce délai + 2 s)` |
 
 - **Ollama** : `ollama pull <modèle>` (un petit modèle instruct qui parle français suffit), puis
   `NPC_LLM_BASE_URL=http://localhost:11434/v1` et `NPC_LLM_MODEL=<modèle>` ; pas de clé.
@@ -210,7 +239,7 @@ comprise), seuls les blocs `text` sont gardés, puis tronqués à 600 caractère
 | `ANTHROPIC_API_KEY` | clé d'API (secret, envoyée en `x-api-key`) ; absente ou vide : moteur `keywords` avec un avertissement |
 | `NPC_ANTHROPIC_MODEL` | facultatif : modèle, `claude-haiku-5-5` par défaut |
 | `NPC_ANTHROPIC_BASE_URL` | facultatif : `https://api.anthropic.com` par défaut, à surcharger seulement pour les tests (slash final toléré) |
-| `NPC_LLM_TIMEOUT_MS` | délai maximal d'un appel, partagé avec `openai-compatible` (défaut 8000, plafonné à 14000) |
+| `NPC_LLM_TIMEOUT_MS` | délai maximal d'un appel, partagé avec `openai-compatible` (défaut 8000, plafonné à 60000) |
 
 Si l'API fait défaut (réseau, statut d'erreur dont 400, 401 ou 529, délai, JSON invalide, texte vide,
 `stop_reason` `refusal`, ou `max_tokens` sans texte), le PNJ

@@ -31,3 +31,24 @@ redis:
   resources:
     requests: { cpu: 50m, memory: 64Mi }
     limits: { memory: 256Mi }
+
+# Fiches de PNJ : si files/personas/<scénario>/*.md existe (copié par deploy/local.sh), une ConfigMap
+# <release>-personas est montée sur /etc/sre-teams/personas et NPC_PERSONAS_DIR y pointe.
+
+# Ollama optionnel : modèle local pour les PNJ (NPC_ENGINE=openai-compatible)
+ollama:
+  enabled: false
+  image: ollama/ollama:0.40.10
+  # Modèle tiré par l'initContainer (alternative plus riche : qwen2.5:3b, environ 1,9 Go)
+  model: qwen2.5:1.5b
+  keepAlive: 24h
+  llmTimeoutMs: 45000
+  storageClass: local-path
+  storageSize: 10Gi
+  resources:
+    requests: { cpu: "2", memory: 2Gi }
+    limits: { memory: 4Gi }
+
+# NetworkPolicy en entrée : Redis et Ollama n'acceptent que les pods de l'application (même release)
+networkPolicy:
+  enabled: true

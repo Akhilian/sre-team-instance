@@ -21,6 +21,7 @@ import {
 } from '../npc/persona-source'
 import { npcScenarioIdFor, SCENARIOS } from '../scenarios'
 import { addNpcMessage, getChannel, listMessages } from './chat-store'
+import { dispatcherTimeoutMs } from '../npc/engines/openai-compatible'
 import { processEnv } from './env'
 import { setNpcTyping } from './presence-store'
 
@@ -135,6 +136,7 @@ export function useNpcDispatcher(): Promise<NpcDispatcher> {
       retriever: createLexicalRetriever(),
       responder: npcEngine().responder,
       personas,
+      respondTimeoutMs: dispatcherTimeoutMs(npcEngine().name, processEnv()),
       // Sans lancement, les PNJ proposés sont ceux du premier scénario de /admin, pas ceux de la première fiche par chemin
       initialScenarioId: SCENARIOS[0]?.id,
       delayMs: replyDelayMs,

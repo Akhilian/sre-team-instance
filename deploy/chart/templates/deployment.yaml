@@ -42,3 +42,21 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if include "sre-teams.hasPersonas" . }}
+          volumeMounts:
+            - name: personas
+              mountPath: /etc/sre-teams/personas
+              readOnly: true
+          {{- end }}
+      {{- if include "sre-teams.hasPersonas" . }}
+      volumes:
+        - name: personas
+          configMap:
+            name: {{ .Release.Name }}-personas
+            items:
+              {{- range $path, $_ := .Files.Glob "files/personas/*/*.md" }}
+              {{- $rel := $path | trimPrefix "files/personas/" }}
+              - key: {{ $rel | replace "/" "_" }}
+                path: {{ $rel }}
+              {{- end }}
+      {{- end }}

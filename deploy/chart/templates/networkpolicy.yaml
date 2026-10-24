@@ -1,0 +1,63 @@
+{{- if .Values.networkPolicy.enabled }}
+# L'application accepte tout (accès depuis l'hôte via servicelb)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-app
+  labels:
+    {{- include "sre-teams.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sre-teams
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress]
+  ingress:
+    - {}
+{{- if .Values.redis.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-redis
+  labels:
+    {{- include "sre-teams.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sre-teams-redis
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sre-teams
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - port: 6379
+{{- end }}
+{{- if .Values.ollama.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-ollama
+  labels:
+    {{- include "sre-teams.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sre-teams-ollama
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sre-teams
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - port: 11434
+{{- end }}
+{{- end }}

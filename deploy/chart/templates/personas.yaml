@@ -1,0 +1,12 @@
+{{- if include "sre-teams.hasPersonas" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-personas
+  labels:
+    {{- include "sre-teams.labels" . | nindent 4 }}
+data:
+  {{- range $path, $_ := .Files.Glob "files/personas/*/*.md" }}
+  {{ $path | trimPrefix "files/personas/" | replace "/" "_" }}: {{ $.Files.Get $path | toJson }}
+  {{- end }}
+{{- end }}

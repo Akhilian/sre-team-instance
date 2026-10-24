@@ -5,7 +5,7 @@ import type { NpcRequest } from '../shared/types/npc'
 import { buildNpcPrompt } from '../server/npc/prompt'
 import { createLexicalRetriever } from '../server/npc/lexical-retriever'
 import { createKeywordsResponder } from '../server/npc/engines/keywords'
-import { createOpenAiCompatibleResponder } from '../server/npc/engines/openai-compatible'
+import { createOpenAiCompatibleResponder, dispatcherTimeoutMs, timeoutFromEnv } from '../server/npc/engines/openai-compatible'
 import { resolveNpcEngine } from '../server/npc/engines'
 import { personaById } from './npc-helpers'
 
@@ -207,5 +207,19 @@ describe('029 : issue du dernier appel (lastModelCall)', () => {
     await engine.respond(await request('Quel déploiement ?'))
     expect(outcomes).toEqual([{ ok: true }, { ok: false, reason: 'HTTP 503' }])
     expect(JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body)).temperature).toBe(0.3)
+  })
+})
+
+describe('032 : délais', () => {
+  it('NPC_LLM_TIMEOUT_MS=45000 est retenu, au-delà de 60000 ramené à 60000', () => {
+    expect(timeoutFromEnv({ NPC_LLM_TIMEOUT_MS: '45000' })).toBe(45000)
+    expect(timeoutFromEnv({ NPC_LLM_TIMEOUT_MS: '90000' })).toBe(60000)
+    expect(timeoutFromEnv({})).toBe(8000)
+  })
+
+  it('délai du dispatcher : max(15 s, modèle + 2 s) avec un moteur à modèle, 15 s sinon', () => {
+    expect(dispatcherTimeoutMs('openai-compatible', { NPC_LLM_TIMEOUT_MS: '45000' })).toBe(47000)
+    expect(dispatcherTimeoutMs('anthropic', {})).toBe(15000)
+    expect(dispatcherTimeoutMs('keywords', { NPC_LLM_TIMEOUT_MS: '45000' })).toBe(15000)
   })
 })

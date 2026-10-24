@@ -6,12 +6,13 @@ import type { ModelCallOutcome, NpcRequest, NpcResponder } from '../../../shared
 import { NPC_REPLY_MAX_LENGTH } from '../../../shared/utils/limits'
 import type { Env } from '../../utils/env'
 import { truncateText } from '../../utils/chat-store'
+import { NPC_RESPOND_TIMEOUT_MS } from '../dispatcher'
 import { buildNpcPrompt } from '../prompt'
 import { createKeywordsResponder } from './keywords'
 
-/** Délai maximal d'un appel au modèle, sous celui du dispatcher (15 s) pour laisser place au repli */
+/** Délai maximal d'un appel au modèle, ; le délai du dispatcher s'y adapte pour laisser place au repli */
 export const NPC_LLM_TIMEOUT_DEFAULT_MS = 8000
-const NPC_LLM_TIMEOUT_MAX_MS = 14_000
+const NPC_LLM_TIMEOUT_MAX_MS = 60_000
 /** Réponses courtes et peu créatives : 2 à 4 phrases fidèles à la fiche */
 const TEMPERATURE = 0.3
 const MAX_TOKENS = 300
@@ -107,12 +108,18 @@ export function createOpenAiCompatibleResponder(options: OpenAiCompatibleOptions
   }
 }
 
-/** NPC_LLM_TIMEOUT_MS : entier > 0 (plafonné à 14 s), sinon 8000 ; partagé par les moteurs à modèle */
+/** NPC_LLM_TIMEOUT_MS : entier > 0 (plafonné à 60 s), sinon 8000 ; partagé par les moteurs à modèle */
 export function timeoutFromEnv(env: Env): number {
   const raw = env.NPC_LLM_TIMEOUT_MS?.trim() ?? ''
   const value = Number(raw)
   if (raw === '' || !Number.isSafeInteger(value) || value <= 0) return NPC_LLM_TIMEOUT_DEFAULT_MS
   return Math.min(value, NPC_LLM_TIMEOUT_MAX_MS)
+}
+
+/** Délai du dispatcher : 15 s, ou délai du modèle + 2 s pour un moteur à modèle, afin que le repli keywords reste possible */
+export function dispatcherTimeoutMs(engineName: string, env: Env): number {
+  if (engineName !== 'openai-compatible' && engineName !== 'anthropic') return NPC_RESPOND_TIMEOUT_MS
+  return Math.max(NPC_RESPOND_TIMEOUT_MS, timeoutFromEnv(env) + 2000)
 }
 
 /** Fabrique du registre : lève une erreur (sans valeur sensible) si NPC_LLM_BASE_URL ou NPC_LLM_MODEL manque */

@@ -1,3 +1,13 @@
+{{- $cfg := deepCopy .Values.config }}
+{{- if include "sre-teams.hasPersonas" . }}
+{{- $_ := set $cfg "NPC_PERSONAS_DIR" "/etc/sre-teams/personas" }}
+{{- end }}
+{{- if .Values.ollama.enabled }}
+{{- $_ := set $cfg "NPC_ENGINE" "openai-compatible" }}
+{{- $_ := set $cfg "NPC_LLM_BASE_URL" (printf "http://%s-ollama:11434/v1" .Release.Name) }}
+{{- $_ := set $cfg "NPC_LLM_MODEL" .Values.ollama.model }}
+{{- $_ := set $cfg "NPC_LLM_TIMEOUT_MS" (toString .Values.ollama.llmTimeoutMs) }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -5,6 +15,6 @@ metadata:
   labels:
     {{- include "sre-teams.labels" . | nindent 4 }}
 data:
-  {{- range $k, $v := .Values.config }}
+  {{- range $k, $v := $cfg }}
   {{ $k }}: {{ $v | quote }}
   {{- end }}
