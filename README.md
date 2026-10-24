@@ -291,6 +291,44 @@ refuse en 400 `temperature`, `top_p` et `top_k`, comme l'API réelle ; `FAKE_ANT
 (`lastModelCall` de `GET /api/admin/npcs`, `null` avec `keywords` ou avant tout appel). Sur Render,
 `NPC_ENGINE` est déclarée en `sync: false` : la saisir dans **Environment** (vide = `keywords`).
 
+## Métriques et SLO
+
+`GET /metrics` expose les métriques au format texte Prometheus 0.0.4 (registre maison, sans `prom-client`). `METRICS_ENABLED=false` (ou `0`, `off`) répond 404 ; actif par défaut, coupé dans `render.yaml` (pas de Prometheus sur Render, l'URL est publique). Pas d'authentification : aucune métrique ne contient de secret, de code animateur, d'URL de modèle, de clé d'API, de texte de message ni d'identifiant de participant, de message ou de canal. `/metrics` et `/api/health` ne sont pas comptés. La collecte (ServiceMonitor), les SLO Sloth et les dashboards vivent dans le dépôt voisin `platform`.
+
+| Métrique (préfixe `paging_`) | Labels | Contenu |
+| --- | --- | --- |
+| `http_requests_total` | `method`, `route`, `status_class` | requêtes ; `route` = motif Nitro (`/api/channels/:id/messages`), jamais l'URL ; inconnu ou page → `other` |
+| `http_request_duration_seconds` | `method`, `route` | histogramme 0,01 à 5 s |
+| `messages_posted_total` | `kind` (`human`, `npc`, `system`) | messages publiés (annonces et alertes : `system`) |
+| `active_clients` | | participants présents (fenêtre de présence de 15 s ; l'app fait du polling) |
+| `npc_replies_total` | `engine`, `outcome` | `ok`, `fallback` (repli keywords après erreur du moteur), `timeout`, `rejected_repeat` (anti-répétition), `capped` (réponse fixe au plafond) |
+| `npc_generation_duration_seconds` | `engine` | durée du seul appel au moteur ; le délai de rythme (`NPC_PACE`) n'y entre jamais |
+| `npc_engine_errors_total` | `engine`, `reason` (`timeout`, `http`, `invalid`) | échecs d'appel au moteur |
+| `npc_llm_duration_seconds` | `engine`, `model`, `outcome` | appel au modèle (`ok`, `timeout`, `error`, `fallback` = réponse inexploitable, `rejected_repeat`), buckets 0,5 à 60 s |
+| `npc_llm_effective_tokens_per_second` | `engine`, `model` | **débit effectif** = tokens de sortie / durée totale de l'appel ; bout en bout, prompt processing inclus, pas le débit de génération pur |
+| `npc_llm_tokens_total` | `engine`, `model`, `direction` | tokens lus dans `usage` de l'API ; rien si l'API n'en renvoie pas (jamais estimés) |
+| `npc_llm_prompt_chars`, `npc_llm_response_chars` | `engine`, `model` | taille du prompt envoyé et de la réponse nettoyée |
+| `storage_operations_total` | `op` (`read`, `write`), `result` | opérations sur le stockage de persistance |
+| `storage_operation_duration_seconds` | `op` | histogramme |
+| `storage_up` | | 1/0 : dernier état connu du stockage |
+
+Les métriques `npc_llm_*` ne concernent que les moteurs à modèle (`keywords` n'en émet pas). `model` est la valeur configurée (`NPC_LLM_MODEL`, `NPC_ANTHROPIC_MODEL`), au plus 10 valeurs distinctes par processus, puis `other`. Pas de métrique d'attente en file : l'application n'a pas de file devant le modèle (le plafond de débit des PNJ refuse, il ne met pas en attente). Un délai du dispatcher dépassé après la réponse tardive du moteur peut compter deux issues pour la même réponse (cas rare).
+
+### SLO (définis dans `platform/observability/sloth/`)
+
+Fenêtre de 30 jours : c'est la période du contrôleur Sloth, commune à tous les SLO de la plateforme (la spec visait 28 jours ; la changer touche aussi DocShare).
+
+| SLO | Objectif | Mesure |
+| --- | --- | --- |
+| Disponibilité de la messagerie | 99,5 % | `POST /api/channels/:id/messages` hors 5xx (4xx exclus du total) |
+| Latence de publication | 95 % | mêmes requêtes en moins de 250 ms |
+| Réponses PNJ sans repli | 95 % | `ok` / (`ok` + `fallback` + `timeout`), moteurs à modèle ; `capped` et `rejected_repeat` exclus |
+| Génération PNJ | 90 % | générations du moteur à modèle en moins de 10 s (rythme exclu) |
+| Débit effectif du modèle | 90 % | appels à au moins 1 token/s, bout en bout |
+| Réponse dans le temps imparti | 97 % | `ok` / (`ok` + `timeout`) sous 60 s (`NPC_LLM_TIMEOUT_MS` au plus) |
+
+Hypothèse de calibrage : qwen2.5:3b sur CPU (≈ 0,2 s à chaud pour 60 tokens, ≈ 15 s de bout en bout) ; un 7b à froid (104 s) ne tiendrait pas ces objectifs, c'est assumé. Le seuil de débit (1 token/s) est prudent et à recalibrer après mesure. Le time to first token n'est pas mesuré : il exigerait le streaming, écarté (le message reste publié en une fois, appel non-stream).
+
 ## Persistance des conversations
 
 Canaux et messages (réactions et statut d'alerte compris) sont sauvegardés dans un instantané unique

@@ -206,7 +206,7 @@ describe('029 : issue du dernier appel (lastModelCall)', () => {
     await engine.respond(await request('Quel déploiement ?'))
     status = 503
     await engine.respond(await request('Quel déploiement ?'))
-    expect(outcomes).toEqual([{ ok: true }, { ok: false, reason: 'HTTP 503' }])
+    expect(outcomes).toEqual([expect.objectContaining({ ok: true }), expect.objectContaining({ ok: false, reason: 'HTTP 503' })])
     expect(JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body)).temperature).toBe(0.3)
   })
 })

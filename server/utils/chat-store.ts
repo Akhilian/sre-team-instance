@@ -2,6 +2,7 @@
 // (instantané exportSnapshot / importSnapshot) est branchée par server/utils/chat-persistence.ts.
 // Module pur (sans auto-import Nuxt) pour être testable directement avec Vitest.
 import type { Channel, ChannelSummary, DirectChannel, Message, MessagesDelta } from '../../shared/types/chat'
+import { recordMessagePosted } from './paging-metrics'
 import { isReactionEmoji } from '../../shared/utils/reactions'
 import {
   ALERT_SERVICE_MAX_LENGTH,
@@ -282,6 +283,7 @@ function requireParentId(value: unknown, messages: readonly Message[]): string {
 function pushMessage(messages: Message[], message: Message): void {
   bumpRev(message)
   messages.push(message)
+  recordMessagePosted(message.npc ? 'npc' : message.kind !== undefined ? 'system' : 'human')
   totalCounts.set(message.channelId, (totalCounts.get(message.channelId) ?? 0) + 1)
   if (messages.length > CHANNEL_MESSAGES_MAX) {
     const evicted = messages.splice(0, messages.length - CHANNEL_MESSAGES_MAX)

@@ -4,6 +4,7 @@
 import { createStorage, type Storage } from 'unstorage'
 import { DEFAULT_CHANNEL_IDS, exportSnapshot, importSnapshot } from './chat-store'
 import { type Env, processEnv } from './env'
+import { trackStorage } from './paging-metrics'
 
 export const SNAPSHOT_KEY = 'chat-snapshot'
 /** Délai maximal entre une mutation et l'écriture de l'instantané */
@@ -131,7 +132,7 @@ export function createChatPersistence(storage: Storage, options: ChatPersistence
 
   async function read(): Promise<{ ok: true, data: unknown } | { ok: false }> {
     try {
-      const data = await withTimeout(storage.getItem(SNAPSHOT_KEY), timeoutMs, 'lecture de l\'instantané')
+      const data = await trackStorage('read', () => withTimeout(storage.getItem(SNAPSHOT_KEY), timeoutMs, 'lecture de l\'instantané'))
       readFailing = false
       return { ok: true, data }
     }
@@ -186,7 +187,7 @@ export function createChatPersistence(storage: Storage, options: ChatPersistence
   function save(): Promise<void> {
     writing = writing.then(async () => {
       try {
-        await withTimeout(storage.setItem(SNAPSHOT_KEY, exportSnapshot()), timeoutMs, 'écriture de l\'instantané')
+        await trackStorage('write', () => withTimeout(storage.setItem(SNAPSHOT_KEY, exportSnapshot()), timeoutMs, 'écriture de l\'instantané'))
       }
       catch (error) {
         logger.error('[chat-persistence] écriture de l\'instantané impossible', error)

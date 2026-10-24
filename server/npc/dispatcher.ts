@@ -89,6 +89,11 @@ export interface NpcDispatcherDeps<Handle = unknown> {
    * annulation) de chaque réponse ; exactement une fin par début
    */
   onTyping?: (persona: NpcPersona, channelId: string, typing: boolean) => void
+  /**
+   * Issues que le moteur ne voit pas (métriques) : `capped` (réponse fixe au plafond) et `timeout` (moteur
+   * sans réponse dans le délai du dispatcher)
+   */
+  onReplyOutcome?: (outcome: 'capped' | 'timeout', persona: NpcPersona) => void
 }
 
 export interface NpcDispatcher {
@@ -132,6 +137,9 @@ export interface NpcDispatcher {
    */
   cancelPending: () => void
 }
+
+/** Délai du dispatcher dépassé (distinct des échecs du moteur, pour les métriques) */
+class NpcTimeoutError extends Error {}
 
 /** Une ligne de journal, sans trace de pile */
 function logAbandoned(error: unknown) {
@@ -322,6 +330,7 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
     const last = busyRepliesByKey.get(key)
     if (last !== undefined && now - last < NPC_BUSY_WINDOW_MS) return
     busyRepliesByKey.set(key, now)
+    deps.onReplyOutcome?.('capped', persona)
     const busy: NpcReply = { persona, channelId, text: NPC_BUSY_REPLY }
     if (parentId !== undefined) busy.parentId = parentId
     try {
@@ -336,7 +345,7 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
   function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     let handle: Handle | undefined
     const timeout = new Promise<never>((_, reject) => {
-      handle = deps.schedule(() => reject(new Error(`moteur PNJ sans réponse après ${ms} ms`)), ms)
+      handle = deps.schedule(() => reject(new NpcTimeoutError(`moteur PNJ sans réponse après ${ms} ms`)), ms)
     })
     return Promise.race([promise, timeout]).finally(() => {
       if (handle !== undefined) deps.cancel?.(handle)
@@ -524,6 +533,7 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
             stopTyping(token)
             // Annulée entre-temps : l'échec (fil effacé, moteur interrompu) est attendu, rien à signaler
             if (cancelled()) return
+            if (error instanceof NpcTimeoutError) deps.onReplyOutcome?.('timeout', persona)
             onError(error)
           })
         scheduled.push(persona.id)

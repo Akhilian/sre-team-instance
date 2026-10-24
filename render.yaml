@@ -36,3 +36,6 @@ services:
         sync: false
       - key: NPC_ANTHROPIC_MODEL
         sync: false
+      # /metrics (Prometheus) coupé sur Render : l'URL est publique et rien ne le collecte (voir README)
+      - key: METRICS_ENABLED
+        value: "false"

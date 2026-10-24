@@ -26,6 +26,7 @@ import { addNpcMessage, addSystemMessage, getChannel, listMessages } from './cha
 import { NPC_CHANNEL_CONTEXT_MAX } from '../../shared/utils/limits'
 import { dispatcherTimeoutMs } from '../npc/engines/openai-compatible'
 import { processEnv } from './env'
+import { recordNpcReply } from './paging-metrics'
 import { setNpcTyping } from './presence-store'
 
 /** Base unstorage des fiches : server/npc/personas/<scénario>/<id>.md */
@@ -190,6 +191,7 @@ export function useNpcDispatcher(): Promise<NpcDispatcher> {
       channelContext: channelToRead,
       directNpcId: channelId => getChannel(channelId)?.direct?.npcId,
       onTyping: (persona, channelId, typing) => setNpcTyping({ channelId, name: persona.name, typing }, Date.now()),
+      onReplyOutcome: outcome => recordNpcReply(npcEngine().name, outcome),
       publish: reply => addNpcMessage(reply.channelId, {
         npc: reply.persona,
         text: reply.text,

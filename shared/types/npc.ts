@@ -126,6 +126,15 @@ export interface ModelCallOutcome {
   ok: boolean
   /** Raison courte de l'échec (« HTTP 400 », « refus »…), sans donnée sensible */
   reason?: string
+  /** Mesures de l'appel (041), jamais de texte de prompt ni de réponse */
+  /** Durée totale de l'appel (requête et lecture de la réponse) */
+  durationMs?: number
+  /** Tokens lus dans `usage` de l'API ; absents si l'API n'en renvoie pas (jamais estimés) */
+  inputTokens?: number
+  outputTokens?: number
+  /** Taille du prompt envoyé et de la réponse nettoyée, en caractères */
+  promptChars?: number
+  responseChars?: number
 }
 
 /** Dernier appel au modèle, daté (at : ISO 8601) */

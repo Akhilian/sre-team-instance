@@ -66,7 +66,16 @@ export interface AnthropicOptions {
   fallback: NpcResponder
   logger: Pick<Console, 'warn'>
   /** Issue de chaque appel à l'API (réussi, ou échec et sa raison courte) */
-  onOutcome?: (outcome: ModelCallOutcome) => void
+  onOutcome?: (outcome: ModelCallOutcome, request: NpcRequest) => void
+}
+
+/** Tokens de `usage` (entiers ≥ 0) ; absents si l'API n'en renvoie pas, jamais estimés */
+function usageOf(body: unknown): { inputTokens?: number, outputTokens?: number } {
+  const usage = (body as { usage?: { input_tokens?: unknown, output_tokens?: unknown } } | null)?.usage
+  const count = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
+  const input = count(usage?.input_tokens)
+  const output = count(usage?.output_tokens)
+  return { ...(input !== undefined && { inputTokens: input }), ...(output !== undefined && { outputTokens: output }) }
 }
 
 /** Échec de l'API, avec une raison courte et sans donnée sensible, pour le journal */
@@ -88,8 +97,7 @@ export function createAnthropicResponder(options: AnthropicOptions): NpcResponde
   const endpoint = `${options.baseUrl.trim().replace(/\/+$/, '')}/v1/messages`
   const doFetch = options.fetch ?? globalThis.fetch
 
-  async function complete(request: NpcRequest): Promise<string> {
-    const { system, messages } = toAnthropicMessages(buildNpcPrompt(request))
+  async function complete(request: NpcRequest, { system, messages }: AnthropicPrompt): Promise<{ text: string, inputTokens?: number, outputTokens?: number }> {
     let body: unknown
     try {
       const response = await doFetch(endpoint, {
@@ -127,19 +135,22 @@ export function createAnthropicResponder(options: AnthropicOptions): NpcResponde
     if (stopReason === 'refusal') throw new ModelUnavailable('refus')
     const text = cleanModelOutput(textOf(body), { personaName: request.persona.name, spontaneous: request.spontaneous !== undefined, base: request.spontaneous?.base })
     if (text === '') throw new ModelUnavailable(stopReason === 'max_tokens' ? 'max_tokens sans texte' : 'réponse vide')
-    return truncateText(text, NPC_REPLY_MAX_LENGTH)
+    return { text: truncateText(text, NPC_REPLY_MAX_LENGTH), ...usageOf(body) }
   }
 
   return {
     async respond(request) {
+      const started = performance.now()
+      const prompt = toAnthropicMessages(buildNpcPrompt(request))
+      const promptChars = prompt.system.length + prompt.messages.reduce((total, message) => total + message.content.length, 0)
       try {
-        const text = await complete(request)
-        options.onOutcome?.({ ok: true })
+        const { text, ...usage } = await complete(request, prompt)
+        options.onOutcome?.({ ok: true, durationMs: performance.now() - started, promptChars, responseChars: text.length, ...usage }, request)
         return text
       }
       catch (error) {
         const reason = error instanceof ModelUnavailable ? error.message : 'erreur inattendue'
-        options.onOutcome?.({ ok: false, reason })
+        options.onOutcome?.({ ok: false, reason, durationMs: performance.now() - started, promptChars }, request)
         options.logger.warn(`[npc] anthropic indisponible (${reason}) : repli keywords`)
         return options.fallback.respond(request)
       }
@@ -151,7 +162,7 @@ export function createAnthropicResponder(options: AnthropicOptions): NpcResponde
 export function anthropicFromEnv(
   env: Env,
   logger: Pick<Console, 'warn'> = console,
-  onOutcome?: (outcome: ModelCallOutcome) => void,
+  onOutcome?: (outcome: ModelCallOutcome, request: NpcRequest) => void,
 ): NpcResponder {
   const apiKey = env.ANTHROPIC_API_KEY?.trim() ?? ''
   if (apiKey === '') throw new Error('ANTHROPIC_API_KEY manquant')

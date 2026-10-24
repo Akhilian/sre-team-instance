@@ -4,6 +4,7 @@
 import type { NpcPersona, NpcRequest, NpcResponder } from '../../shared/types/npc'
 import { NPC_ACK_TEXTS, NPC_BUSY_REPLY } from './generic-phrases'
 import { allWords } from './lexical-retriever'
+import { markReplyOutcome } from '../utils/paging-metrics'
 
 /** Dernières réponses du PNJ comparées à la nouvelle */
 export const NPC_REPEAT_WINDOW = 3
@@ -68,6 +69,7 @@ export function withoutRepeats(responder: NpcResponder, fallback: NpcResponder):
       if (request.spontaneous) return text
       const recent = recentOwnReplies(request)
       if (!isRepeat(text, recent)) return text
+      markReplyOutcome(request, 'rejected_repeat')
       const fresh = request.excerpts.find(excerpt => !isRepeat(excerpt.text, recent))
       if (fresh) return fresh.text
       return fallback.respond(request)

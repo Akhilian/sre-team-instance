@@ -187,7 +187,7 @@ describe('029 CA1 : réflexion, refus et max_tokens', () => {
     const { engine, logger, onOutcome } = responder(async () => okResponse([THINKING, { type: 'text', text: 'Le déploiement v2.41.0.' }]))
     expect(await engine.respond(await request('Quel déploiement récent ?'))).toBe('Le déploiement v2.41.0.')
     expect(logger.warn).not.toHaveBeenCalled()
-    expect(onOutcome).toHaveBeenCalledExactlyOnceWith({ ok: true })
+    expect(onOutcome).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ ok: true }), expect.anything())
   })
 
   const failures: [string, string, () => Response][] = [
@@ -204,7 +204,7 @@ describe('029 CA1 : réflexion, refus et max_tokens', () => {
       const line = String(logger.warn.mock.calls[0]![0])
       expect(line).toBe(`[npc] anthropic indisponible (${reason}) : repli keywords`)
       expect(line).not.toContain(API_KEY)
-      expect(onOutcome).toHaveBeenCalledExactlyOnceWith({ ok: false, reason })
+      expect(onOutcome).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ ok: false, reason }), expect.anything())
     })
   }
 

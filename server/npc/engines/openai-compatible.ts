@@ -7,7 +7,7 @@ import { NPC_REPLY_MAX_LENGTH } from '../../../shared/utils/limits'
 import type { Env } from '../../utils/env'
 import { truncateText } from '../../utils/chat-store'
 import { NPC_RESPOND_TIMEOUT_MS } from '../dispatcher'
-import { buildNpcPrompt } from '../prompt'
+import { buildNpcPrompt, type NpcPromptMessage } from '../prompt'
 import { cleanModelOutput } from '../service-tone'
 import { createKeywordsResponder } from './keywords'
 
@@ -30,7 +30,16 @@ export interface OpenAiCompatibleOptions {
   fallback: NpcResponder
   logger: Pick<Console, 'warn'>
   /** Issue de chaque appel au modèle (réussi, ou échec et sa raison courte) */
-  onOutcome?: (outcome: ModelCallOutcome) => void
+  onOutcome?: (outcome: ModelCallOutcome, request: NpcRequest) => void
+}
+
+/** Tokens de `usage` (entiers ≥ 0) ; absents si l'API n'en renvoie pas, jamais estimés */
+function usageOf(body: unknown): { inputTokens?: number, outputTokens?: number } {
+  const usage = (body as { usage?: { prompt_tokens?: unknown, completion_tokens?: unknown } } | null)?.usage
+  const count = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
+  const input = count(usage?.prompt_tokens)
+  const output = count(usage?.completion_tokens)
+  return { ...(input !== undefined && { inputTokens: input }), ...(output !== undefined && { outputTokens: output }) }
 }
 
 /** Échec du modèle, avec une raison courte et sans donnée sensible, pour le journal */
@@ -54,7 +63,7 @@ export function createOpenAiCompatibleResponder(options: OpenAiCompatibleOptions
   const apiKey = options.apiKey?.trim() ?? ''
   const doFetch = options.fetch ?? globalThis.fetch
 
-  async function complete(request: NpcRequest): Promise<string> {
+  async function complete(request: NpcRequest, prompt: NpcPromptMessage[]): Promise<{ text: string, inputTokens?: number, outputTokens?: number }> {
     const headers: Record<string, string> = { 'content-type': 'application/json' }
     if (apiKey !== '') headers.authorization = `Bearer ${apiKey}`
     let response: Response
@@ -65,7 +74,7 @@ export function createOpenAiCompatibleResponder(options: OpenAiCompatibleOptions
         headers,
         body: JSON.stringify({
           model: options.model,
-          messages: buildNpcPrompt(request),
+          messages: prompt,
           stream: false,
           temperature: TEMPERATURE,
           max_tokens: MAX_TOKENS,
@@ -89,19 +98,22 @@ export function createOpenAiCompatibleResponder(options: OpenAiCompatibleOptions
     }
     const text = contentOf(body, request)
     if (text === '') throw new ModelUnavailable('réponse vide')
-    return truncateText(text, NPC_REPLY_MAX_LENGTH)
+    return { text: truncateText(text, NPC_REPLY_MAX_LENGTH), ...usageOf(body) }
   }
 
   return {
     async respond(request) {
+      const started = performance.now()
+      const prompt = buildNpcPrompt(request)
+      const promptChars = prompt.reduce((total, message) => total + message.content.length, 0)
       try {
-        const text = await complete(request)
-        options.onOutcome?.({ ok: true })
+        const { text, ...usage } = await complete(request, prompt)
+        options.onOutcome?.({ ok: true, durationMs: performance.now() - started, promptChars, responseChars: text.length, ...usage }, request)
         return text
       }
       catch (error) {
         const reason = error instanceof ModelUnavailable ? error.message : 'erreur inattendue'
-        options.onOutcome?.({ ok: false, reason })
+        options.onOutcome?.({ ok: false, reason, durationMs: performance.now() - started, promptChars }, request)
         options.logger.warn(`[npc] openai-compatible indisponible (${reason}) : repli keywords`)
         return options.fallback.respond(request)
       }
@@ -127,7 +139,7 @@ export function dispatcherTimeoutMs(engineName: string, env: Env): number {
 export function openAiCompatibleFromEnv(
   env: Env,
   logger: Pick<Console, 'warn'> = console,
-  onOutcome?: (outcome: ModelCallOutcome) => void,
+  onOutcome?: (outcome: ModelCallOutcome, request: NpcRequest) => void,
 ): NpcResponder {
   const baseUrl = env.NPC_LLM_BASE_URL?.trim() ?? ''
   const model = env.NPC_LLM_MODEL?.trim() ?? ''
