@@ -1,0 +1,33 @@
+image:
+  repository: sre-teams
+  tag: local
+  pullPolicy: IfNotPresent
+
+# Port exposé par le Service LoadBalancer (servicelb de k3s)
+service:
+  port: 8088
+
+# Code animateur : obligatoire (aucune valeur par défaut)
+facilitatorCode: ""
+
+# Clé d'API Claude, optionnelle (moteur NPC_ENGINE=anthropic)
+anthropicApiKey: ""
+
+config:
+  NODE_ENV: production
+  NPC_ENGINE: keywords
+
+resources:
+  requests: { cpu: 100m, memory: 192Mi }
+  limits: { memory: 512Mi }
+
+redis:
+  enabled: true
+  image: redis:7-alpine
+  # Mot de passe Redis : obligatoire quand redis.enabled=true
+  password: ""
+  storageClass: local-path
+  storageSize: 1Gi
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { memory: 256Mi }

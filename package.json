@@ -10,7 +10,9 @@
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
     "test": "vitest run",
-    "test:http": "vitest run --config vitest.http.config.ts"
+    "test:http": "vitest run --config vitest.http.config.ts",
+    "k8s:up": "bash deploy/local.sh up",
+    "k8s:down": "bash deploy/local.sh down"
   },
   "dependencies": {
     "ioredis": "^5.11.1",

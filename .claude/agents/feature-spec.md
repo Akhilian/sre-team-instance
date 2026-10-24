@@ -2,6 +2,7 @@
 name: feature-spec
 description: Définit la PROCHAINE feature à construire, de façon succincte et vérifiable. Lit l'objectif global (specs/GOAL.md), l'avancement (specs/PROGRESS.md) et le code, puis écrit une seule spec dans specs/NNN-<slug>.md. Première étape de chaque boucle spec → implémentation → vérification.
 tools: Read, Grep, Glob, Bash, Write, mcp__context7__*
+model: opus
 color: blue
 ---
 

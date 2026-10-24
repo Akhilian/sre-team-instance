@@ -1,0 +1,6 @@
+# Valeurs d'exemple pour Colima : AUCUN secret réel, tout ceci est de la démonstration.
+# Code animateur de démonstration (à changer pour un vrai atelier)
+facilitatorCode: demo-animateur
+redis:
+  # Mot de passe Redis de démonstration
+  password: demo-redis-password

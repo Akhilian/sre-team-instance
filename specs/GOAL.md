@@ -81,3 +81,25 @@ L'information utile à la résolution est **répartie** : aucun PNJ ne sait tout
 
 ## Définition de « terminé » (phase 2)
 Lors d'un scénario lancé par l'animateur, le lanceur d'alerte ouvre l'incident. L'équipe peut interroger au moins 4 PNJ, qui répondent en quelques secondes dans le canal, chacun avec sa part d'information et sa personnalité. Il faut combiner les informations de plusieurs PNJ pour identifier la cause et la bonne communication.
+
+---
+
+# Phase 3 — Hébergement Kubernetes (local d'abord)
+
+## Demande de l'utilisateur
+> Propose-moi un plan d'implémentation pour héberger cette instance Teams et les scénarios ainsi que les services nécessaires dans Kubernetes. […] Pour le moment, implémente tout pour que ça marche en local avec un Colima Kubernetes ou une version K3S ou des choses dans ce genre-là.
+
+## Plan retenu (validé dans la conversation du 2026-10-24)
+- **Une seule instance de l'application** : l'état (scénario en cours, présence, PNJ, fiches modifiées, `rev`) vit en mémoire → `replicas: 1`, stratégie `Recreate`, pas d'HPA. Redis garde l'instantané des conversations.
+- **Image** : `Dockerfile` multi-étapes `node:24-alpine`, utilisateur non root, port 3000, `.dockerignore`.
+- **Chart Helm** `deploy/chart/` : application (Deployment, Service, Ingress optionnel), Redis optionnel (StatefulSet + PVC + mot de passe), Ollama optionnel (Deployment + PVC + pull du modèle), ConfigMap de configuration, Secret (`FACILITATOR_CODE`, `REDIS_URL`, `ANTHROPIC_API_KEY`), fiches de PNJ en ConfigMap montée sur `NPC_PERSONAS_DIR` (sans `subPath`, rechargeables depuis `/admin`), sondes sur `/api/health`, ressources, NetworkPolicy. Une release par équipe possible (namespace et code animateur propres).
+- `render.yaml` reste en place : les deux cibles cohabitent.
+
+## Contraintes locales
+- Cluster : Colima (`colima start --kubernetes`, contexte kubectl `colima`, k3s v1.35, runtime Docker : une image construite par `docker build` est visible du cluster avec `imagePullPolicy: IfNotPresent`, sans registre). Pas d'Ingress controller (Traefik désactivé par Colima) ; `servicelb` de k3s disponible ; StorageClass `local-path`. Helm 4 et kubectl 1.37 installés. Mac 14 cœurs, VM Colima 6 CPU / 10 Gi.
+- **Le cluster héberge d'autres projets (`code-escape`, `crossplane-system`…) : n'y toucher sous aucun prétexte.** Tout dans le namespace `sre-teams` (ou un namespace par équipe préfixé `sre-teams-`). Jamais de `kubectl delete` hors de ces namespaces, ni de ressource à portée cluster sans nécessité.
+- Ports déjà pris sur le nœud : 3000, 5173, 5174, 5432, 9000, 9443.
+- Aucun secret commité ; valeurs locales d'exemple dans un fichier `values-local.yaml` sans secret réel.
+
+## Définition de « terminé » (phase 3)
+Depuis un clone propre : une commande (script ou cible `make`/npm) construit l'image et installe le chart dans Colima ; l'application répond sur `http://localhost:<port>` ; un message survit à `kubectl rollout restart` (Redis) ; un scénario se joue avec ses PNJ ; une fiche modifiée dans la ConfigMap est prise en compte par « Recharger » ; Ollama est activable par une valeur du chart et les PNJ répondent via `openai-compatible` ; le README documente installation, accès, désinstallation.

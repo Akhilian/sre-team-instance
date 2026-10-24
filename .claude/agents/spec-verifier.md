@@ -2,6 +2,7 @@
 name: spec-verifier
 description: Vérifie de façon indépendante qu'une spec specs/NNN-*.md est satisfaite par le code actuel, critère par critère, avec des preuves (commandes lancées, sorties, requêtes HTTP). Ne modifie aucun fichier. Rend un verdict PASS ou FAIL. Troisième étape de chaque boucle spec → implémentation → vérification.
 tools: Read, Grep, Glob, Bash
+model: sonnet
 color: red
 ---
 

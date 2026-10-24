@@ -2,6 +2,7 @@
 name: feature-implementer
 description: Implémente UNE spec de specs/NNN-*.md dans l'application Nuxt (front app/, API server/), avec les tests correspondants, jusqu'à ce que typecheck, tests et build passent. Ne commite pas. Deuxième étape de chaque boucle spec → implémentation → vérification.
 tools: Read, Edit, Write, Bash, Grep, Glob, mcp__context7__*
+model: sonnet
 color: green
 ---
 
