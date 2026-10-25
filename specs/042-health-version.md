@@ -10,10 +10,10 @@ Pouvoir identifier la version déployée d'une instance depuis son health check 
 - Version dans `/metrics`, SHA git, date de build, mécanisme de bump automatique.
 - Modification de `status`, `timestamp`, `storage`, `facilitatorCode`, `npcEngine`.
 ## Critères d'acceptation
-- [ ] CA1 — `GET /api/health` sur le build renvoie 200 avec un champ `version` de type chaîne valant exactement `"0.1.0"`.
-- [ ] CA2 — Les cinq champs existants (`status`, `timestamp`, `storage`, `facilitatorCode`, `npcEngine`) sont toujours présents avec les mêmes types et sémantique ; les tests HTTP existants sur `/api/health` passent sans modification.
-- [ ] CA3 — `tests/http/health.test.ts` compare `version` à la valeur lue dans `package.json` (pas une constante recopiée) et vérifie les cinq champs existants.
-- [ ] CA4 — La version est lue depuis `package.json` au build (pas de lecture de fichier à l'exécution) : `node .output/server/index.mjs` lancé depuis un autre répertoire renvoie la même `version`.
+- [x] CA1 — `GET /api/health` sur le build renvoie 200 avec un champ `version` de type chaîne valant exactement `"0.1.0"`.
+- [x] CA2 — Les cinq champs existants (`status`, `timestamp`, `storage`, `facilitatorCode`, `npcEngine`) sont toujours présents avec les mêmes types et sémantique ; les tests HTTP existants sur `/api/health` passent sans modification.
+- [x] CA3 — `tests/http/health.test.ts` compare `version` à la valeur lue dans `package.json` (pas une constante recopiée) et vérifie les cinq champs existants.
+- [x] CA4 — La version est lue depuis `package.json` au build (pas de lecture de fichier à l'exécution) : `node .output/server/index.mjs` lancé depuis un autre répertoire renvoie la même `version`.
 ## Vérification
 `npm run build && npm run test:http -- tests/http/health.test.ts` ; CA4 : `cd /tmp && PORT=10124 node <dépôt>/.output/server/index.mjs &` puis `curl -s localhost:10124/api/health`, arrêter le processus.
 ## Notes d'implémentation

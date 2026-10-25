@@ -87,7 +87,7 @@
 - Décisions : pas de streaming donc pas de TTFT (moteurs en `stream:false`) ; débit effectif = tokens de sortie / durée totale de l'appel (bout en bout) ; fenêtre SLO 30 j (période globale du contrôleur Sloth) ; SLI de génération mesuré après le délai de rythme, indépendant de `NPC_PACE` ; SLO 3 et 4 excluent `engine="keywords"` ; label `model` borné à 10 puis `other` ; Sloth et Prometheus font partie du socle de `platform`.
 - Dette / suite : seuil du SLO débit (1 token/s) à recalibrer sur qwen2.5:3b ; double comptage possible d'issue (timeout du dispatcher puis réponse tardive) ; aucun scrape réel testé ; ServiceMonitor exige les CRD de l'Operator ; tag llama.cpp non épinglé, noms des métriques llama.cpp à vérifier sur l'image ; TTFT possible si streaming. Prochaine : tester `make up` sur Colima dans un namespace `sre-teams-*`, puis orchestrateur de scénarios.
 
-## 042 — Version dans /api/health (2026-10-25, commit à renseigner)
+## 042 — Version dans /api/health (2026-10-25, commit eea7baf)
 - Livré : `GET /api/health` renvoie `version` lue depuis `package.json` (importé, inliné au build) ; `package.json` et `package-lock.json` à `"0.1.0"` ; test `tests/http/health.test.ts`. PASS (CA1-4), aucun écart.
 - Décisions : `package.json` est la source de vérité de la version (0.1.0), à consommer par `workshop-platform` via `appVersion`.
 - Dette / suite : aucune.
