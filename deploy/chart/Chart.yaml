@@ -1,6 +1,6 @@
 apiVersion: v2
 name: war-room
-description: Application workshop-teams (Nuxt) + Redis, PNJ via le service llm
+description: Application workshop-war-room (Nuxt) + Redis, PNJ via le service llm
 type: application
 version: 0.1.0
 appVersion: "0.1.0"

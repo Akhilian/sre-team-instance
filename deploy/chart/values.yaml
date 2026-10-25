@@ -1,4 +1,4 @@
-# Version applicative (label app.kubernetes.io/version) ; garder alignée sur `version` de /api/health (workshop-teams).
+# Version applicative (label app.kubernetes.io/version) ; garder alignée sur `version` de /api/health (workshop-war-room).
 appVersion: "0.1.0"
 
 image:

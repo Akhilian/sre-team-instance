@@ -104,3 +104,8 @@
 - Livré : `ci.yml` sans `workflow_call` (`pull_request`, push `main`, `workflow_dispatch`) ; `image.yml` déclenché par `workflow_run` du workflow « CI » (success + push, ou `workflow_dispatch`), checkout et tag sha sur `head_sha`, plus de filtre `paths` ; README et CLAUDE.md décrivent CI → Publication. PASS (CA1-5).
 - Décisions : publication à chaque CI verte sur `main`. Écart accepté : le workflow garde le nom « Publication de l'image ».
 - Dette / suite : `workflow_run` n'est actif qu'une fois `image.yml` sur la branche par défaut, l'enchaînement ne se constate qu'au push suivant ; le workflow de docshare garde l'ancienne structure (hors périmètre).
+
+## 049 — Références au dossier workshop-war-room (2026-10-25, commit à renseigner)
+- Livré : `workshop-teams` remplacé par `workshop-war-room` dans CLAUDE.md (contrat), `deploy/chart/Chart.yaml`, `deploy/chart/values.yaml`, `specs/ROADMAP.md`. Typecheck, 662 tests, build, 103 tests HTTP, helm lint/template OK. PASS (CA1-2).
+- Décisions : le dossier local s'appelle `workshop-war-room` ; les `teams/NNN` des anciennes entrées de PROGRESS désignent ce dépôt.
+- Dette / suite : renommer le dépôt GitHub, le service Render et le dépôt Docker Hub (utilisateur) ; premier passage de platform-conformity. Écarts acceptés : README sans occurrence (inchangé) ; `helm template` sans values échoue sur `facilitatorCode` (préexistant).

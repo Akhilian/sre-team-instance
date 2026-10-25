@@ -8,7 +8,7 @@ Application full-stack Nuxt 4 (front `app/`, API `server/api/`), déployée sur 
 - `npm run build` puis `node .output/server/index.mjs` : build et démarrage comme sur Render
 
 ## Orchestration
-L'orchestration et les agents (feature-spec, feature-implementer, spec-verifier, chrome-checker, loop-closer) vivent dans `/Users/adrien/Desktop/projets/SRE` : lancer `claude` depuis `SRE/` ; `SRE/CLAUDE.md` décrit le circuit. Lancé depuis `workshop-teams`, les agents ne sont pas disponibles.
+L'orchestration et les agents (feature-spec, feature-implementer, spec-verifier, chrome-checker, loop-closer) vivent dans `/Users/adrien/Desktop/projets/SRE` : lancer `claude` depuis `SRE/` ; `SRE/CLAUDE.md` décrit le circuit. Lancé depuis `workshop-war-room`, les agents ne sont pas disponibles.
 
 ## Format d'une entrée de `specs/PROGRESS.md`
 ```markdown
@@ -31,4 +31,4 @@ Lu par les agents partagés de `SRE/.claude/agents/` (lancés depuis `/Users/adr
 - **Réglages modifiables en test** : rythme des PNJ `NPC_PACE` (ou `/admin`), à remettre à sa valeur initiale.
 - **SLO** : les 6 SLO Sloth de war-room vivent dans `observability/sloth/war-room-*.yaml` (validés par `tests/sloth-war-room.test.ts`) ; les dashboards du produit restent dans `workshop-platform`.
 - **CI et publication** : `.github/workflows/ci.yml` (typecheck, tests, build, puis test:http qui exige le build) et `image.yml` (publie `akhilian/sre-war-room` sur Docker Hub avec le secret `DOCKERHUB_TOKEN`). `image.yml` s'enchaîne après la CI (`workflow_run` du workflow « CI », `main`) et publie à chaque CI verte sur `main` (commit `head_sha`, sans filtre de chemins) ; ne pas lancer le workflow depuis une session.
-- **Dépendances** : `workshop-platform` consomme l'image et les fiches de cette application ; faire la boucle de teams avant celle de platform.
+- **Dépendances** : `workshop-platform` consomme l'image et les fiches de cette application ; faire la boucle de workshop-war-room avant celle de platform.
