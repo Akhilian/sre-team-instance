@@ -91,7 +91,7 @@
 - Décisions : teams est la source unique du chart paging ; écarts acceptés : `redis.storageClass` "" par défaut (`local-path` dans `values-local.yaml`), chart renommé `sre-teams` → `paging`, PNJ en keywords en local sans `llm.enabled`.
 - Dette / suite : retirer `charts/paging` côté platform (étape 2 du transverse) ; platform consomme le chart par chemin relatif.
 
-## 044 — SLO Sloth du paging dans teams (2026-10-25, commit à renseigner)
+## 044 — SLO Sloth du paging dans teams (2026-10-25, commit 5850e42)
 - Livré : 6 SLO `observability/sloth/paging-*.yaml` (identiques à ceux de la plateforme, validés Sloth v0.16.0), test `tests/sloth-paging.test.ts` (cohérence avec `server/utils/paging-metrics.ts`, cas négatif), README et contrat d'agents mis à jour ; 662 tests OK. PASS (CA1-6).
 - Décisions : les SLO d'une application vivent avec son code ; la plateforme les consomme par chemin relatif puis retire ses copies. Écarts acceptés : test par regex (pas de dépendance YAML), noms de métriques vérifiés mais pas les valeurs de labels.
 - Dette / suite : dashboards `paging.json` et `paging-llm-compare.json` restent dans la plateforme (`generate.py` partagé), à rapatrier si le générateur est scindé ; labels de valeurs non testés ; retirer les copies côté platform.
