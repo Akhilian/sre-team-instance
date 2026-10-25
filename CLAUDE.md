@@ -53,4 +53,6 @@ Lu par les agents partagés de `SRE/.claude/agents/` (lancés depuis `/Users/adr
 - **Specs** : objectif `specs/GOAL.md`, avancement `specs/PROGRESS.md` (format ci-dessus, 3 dernières boucles détaillées), specs `specs/NNN-<slug>.md` (NNN sur 3 chiffres, propre à ce dépôt).
 - **Git** : remote `origin` (`git@github.com:Akhilian/sre-team-instance.git`), branche `main`, `git add -A` dans ce dépôt, commit `git -c commit.gpgsign=false`, `git push origin main` ; la deploy key est déjà dans `core.sshCommand` local. Ne jamais réécrire l'historique ni forcer un push. Le push sur `main` déclenche le déploiement Render.
 - **Contraintes** : `kubectl` limité aux namespaces `sre-teams` et `sre-teams-*` ; aucun déploiement sans demande ; secrets via variables d'environnement (README et `render.yaml` avec `sync: false`), jamais en dur ; TypeScript fixé en ~6.0.
+- **Reset d'instance** : `POST /api/admin/reset` (corps `{"scope":"messages"|"all"}`, en-tête `x-facilitator-code`) efface messages et état de test et arrête le scénario ; à lancer après tout test.
+- **Réglages modifiables en test** : rythme des PNJ `NPC_PACE` (ou `/admin`), à remettre à sa valeur initiale.
 - **Dépendances** : `workshop-platform` consomme l'image et les fiches de cette application ; faire la boucle de teams avant celle de platform.
