@@ -77,10 +77,7 @@
 
 - 039 — Bug rôle écrasé ; évolutions 007 (`/admin` deux colonnes) et 038 (textes) (4db86ab) : `/admin` en deux colonnes ≥ 1100 px, choix de rôle local conservé tant que non confirmé (`role-sync.ts`), textes d'onboarding nuancés.
 
-## 040 — Qualité et rythme des réponses des PNJ (2026-10-24, commit ff8d7bc)
-- Livré : extrait de fiche dans le tour utilisateur, `STYLE_EXAMPLES` supprimés, anti-répétition (3 dernières réponses, `server/npc/anti-repeat.ts`), synonymes dans les fiches Sarah et Julien, avis « X n'est pas dans ce scénario » pour un PNJ d'un autre scénario, « @Julien ? » reprend la dernière question, spontanées non répétées ; rythme de réponse `instantané|réaliste|occupé` (`NPC_PACE`, `/admin`, `NPC_DELAY_SCALE`, section `## Disponibilité`, accusé en mode occupé) ; modèle Ollama par défaut `qwen2.5:3b`. Vérifié dans Chrome sur Colima.
-- Décisions : le délai de réponse est un plancher (max entre délai tiré et génération, pas une somme) ; `qwen2.5:7b` rejeté sur la VM Colima de 10 Gi (104 s au 1er appel, VM saturée), possible avec ≥ 14 Gi (commande dans le README) ; sondes Ollama/app plus tolérantes, keepAlive 24 h ; seuil du retriever abaissé seulement pour les expressions de 3 mots ou plus ; l'avis « pas dans ce scénario » ne couvre que les PNJ connus d'un autre scénario ; messages `kind: 'system'` ajoutés côté serveur uniquement.
-- Dette / suite : pas de style dédié aux messages système ; PNJ hors-sujet (Thomas) ne refusent pas nettement ; seuil du retriever étroit pour les déclencheurs de 2 mots. Prochaine : dépôt voisin `platform` (hébergement avec llama.cpp), voir `specs/ROADMAP.md` (orchestrateur de scénarios en premier).
+- 040 — Qualité et rythme des réponses des PNJ (ff8d7bc) : extrait de fiche dans le tour, anti-répétition, avis « pas dans ce scénario », rythme `NPC_PACE` (instantané|réaliste|occupé), Ollama `qwen2.5:3b` par défaut (7b rejeté sur Colima 10 Gi).
 
 ## 041 — Métriques Prometheus et SLI/SLO de l'app de paging (2026-10-24, commit 268d83b)
 - Livré : registre de métriques maison, `GET /metrics` (désactivable par `METRICS_ENABLED`, false sur Render), métriques HTTP/messages/PNJ/Redis, `paging_npc_llm_*` par engine+model (durée par issue, débit effectif, tokens, tailles), 6 SLO Sloth, dashboards, ServiceMonitor optionnels dans `platform`. PASS (CA1-7, CA10-14 ; CA8/CA9 écartés).
@@ -91,3 +88,8 @@
 - Livré : `GET /api/health` renvoie `version` lue depuis `package.json` (importé, inliné au build) ; `package.json` et `package-lock.json` à `"0.1.0"` ; test `tests/http/health.test.ts`. PASS (CA1-4), aucun écart.
 - Décisions : `package.json` est la source de vérité de la version (0.1.0), à consommer par `workshop-platform` via `appVersion`.
 - Dette / suite : aucune.
+
+## 043 — Chart paging : teams source de vérité (2026-10-25, commit à renseigner)
+- Livré : `deploy/chart` aligné sur `platform/charts/paging` (appVersion + label `version`, bloc `metrics`, ServiceMonitor, ConfigMap vers le chart `llm`), Ollama retiré ; `local.sh` et scripts `k8s:up`, `k8s:down`, `k8s:personas` (copie gitignorée de `server/npc/personas`) ; README et contrat mis à jour (redéploiement `npm run -s k8s:up`). PASS (CA1-6).
+- Décisions : teams est la source unique du chart paging ; écarts acceptés : `redis.storageClass` "" par défaut (`local-path` dans `values-local.yaml`), chart renommé `sre-teams` → `paging`, PNJ en keywords en local sans `llm.enabled`.
+- Dette / suite : retirer `charts/paging` côté platform (étape 2 du transverse) ; platform consomme le chart par chemin relatif.

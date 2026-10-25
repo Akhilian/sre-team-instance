@@ -115,3 +115,6 @@ Terminé : métriques exposées et testées, SLI/SLO définis et validés sans d
 
 ## Évolution 2026-10-25 — version dans /api/health
 `GET /api/health` renvoie en plus `version` (chaîne lue depuis `package.json`), champs existants inchangés. Test dans `test:http`. Pas de Chrome, pas de redéploiement. Transverse : voir `SRE/specs/GOAL.md`.
+
+## Évolution 2026-10-25 — chart d'application source de vérité
+`deploy/chart` de teams devient la seule version du chart `paging` : y ramener les évolutions de `workshop-platform/charts/paging` (label `app.kubernetes.io/version` + `appVersion`, bloc `metrics`, ServiceMonitor, configmap vers le chart `llm`, retrait d'Ollama et de `ollama.yaml`). Garder le build de l'image et les fiches PNJ ici. Adapter scripts npm `k8s:*`, `local.sh`, README et contrat d'agents (redéploiement, instance). Aucun déploiement. Transverse : `SRE/specs/GOAL.md`. La plateforme retirera ensuite sa copie.

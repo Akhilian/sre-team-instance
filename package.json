@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:http": "vitest run --config vitest.http.config.ts",
     "k8s:up": "bash deploy/local.sh up",
-    "k8s:up:ollama": "bash deploy/local.sh up --ollama",
+    "k8s:personas": "rm -rf deploy/chart/files/personas && mkdir -p deploy/chart/files && cp -R server/npc/personas deploy/chart/files/personas",
     "k8s:down": "bash deploy/local.sh down"
   },
   "dependencies": {

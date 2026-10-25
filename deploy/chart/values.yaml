@@ -1,3 +1,6 @@
+# Version applicative (label app.kubernetes.io/version) ; garder alignée sur `version` de /api/health (workshop-teams).
+appVersion: "0.1.0"
+
 image:
   repository: sre-teams
   tag: local
@@ -7,7 +10,7 @@ image:
 service:
   port: 8088
 
-# Code animateur : obligatoire (aucune valeur par défaut)
+# Secrets : obligatoires, JAMAIS commités (--set-string ou variables d'environnement via le Makefile)
 facilitatorCode: ""
 
 # Clé d'API Claude, optionnelle (moteur NPC_ENGINE=anthropic)
@@ -26,30 +29,29 @@ redis:
   image: redis:7-alpine
   # Mot de passe Redis : obligatoire quand redis.enabled=true
   password: ""
-  storageClass: local-path
+  storageClass: ""   # "" = classe par défaut du cluster
   storageSize: 1Gi
   resources:
     requests: { cpu: 50m, memory: 64Mi }
     limits: { memory: 256Mi }
 
-# Fiches de PNJ : si files/personas/<scénario>/*.md existe (copié par deploy/local.sh), une ConfigMap
-# <release>-personas est montée sur /etc/sre-teams/personas et NPC_PERSONAS_DIR y pointe.
+# Fiches de PNJ : files/personas/<scénario>/*.md -> ConfigMap <release>-personas, montée sur
+# /etc/sre-teams/personas (NPC_PERSONAS_DIR).
 
-# Ollama optionnel : modèle local pour les PNJ (NPC_ENGINE=openai-compatible)
-ollama:
+# Modèle self-hosted (chart llm, même namespace). Désactivé : moteur `config.NPC_ENGINE` (keywords).
+llm:
   enabled: false
-  image: ollama/ollama:0.40.10
-  # Modèle tiré par l'initContainer (qwen2.5:3b, environ 1,9 Go). Le 7b (environ 4,7 Go) a mesuré 104 s au
-  # 1er appel et saturé une VM Colima de 10 Gi ; 7b possible si RAM Colima >= 14 Gi (requests 5Gi / limits 7Gi)
-  model: qwen2.5:3b
-  keepAlive: 24h
-  llmTimeoutMs: 60000
-  storageClass: local-path
-  storageSize: 10Gi
-  resources:
-    requests: { cpu: "2", memory: 3Gi }
-    limits: { memory: 4Gi }
+  baseUrl: http://llm:8080/v1
+  model: qwen2.5-3b   # = model.alias du chart llm
+  timeoutMs: 60000
 
-# NetworkPolicy en entrée : Redis et Ollama n'acceptent que les pods de l'application (même release)
+# NetworkPolicy en entrée : Redis n'accepte que les pods de l'application (même release)
 networkPolicy:
   enabled: true
+
+# Métriques Prometheus (GET /metrics de l'app, voir README) : ServiceMonitor pour le Prometheus de
+# kube-prometheus-stack (sre-teams-monitoring). Désactivé par défaut : il exige les CRD de l'Operator
+# (monitoring installé avant) ; activé sur eks (environments/eks/paging.yaml).
+metrics:
+  enabled: false
+  interval: 30s

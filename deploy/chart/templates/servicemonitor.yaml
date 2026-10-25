@@ -1,0 +1,20 @@
+{{- if .Values.metrics.enabled }}
+# GET /metrics de l'app (METRICS_ENABLED côté app, actif par défaut). Le Prometheus de kube-prometheus-stack
+# sélectionne tous les ServiceMonitor (serviceMonitorSelectorNilUsesHelmValues: false) : pas de label release.
+# Aucun impact sur la NetworkPolicy : l'ingress de l'application accepte tout, seule la règle Redis est restreinte.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "sre-teams.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sre-teams
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.metrics.interval }}
+{{- end }}

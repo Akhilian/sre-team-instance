@@ -4,3 +4,4 @@ facilitatorCode: demo-animateur
 redis:
   # Mot de passe Redis de démonstration
   password: demo-redis-password
+  storageClass: local-path

@@ -1,6 +1,6 @@
 apiVersion: v2
-name: sre-teams
-description: Instance Teams du workshop SRE (application Nuxt + Redis optionnel)
+name: paging
+description: Application workshop-teams (Nuxt) + Redis, PNJ via le service llm
 type: application
 version: 0.1.0
-appVersion: "local"
+appVersion: "0.1.0"

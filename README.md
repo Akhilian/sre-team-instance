@@ -43,27 +43,24 @@ Le chart `deploy/chart/` installe l'application et Redis dans le namespace `sre-
 
 ```bash
 npm run k8s:up          # build de l'image sre-teams:local, copie des fiches, helm upgrade --install
-npm run k8s:up:ollama   # idem avec Ollama (modèle local pour les PNJ), jusqu'à 20 min la première fois
 npm run k8s:down        # supprime le namespace sre-teams, PVC compris
 ```
 
-- **Accès** : `http://localhost:8088` ; code animateur de démonstration `demo-animateur`, remplaçable au déploiement : `FACILITATOR_CODE=mon-code npm run k8s:up` (ou `k8s:up:ollama`)
+- **Accès** : `http://localhost:8088` ; code animateur de démonstration `demo-animateur`, remplaçable au déploiement : `FACILITATOR_CODE=mon-code npm run k8s:up`
   (`deploy/values-local.yaml`, aucun secret réel).
-- **Fiches de PNJ** : `up` copie `server/npc/personas/` dans `deploy/chart/files/personas/` (gitignoré) et le
+- **Fiches de PNJ** : `up` (via `npm run k8s:personas`) copie `server/npc/personas/` dans `deploy/chart/files/personas/` (gitignoré) et le
   chart en fait la ConfigMap `sre-teams-personas`, montée sur `/etc/sre-teams/personas` (`NPC_PERSONAS_DIR`).
   Pour en modifier une : `kubectl -n sre-teams edit configmap sre-teams-personas` (clé
   `<scénario>_<id>.md`), attendre la synchronisation du kubelet (environ 1 min), puis « Recharger » dans
   `/admin`. La modification est écrasée au prochain `up`. Sans fiches copiées, les fiches embarquées sont utilisées.
-- **Ollama** : `ollama.enabled=true` (ce que fait `k8s:up:ollama`) ajoute un Deployment `ollama/ollama`, un
-  PVC de 10 Gi et un Service ; un initContainer tire le modèle `ollama.model` (`qwen2.5:3b` par défaut,
-  environ 1,9 Go ; requests 3 Gi / limits 4 Gi de mémoire, `OLLAMA_KEEP_ALIVE=24h` pour garder le modèle chargé,
-  sondes tolérantes sous charge). Les PNJ passent en `openai-compatible` (`NPC_LLM_TIMEOUT_MS=60000`). Le 7b a mesuré
-  104 s au 1er appel et saturé une VM Colima de 10 Gi ; il reste possible avec une VM d'au moins 14 Gi
-  (`colima stop && colima start --memory 14`, puis `--set ollama.model=qwen2.5:7b --set ollama.resources.requests.memory=5Gi
-  --set ollama.resources.limits.memory=7Gi` dans `deploy/local.sh`). Sur CPU, la première réponse
-  charge le modèle : le script fait un appel de chauffe. Sans `--ollama`, `up` repasse en `keywords`.
-- **NetworkPolicy** (`networkPolicy.enabled`, entrée seulement) : Redis et Ollama n'acceptent que les pods de
-  l'application. Pas de règle de sortie (le pull du modèle a besoin d'Internet). k3s les applique : depuis un pod
+- **LLM des PNJ** : le chart ne déploie plus de modèle. Avec `llm.enabled=true`, la ConfigMap passe les PNJ en
+  `NPC_ENGINE: openai-compatible` vers `llm.baseUrl` (défaut `http://llm:8080/v1`, `llm.model`, `llm.timeoutMs`) ;
+  le service est fourni par le chart `llm` de `workshop-platform`, installé séparément. `k8s:up` laisse
+  `llm.enabled=false` : les PNJ restent en `keywords`.
+- **Chart `paging`** : `deploy/chart` est la source de vérité (version `appVersion` = `version` de `package.json`,
+  label `app.kubernetes.io/version`, `metrics.enabled` pour le ServiceMonitor sur `/metrics`).
+- **NetworkPolicy** (`networkPolicy.enabled`, entrée seulement) : Redis n'accepte que les pods de
+  l'application. Pas de règle de sortie. k3s les applique : depuis un pod
   hors application, la connexion à `sre-teams-redis:6379` est refusée.
 
 ## Outils d'animateur

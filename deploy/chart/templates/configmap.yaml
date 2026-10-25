@@ -2,11 +2,11 @@
 {{- if include "sre-teams.hasPersonas" . }}
 {{- $_ := set $cfg "NPC_PERSONAS_DIR" "/etc/sre-teams/personas" }}
 {{- end }}
-{{- if .Values.ollama.enabled }}
+{{- if .Values.llm.enabled }}
 {{- $_ := set $cfg "NPC_ENGINE" "openai-compatible" }}
-{{- $_ := set $cfg "NPC_LLM_BASE_URL" (printf "http://%s-ollama:11434/v1" .Release.Name) }}
-{{- $_ := set $cfg "NPC_LLM_MODEL" .Values.ollama.model }}
-{{- $_ := set $cfg "NPC_LLM_TIMEOUT_MS" (toString .Values.ollama.llmTimeoutMs) }}
+{{- $_ := set $cfg "NPC_LLM_BASE_URL" .Values.llm.baseUrl }}
+{{- $_ := set $cfg "NPC_LLM_MODEL" .Values.llm.model }}
+{{- $_ := set $cfg "NPC_LLM_TIMEOUT_MS" (toString .Values.llm.timeoutMs) }}
 {{- end }}
 apiVersion: v1
 kind: ConfigMap
