@@ -2,8 +2,8 @@
 // Lus uniquement côté client (après montage), comme le nom d'affichage, pour éviter tout écart d'hydratation.
 import { DEFAULT_ROLE_ID, isRoleId, type RoleId } from '~~/shared/onboarding/roles'
 
-export const ROLE_STORAGE_KEY = 'sre-team-instance:role'
-export const ONBOARDING_STORAGE_KEY = 'sre-team-instance:onboarding-done'
+export const ROLE_STORAGE_KEY = 'sre-war-room:role'
+export const ONBOARDING_STORAGE_KEY = 'sre-war-room:onboarding-done'
 
 export function useRole() {
   // Rôle choisi ou reçu du serveur ; '' tant qu'aucun n'est connu

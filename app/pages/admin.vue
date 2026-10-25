@@ -26,7 +26,7 @@ import {
 } from '~~/shared/utils/alerts'
 import { TEXT_MAX_LENGTH } from '~~/shared/utils/limits'
 
-const FACILITATOR_CODE_STORAGE_KEY = 'sre-team-instance:facilitator-code'
+const FACILITATOR_CODE_STORAGE_KEY = 'sre-war-room:facilitator-code'
 const SCENARIO_POLL_INTERVAL_MS = 2000
 
 useHead({ title: 'Animateur | SRE Team Instance' })

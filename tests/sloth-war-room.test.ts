@@ -1,5 +1,5 @@
-// 044 : les SLO Sloth du paging (observability/sloth/paging-*.yaml) ne citent que des métriques,
-// labels et buckets déclarés dans server/utils/paging-metrics.ts
+// 044 : les SLO Sloth de war-room (observability/sloth/war-room-*.yaml) ne citent que des métriques,
+// labels et buckets déclarés dans server/utils/war-room-metrics.ts
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -22,7 +22,7 @@ export function declaredMetrics(source: string): Map<string, Declared> {
   }
   const metrics = new Map<string, Declared>()
   for (const line of source.split('\n')) {
-    const head = /registry\.(counter|gauge|histogram)\('(paging_\w+)'/.exec(line)
+    const head = /registry\.(counter|gauge|histogram)\('(war_room_\w+)'/.exec(line)
     if (!head) continue
     // après la description (chaîne simple, échappements possibles) : labels puis buckets
     const rest = line.slice(head.index + head[0].length).replace(/^,\s*'(?:[^'\\]|\\.)*'/, '')
@@ -35,7 +35,7 @@ export function declaredMetrics(source: string): Map<string, Declared> {
 export function checkQueries(yaml: string, metrics: Map<string, Declared>): string[] {
   const errors: string[] = []
   const queries = yaml.split('\n').filter(l => !l.trim().startsWith('#')).join('\n')
-  for (const m of queries.matchAll(/\b(paging_\w+?)(_bucket|_count|_sum)?(?:\{([^}]*)\})?(?![\w])/g)) {
+  for (const m of queries.matchAll(/\b(war_room_\w+?)(_bucket|_count|_sum)?(?:\{([^}]*)\})?(?![\w])/g)) {
     const [, base, suffix, selector] = m
     const name = metrics.has(base!) ? base! : `${base}${suffix ?? ''}`
     const declared = metrics.get(name)
@@ -54,31 +54,31 @@ export function checkQueries(yaml: string, metrics: Map<string, Declared>): stri
   return errors
 }
 
-const metrics = declaredMetrics(readFileSync(join(ROOT, 'server/utils/paging-metrics.ts'), 'utf8'))
-const files = readdirSync(SLO_DIR).filter(f => /^paging-.*\.yaml$/.test(f))
+const metrics = declaredMetrics(readFileSync(join(ROOT, 'server/utils/war-room-metrics.ts'), 'utf8'))
+const files = readdirSync(SLO_DIR).filter(f => /^war-room-.*\.yaml$/.test(f))
 
-describe('SLO Sloth du paging', () => {
+describe('SLO Sloth de war-room', () => {
   it('lit les métriques déclarées', () => {
-    expect(metrics.get('paging_http_request_duration_seconds')).toEqual({ labels: ['method', 'route'], buckets: ['0.01', '0.05', '0.1', '0.25', '0.5', '1', '2.5', '5'] })
-    expect(metrics.get('paging_npc_llm_effective_tokens_per_second')?.labels).toEqual(['engine', 'model'])
+    expect(metrics.get('war_room_http_request_duration_seconds')).toEqual({ labels: ['method', 'route'], buckets: ['0.01', '0.05', '0.1', '0.25', '0.5', '1', '2.5', '5'] })
+    expect(metrics.get('war_room_npc_llm_effective_tokens_per_second')?.labels).toEqual(['engine', 'model'])
   })
 
   it('contient les 6 fichiers attendus', () => {
-    expect(files.sort()).toEqual(['availability', 'latency', 'llm-deadline', 'llm-throughput', 'npc-fallback', 'npc-generation'].map(n => `paging-${n}.yaml`))
+    expect(files.sort()).toEqual(['availability', 'latency', 'llm-deadline', 'llm-throughput', 'npc-fallback', 'npc-generation'].map(n => `war-room-${n}.yaml`))
   })
 
   it.each(files)('%s : métriques, labels et buckets existent', (file) => {
     const yaml = readFileSync(join(SLO_DIR, file), 'utf8')
-    expect(yaml).toMatch(/paging_/)
+    expect(yaml).toMatch(/war_room_/)
     expect(checkQueries(yaml, metrics)).toEqual([])
     expect(yaml).not.toMatch(/workshop-platform/)
-    expect(yaml).toContain(`kubectl apply -n sre-teams -f observability/sloth/${file}`)
+    expect(yaml).toContain(`kubectl apply -n sre-war-room -f observability/sloth/${file}`)
   })
 
   it('détecte une métrique, un label ou un bucket absent', () => {
-    expect(checkQueries('sum(rate(paging_inconnue_total[5m]))', metrics)).toHaveLength(1)
-    expect(checkQueries('paging_http_requests_total{foo="x"}', metrics)).toHaveLength(1)
-    expect(checkQueries('paging_http_request_duration_seconds_bucket{le="0.3"}', metrics)).toHaveLength(1)
-    expect(checkQueries('paging_http_request_duration_seconds_bucket{le="0.25",route="/x"}', metrics)).toEqual([])
+    expect(checkQueries('sum(rate(war_room_inconnue_total[5m]))', metrics)).toHaveLength(1)
+    expect(checkQueries('war_room_http_requests_total{foo="x"}', metrics)).toHaveLength(1)
+    expect(checkQueries('war_room_http_request_duration_seconds_bucket{le="0.3"}', metrics)).toHaveLength(1)
+    expect(checkQueries('war_room_http_request_duration_seconds_bucket{le="0.25",route="/x"}', metrics)).toEqual([])
   })
 })

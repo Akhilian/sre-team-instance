@@ -4,7 +4,7 @@
 import { createStorage, type Storage } from 'unstorage'
 import { DEFAULT_CHANNEL_IDS, exportSnapshot, importSnapshot } from './chat-store'
 import { type Env, processEnv } from './env'
-import { trackStorage } from './paging-metrics'
+import { trackStorage } from './war-room-metrics'
 
 export const SNAPSHOT_KEY = 'chat-snapshot'
 /** Délai maximal entre une mutation et l'écriture de l'instantané */

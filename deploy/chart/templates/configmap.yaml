@@ -1,6 +1,6 @@
 {{- $cfg := deepCopy .Values.config }}
-{{- if include "sre-teams.hasPersonas" . }}
-{{- $_ := set $cfg "NPC_PERSONAS_DIR" "/etc/sre-teams/personas" }}
+{{- if include "war-room.hasPersonas" . }}
+{{- $_ := set $cfg "NPC_PERSONAS_DIR" "/etc/sre-war-room/personas" }}
 {{- end }}
 {{- if .Values.llm.enabled }}
 {{- $_ := set $cfg "NPC_ENGINE" "openai-compatible" }}
@@ -11,9 +11,9 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "sre-teams.name" . }}
+  name: {{ include "war-room.name" . }}
   labels:
-    {{- include "sre-teams.labels" . | nindent 4 }}
+    {{- include "war-room.labels" . | nindent 4 }}
 data:
   {{- range $k, $v := $cfg }}
   {{ $k }}: {{ $v | quote }}

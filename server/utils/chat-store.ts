@@ -2,7 +2,7 @@
 // (instantané exportSnapshot / importSnapshot) est branchée par server/utils/chat-persistence.ts.
 // Module pur (sans auto-import Nuxt) pour être testable directement avec Vitest.
 import type { Channel, ChannelSummary, DirectChannel, Message, MessagesDelta } from '../../shared/types/chat'
-import { recordMessagePosted } from './paging-metrics'
+import { recordMessagePosted } from './war-room-metrics'
 import { isReactionEmoji } from '../../shared/utils/reactions'
 import {
   ALERT_SERVICE_MAX_LENGTH,

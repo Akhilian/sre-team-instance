@@ -13,7 +13,7 @@ import {
   recordNpcGeneration,
   recordNpcReply,
   takeReplyOutcome,
-} from '../../utils/paging-metrics'
+} from '../../utils/war-room-metrics'
 import { createKeywordsResponder } from './keywords'
 import { openAiCompatibleFromEnv } from './openai-compatible'
 import { ANTHROPIC_DEFAULT_MODEL, anthropicFromEnv } from './anthropic'

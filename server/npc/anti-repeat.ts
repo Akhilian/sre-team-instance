@@ -4,7 +4,7 @@
 import type { NpcPersona, NpcRequest, NpcResponder } from '../../shared/types/npc'
 import { NPC_ACK_TEXTS, NPC_BUSY_REPLY } from './generic-phrases'
 import { allWords } from './lexical-retriever'
-import { markReplyOutcome } from '../utils/paging-metrics'
+import { markReplyOutcome } from '../utils/war-room-metrics'
 
 /** Dernières réponses du PNJ comparées à la nouvelle */
 export const NPC_REPEAT_WINDOW = 3

@@ -1,6 +1,6 @@
 // Métriques HTTP (041) : durée et statut de chaque requête, étiquetés par le motif de route apparié par
 // Nitro (event.context.matchedRoute.path, ex. /api/channels/:id/messages), jamais par l'URL brute.
-// /metrics et /api/health n'y figurent pas. Les compteurs vivent dans server/utils/paging-metrics.ts.
+// /metrics et /api/health n'y figurent pas. Les compteurs vivent dans server/utils/war-room-metrics.ts.
 /** Motif du routeur h3 : `path` (h3 1.x, Nitro 2) ; `route` par tolérance pour une version ultérieure */
 function routePatternOf(matched: unknown): string | undefined {
   const { path, route } = (matched ?? {}) as { path?: unknown, route?: unknown }

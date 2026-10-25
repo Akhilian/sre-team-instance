@@ -1,10 +1,10 @@
-{{- if include "sre-teams.hasPersonas" . }}
+{{- if include "war-room.hasPersonas" . }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-personas
   labels:
-    {{- include "sre-teams.labels" . | nindent 4 }}
+    {{- include "war-room.labels" . | nindent 4 }}
 data:
   {{- range $path, $_ := .Files.Glob "files/personas/*/*.md" }}
   {{ $path | trimPrefix "files/personas/" | replace "/" "_" }}: {{ $.Files.Get $path | toJson }}

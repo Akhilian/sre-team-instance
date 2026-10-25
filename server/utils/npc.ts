@@ -26,7 +26,7 @@ import { addNpcMessage, addSystemMessage, getChannel, listMessages } from './cha
 import { NPC_CHANNEL_CONTEXT_MAX } from '../../shared/utils/limits'
 import { dispatcherTimeoutMs } from '../npc/engines/openai-compatible'
 import { processEnv } from './env'
-import { recordNpcReply } from './paging-metrics'
+import { recordNpcReply } from './war-room-metrics'
 import { setNpcTyping } from './presence-store'
 
 /** Base unstorage des fiches : server/npc/personas/<scénario>/<id>.md */

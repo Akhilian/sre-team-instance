@@ -97,3 +97,9 @@
 - Livré : `.github/workflows/ci.yml` (typecheck, test, test:http, build ; `workflow_call` + `pull_request`) et `image.yml` (push `main` + `workflow_dispatch` : image multi-arch `akhilian/sre-teams`, tags sha long, version `package.json`, `latest`) ; README « Publication de l'image » ; contrat d'agents. PASS (CA1-6).
 - Décisions : teams et docshare publient sur le Docker Hub `akhilian` ; le chart `deploy/chart` garde `image.repository=sre-teams`, surchargé par la plateforme (`environments/eks/paging.yaml` → `akhilian/sre-teams`). Écart accepté : `docs/**` dans les `paths` de `image.yml` (guides embarqués au build).
 - Dette / suite : créer le secret `DOCKERHUB_TOKEN` dans le dépôt GitHub (sinon le job de publication échoue au premier run) ; la plateforme doit épingler le tag (version/sha) au lieu de `latest` ; actionlint absent (validation par parse YAML).
+
+## 046 — Renommage du produit en sre-war-room (2026-10-25, commit à renseigner)
+- Livré : produit, chart (`war-room`), namespace/release/image `sre-war-room`, métriques `war_room_*`, SLO `war-room-*.yaml`, test `tests/sloth-war-room.test.ts`, image `akhilian/sre-war-room`. 662 tests + 103 HTTP OK, Sloth OK. PASS (CA1-5).
+- Décisions : les clés localStorage passent à `sre-war-room:*` (état d'onboarding, rôle, nom, code animateur réinitialisés côté navigateurs). Les entrées historiques ci-dessus gardent les anciens noms.
+- Dette / suite : platform doit suivre (image, chart, métriques `war_room_*`, dashboards) ; renommer dossier, dépôt GitHub, service Render, dépôt Docker Hub.
+- Écarts acceptés : helper renommé `war-room.*` ; 3 occurrences « paging » conservées (fichiers de la plateforme, ancienne URL du remote) ; glob CA1 élargi aux specs 006-009.

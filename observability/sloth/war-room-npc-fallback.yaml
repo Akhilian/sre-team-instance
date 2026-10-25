@@ -1,21 +1,21 @@
 # SLO 3 : réponses PNJ sans repli, moteurs à modèle seulement . capped (plafond atteint) et rejected_repeat (anti-répétition) sont exclus du total.
-# Collecte : ServiceMonitor du chart paging (metrics.enabled=true). Appliquer : kubectl apply -n sre-teams -f observability/sloth/paging-npc-fallback.yaml
+# Collecte : ServiceMonitor du chart war-room (metrics.enabled=true). Appliquer : kubectl apply -n sre-war-room -f observability/sloth/war-room-npc-fallback.yaml
 apiVersion: sloth.slok.dev/v1
 kind: PrometheusServiceLevel
 metadata:
-  name: paging-npc-fallback
+  name: war-room-npc-fallback
 spec:
-  service: paging-npc
+  service: war-room-npc
   slos:
     - name: npc-fallback
       objective: 95
       description: "Les réponses des PNJ viennent du modèle, sans repli sur les mots-clés."
       sli:
         events:
-          errorQuery: sum(rate(paging_npc_replies_total{engine!="keywords",outcome=~"fallback|timeout"}[{{.window}}])) or vector(0)
-          totalQuery: sum(rate(paging_npc_replies_total{engine!="keywords",outcome=~"ok|fallback|timeout"}[{{.window}}]))
+          errorQuery: sum(rate(war_room_npc_replies_total{engine!="keywords",outcome=~"fallback|timeout"}[{{.window}}])) or vector(0)
+          totalQuery: sum(rate(war_room_npc_replies_total{engine!="keywords",outcome=~"ok|fallback|timeout"}[{{.window}}]))
       alerting:
-        name: PagingNpcFallback
+        name: WarRoomNpcFallback
         pageAlert:
           labels: { severity: page }
         ticketAlert:

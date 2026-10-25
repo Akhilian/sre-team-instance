@@ -29,7 +29,7 @@ permissions:
 
 env:
   DOCKERHUB_USER: akhilian
-  IMAGE: sre-teams
+  IMAGE: sre-war-room
 
 jobs:
   ci:

@@ -9,7 +9,7 @@ import {
   normalizeRoute,
   statusClass,
 } from '../server/utils/metrics'
-import { LLM_MODELS_MAX, llmModelLabel, metricsEnabled, recordHttp, registry, resetLlmModels } from '../server/utils/paging-metrics'
+import { LLM_MODELS_MAX, llmModelLabel, metricsEnabled, recordHttp, registry, resetLlmModels } from '../server/utils/war-room-metrics'
 import { createChatPersistence } from '../server/utils/chat-persistence'
 import { resetChatStore } from '../server/utils/chat-store'
 import { resolveNpcEngine } from '../server/npc/engines'
@@ -122,7 +122,7 @@ describe('normalisation de route (CA1)', () => {
   it('recordHttp ne crée aucune série avec un id', () => {
     recordHttp({ method: 'POST', routePattern: '/api/channels/:id/messages', status: 201, seconds: 0.02 })
     const text = registry.render()
-    expect(text).toContain('paging_http_requests_total{method="POST",route="/api/channels/:id/messages",status_class="2xx"}')
+    expect(text).toContain('war_room_http_requests_total{method="POST",route="/api/channels/:id/messages",status_class="2xx"}')
   })
 })
 
@@ -146,17 +146,17 @@ describe('stockage (CA4)', () => {
       return original(...args)
     }) as typeof storage.getItem
     const persistence = createChatPersistence(storage, { retryMs: 20, logger: { warn: vi.fn(), error: vi.fn() } })
-    const before = sample(registry.render(), 'paging_storage_operations_total{op="read",result="error"}') ?? 0
+    const before = sample(registry.render(), 'war_room_storage_operations_total{op="read",result="error"}') ?? 0
     await persistence.hydrate()
     let text = registry.render()
-    expect(sample(text, 'paging_storage_operations_total{op="read",result="error"}')).toBe(before + 1)
-    expect(sample(text, 'paging_storage_up')).toBe(0)
+    expect(sample(text, 'war_room_storage_operations_total{op="read",result="error"}')).toBe(before + 1)
+    expect(sample(text, 'war_room_storage_up')).toBe(0)
     failing = false
-    await vi.waitFor(() => expect(sample(registry.render(), 'paging_storage_up')).toBe(1))
+    await vi.waitFor(() => expect(sample(registry.render(), 'war_room_storage_up')).toBe(1))
     persistence.stop()
     text = registry.render()
-    expect(sample(text, 'paging_storage_operations_total{op="read",result="ok"}')).toBeGreaterThanOrEqual(1)
-    expect(text).toContain('paging_storage_operation_duration_seconds_count{op="read"}')
+    expect(sample(text, 'war_room_storage_operations_total{op="read",result="ok"}')).toBeGreaterThanOrEqual(1)
+    expect(text).toContain('war_room_storage_operation_duration_seconds_count{op="read"}')
   })
 
   it('échec d\'écriture compté', async () => {
@@ -165,8 +165,8 @@ describe('stockage (CA4)', () => {
     await persistence.hydrate()
     storage.setItem = (async () => { throw new Error('disque plein') }) as typeof storage.setItem
     await persistence.flush()
-    expect(sample(registry.render(), 'paging_storage_operations_total{op="write",result="error"}')).toBeGreaterThanOrEqual(1)
-    expect(sample(registry.render(), 'paging_storage_up')).toBe(0)
+    expect(sample(registry.render(), 'war_room_storage_operations_total{op="write",result="error"}')).toBeGreaterThanOrEqual(1)
+    expect(sample(registry.render(), 'war_room_storage_up')).toBe(0)
   })
 })
 
@@ -187,7 +187,7 @@ function reply(content: string, usage?: unknown): Response {
 
 /** Valeur d'un compteur pour des labels, avant/après une action */
 function replies(engine: string, outcome: string): number {
-  return sample(registry.render(), `paging_npc_replies_total{engine="${engine}",outcome="${outcome}"}`) ?? 0
+  return sample(registry.render(), `war_room_npc_replies_total{engine="${engine}",outcome="${outcome}"}`) ?? 0
 }
 
 describe('issues des réponses de PNJ (CA3)', () => {
@@ -224,11 +224,11 @@ describe('issues des réponses de PNJ (CA3)', () => {
     expect(replies('openai-compatible', 'ok')).toBe(before.ok + 1)
   })
 
-  it('issues, tokens et tailles par engine/model sur paging_npc_llm_*', async () => {
+  it('issues, tokens et tailles par engine/model sur war_room_npc_llm_*', async () => {
     const engine = resolveNpcEngine(env, quiet).responder
-    const count = (outcome: string) => sample(registry.render(), `paging_npc_llm_duration_seconds_count{engine="openai-compatible",model="m-test",outcome="${outcome}"}`) ?? 0
+    const count = (outcome: string) => sample(registry.render(), `war_room_npc_llm_duration_seconds_count{engine="openai-compatible",model="m-test",outcome="${outcome}"}`) ?? 0
     const before = { ok: count('ok'), error: count('error'), timeout: count('timeout'), fallback: count('fallback'), rr: count('rejected_repeat') }
-    const tokens = (direction: string) => sample(registry.render(), `paging_npc_llm_tokens_total{engine="openai-compatible",model="m-test",direction="${direction}"}`) ?? 0
+    const tokens = (direction: string) => sample(registry.render(), `war_room_npc_llm_tokens_total{engine="openai-compatible",model="m-test",direction="${direction}"}`) ?? 0
     const tokensBefore = { input: tokens('input'), output: tokens('output') }
 
     await engine.respond(await ask('Quel déploiement récent ?'))
@@ -249,9 +249,9 @@ describe('issues des réponses de PNJ (CA3)', () => {
     expect(count('fallback')).toBe(before.fallback + 1)
     expect(count('rejected_repeat')).toBe(before.rr + 1)
     const text = registry.render()
-    expect(text).toContain('paging_npc_llm_prompt_chars_count{engine="openai-compatible",model="m-test"}')
-    expect(text).toContain('paging_npc_llm_response_chars_count{engine="openai-compatible",model="m-test"}')
-    expect(text).toContain('paging_npc_llm_effective_tokens_per_second_count{engine="openai-compatible",model="m-test"}')
+    expect(text).toContain('war_room_npc_llm_prompt_chars_count{engine="openai-compatible",model="m-test"}')
+    expect(text).toContain('war_room_npc_llm_response_chars_count{engine="openai-compatible",model="m-test"}')
+    expect(text).toContain('war_room_npc_llm_effective_tokens_per_second_count{engine="openai-compatible",model="m-test"}')
     // Ni clé, ni URL, ni texte de prompt ou de réponse
     for (const secret of ['cle-secrete-041', 'modele.test', 'v2.41.0', 'Quel déploiement']) expect(text).not.toContain(secret)
   })
@@ -261,17 +261,17 @@ describe('issues des réponses de PNJ (CA3)', () => {
     fetchMock.mockImplementation(async () => reply('Le déploiement v2.41.0.'))
     await engine.respond(await ask('Quel déploiement récent ?'))
     const text = registry.render()
-    expect(text).not.toContain('paging_npc_llm_tokens_total{engine="openai-compatible",model="m-sans-usage"')
-    expect(text).toContain('paging_npc_llm_duration_seconds_count{engine="openai-compatible",model="m-sans-usage",outcome="ok"}')
-    expect(text).not.toContain('paging_npc_llm_effective_tokens_per_second_count{engine="openai-compatible",model="m-sans-usage"')
+    expect(text).not.toContain('war_room_npc_llm_tokens_total{engine="openai-compatible",model="m-sans-usage"')
+    expect(text).toContain('war_room_npc_llm_duration_seconds_count{engine="openai-compatible",model="m-sans-usage",outcome="ok"}')
+    expect(text).not.toContain('war_room_npc_llm_effective_tokens_per_second_count{engine="openai-compatible",model="m-sans-usage"')
   })
 
-  it('keywords : aucune série paging_npc_llm_* et une génération rapide', async () => {
-    const before = registry.render().split('\n').filter(line => line.startsWith('paging_npc_llm_') && line.includes('keywords'))
+  it('keywords : aucune série war_room_npc_llm_* et une génération rapide', async () => {
+    const before = registry.render().split('\n').filter(line => line.startsWith('war_room_npc_llm_') && line.includes('keywords'))
     expect(before).toEqual([])
     const engine = resolveNpcEngine({}, quiet).responder
     await engine.respond(await ask('Quel déploiement récent ?'))
-    const after = registry.render().split('\n').filter(line => line.startsWith('paging_npc_llm_') && line.includes('keywords'))
+    const after = registry.render().split('\n').filter(line => line.startsWith('war_room_npc_llm_') && line.includes('keywords'))
     expect(after).toEqual([])
     expect(replies('keywords', 'ok')).toBeGreaterThanOrEqual(1)
   })
@@ -288,7 +288,7 @@ describe('issues des réponses de PNJ (CA3)', () => {
     resetChatStore()
     const clock = fakeClock()
     const engine = resolveNpcEngine({}, quiet).responder
-    const generation = () => sample(registry.render(), 'paging_npc_generation_duration_seconds_sum{engine="keywords"}') ?? 0
+    const generation = () => sample(registry.render(), 'war_room_npc_generation_duration_seconds_sum{engine="keywords"}') ?? 0
     const before = generation()
     const dispatcher = createNpcDispatcher({
       ...clock,

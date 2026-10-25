@@ -1,4 +1,4 @@
-// Métriques de l'application de paging (préfixe paging_) sur le registre maison de metrics.ts.
+// Métriques de l'application de sre-war-room (préfixe war_room_) sur le registre maison de metrics.ts.
 // Aucun label à forte cardinalité : ni id de participant, de message ou de canal, ni URL brute.
 // Module pur (sans auto-import Nuxt) ; les points d'instrumentation (middleware HTTP, moteurs de PNJ,
 // persistance) appellent les fonctions ci-dessous.
@@ -12,24 +12,24 @@ export const registry = createRegistry()
 const HTTP_BUCKETS = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]
 const NPC_GENERATION_BUCKETS = [0.25, 0.5, 1, 2, 5, 10, 15, 30]
 
-const httpRequests = registry.counter('paging_http_requests_total', 'Requêtes HTTP traitées, par méthode, route normalisée et classe de statut.', ['method', 'route', 'status_class'])
-const httpDuration = registry.histogram('paging_http_request_duration_seconds', 'Durée des requêtes HTTP, par méthode et route normalisée.', ['method', 'route'], HTTP_BUCKETS)
-const messagesPosted = registry.counter('paging_messages_posted_total', 'Messages publiés, par nature (human, npc, system).', ['kind'])
-registry.gauge('paging_active_clients', 'Participants présents (battement de présence récent).', [], () => presentParticipants(Date.now()).length)
-const npcReplies = registry.counter('paging_npc_replies_total', 'Réponses de PNJ par moteur et issue (ok, fallback, timeout, rejected_repeat, capped).', ['engine', 'outcome'])
-const npcGeneration = registry.histogram('paging_npc_generation_duration_seconds', 'Durée du seul appel au moteur de PNJ (délai de rythme exclu).', ['engine'], NPC_GENERATION_BUCKETS)
-const npcEngineErrors = registry.counter('paging_npc_engine_errors_total', 'Échecs d\'appel au moteur de PNJ, par raison (timeout, http, invalid).', ['engine', 'reason'])
-const storageOps = registry.counter('paging_storage_operations_total', 'Opérations sur le stockage de persistance, par type et résultat.', ['op', 'result'])
-const storageDuration = registry.histogram('paging_storage_operation_duration_seconds', 'Durée des opérations de stockage, par type.', ['op'], HTTP_BUCKETS)
-const storageUp = registry.gauge('paging_storage_up', 'Dernier état connu du stockage de persistance (1 = opération réussie, 0 = échec).')
+const httpRequests = registry.counter('war_room_http_requests_total', 'Requêtes HTTP traitées, par méthode, route normalisée et classe de statut.', ['method', 'route', 'status_class'])
+const httpDuration = registry.histogram('war_room_http_request_duration_seconds', 'Durée des requêtes HTTP, par méthode et route normalisée.', ['method', 'route'], HTTP_BUCKETS)
+const messagesPosted = registry.counter('war_room_messages_posted_total', 'Messages publiés, par nature (human, npc, system).', ['kind'])
+registry.gauge('war_room_active_clients', 'Participants présents (battement de présence récent).', [], () => presentParticipants(Date.now()).length)
+const npcReplies = registry.counter('war_room_npc_replies_total', 'Réponses de PNJ par moteur et issue (ok, fallback, timeout, rejected_repeat, capped).', ['engine', 'outcome'])
+const npcGeneration = registry.histogram('war_room_npc_generation_duration_seconds', 'Durée du seul appel au moteur de PNJ (délai de rythme exclu).', ['engine'], NPC_GENERATION_BUCKETS)
+const npcEngineErrors = registry.counter('war_room_npc_engine_errors_total', 'Échecs d\'appel au moteur de PNJ, par raison (timeout, http, invalid).', ['engine', 'reason'])
+const storageOps = registry.counter('war_room_storage_operations_total', 'Opérations sur le stockage de persistance, par type et résultat.', ['op', 'result'])
+const storageDuration = registry.histogram('war_room_storage_operation_duration_seconds', 'Durée des opérations de stockage, par type.', ['op'], HTTP_BUCKETS)
+const storageUp = registry.gauge('war_room_storage_up', 'Dernier état connu du stockage de persistance (1 = opération réussie, 0 = échec).')
 
 // Performance des moteurs à modèle (engine, model) : jamais d'écriture pour keywords
 const LLM_LABELS = ['engine', 'model'] as const
-const llmDuration = registry.histogram('paging_npc_llm_duration_seconds', 'Durée totale de l\'appel au modèle, par issue (ok, timeout, error, fallback, rejected_repeat).', ['engine', 'model', 'outcome'], [0.5, 1, 2, 5, 10, 15, 30, 60])
-const llmTokensPerSecond = registry.histogram('paging_npc_llm_effective_tokens_per_second', 'Débit effectif bout en bout : tokens de sortie / durée totale de l\'appel (traitement du prompt compris), si au moins 2 tokens.', LLM_LABELS, [0.5, 1, 2, 5, 10, 20, 40])
-const llmTokens = registry.counter('paging_npc_llm_tokens_total', 'Tokens lus dans usage de l\'API (jamais estimés), par direction.', ['engine', 'model', 'direction'])
-const llmPromptChars = registry.histogram('paging_npc_llm_prompt_chars', 'Taille du prompt envoyé au modèle, en caractères.', LLM_LABELS, [500, 1000, 2000, 4000, 8000, 16000])
-const llmResponseChars = registry.histogram('paging_npc_llm_response_chars', 'Taille de la réponse nettoyée du modèle, en caractères.', LLM_LABELS, [50, 100, 200, 400, 800])
+const llmDuration = registry.histogram('war_room_npc_llm_duration_seconds', 'Durée totale de l\'appel au modèle, par issue (ok, timeout, error, fallback, rejected_repeat).', ['engine', 'model', 'outcome'], [0.5, 1, 2, 5, 10, 15, 30, 60])
+const llmTokensPerSecond = registry.histogram('war_room_npc_llm_effective_tokens_per_second', 'Débit effectif bout en bout : tokens de sortie / durée totale de l\'appel (traitement du prompt compris), si au moins 2 tokens.', LLM_LABELS, [0.5, 1, 2, 5, 10, 20, 40])
+const llmTokens = registry.counter('war_room_npc_llm_tokens_total', 'Tokens lus dans usage de l\'API (jamais estimés), par direction.', ['engine', 'model', 'direction'])
+const llmPromptChars = registry.histogram('war_room_npc_llm_prompt_chars', 'Taille du prompt envoyé au modèle, en caractères.', LLM_LABELS, [500, 1000, 2000, 4000, 8000, 16000])
+const llmResponseChars = registry.histogram('war_room_npc_llm_response_chars', 'Taille de la réponse nettoyée du modèle, en caractères.', LLM_LABELS, [50, 100, 200, 400, 800])
 
 /** /metrics et la sonde de santé n'entrent pas dans les métriques HTTP */
 export function isHttpTracked(path: string): boolean {

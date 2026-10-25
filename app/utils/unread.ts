@@ -3,7 +3,7 @@
 // monotone côté serveur : ni l'éviction FIFO ni les resets ne le font baisser.
 import type { ChannelSummary } from '../../shared/types/chat'
 
-export const LAST_SEEN_STORAGE_KEY = 'sre-team-instance:last-seen'
+export const LAST_SEEN_STORAGE_KEY = 'sre-war-room:last-seen'
 
 export interface UnreadState {
   /** Non-lus par id de canal (0 pour le canal courant) */

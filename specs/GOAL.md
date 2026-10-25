@@ -124,3 +124,6 @@ Accueillir les SLO Sloth du paging (6 fichiers `paging-*.yaml`, actuellement dan
 
 ## Évolution 2026-10-25 — publication de l'image sur Docker Hub (akhilian)
 Les deux dépôts de code publient leurs images sur le Docker Hub de l'utilisateur (`akhilian/*`). DocShare le fait déjà (`.github/workflows/image.yml` : `akhilian/docshare`, `akhilian/docshare-web`, secret `DOCKERHUB_TOKEN`). Teams n'a aucun workflow : ajouter la CI GitHub Actions qui, sur push `main` quand typecheck/tests sont verts, construit le `Dockerfile` et publie `akhilian/sre-teams` (tags : sha complet, version de `package.json`, `latest` ; multi-arch comme docshare), même secret `DOCKERHUB_TOKEN` à créer par l'utilisateur dans le dépôt GitHub. La plateforme consomme `akhilian/sre-teams` (`environments/eks/paging.yaml`). Aucun déploiement ; ne pas lancer le workflow depuis la session.
+
+## Évolution 2026-10-25 — renommage en sre-war-room
+Voir `SRE/specs/GOAL.md`. Dans teams : `package.json` name, chart `paging` → `war-room`, métriques `paging_*` → `war_room_*`, SLO, namespaces `sre-war-room*`, image `akhilian/sre-war-room`, UI/README/docs/tests. Dossier local inchangé jusqu'à la dernière étape. Aucun déploiement.

@@ -1,4 +1,4 @@
-# sre-team-instance
+# sre-war-room
 
 Application full-stack [Nuxt 4](https://nuxt.com/docs) : front Vue et API dans le même dépôt.
 
@@ -38,8 +38,8 @@ Le fichier [`render.yaml`](./render.yaml) décrit un *Web Service* Node (Bluepri
 
 Deux workflows GitHub Actions (`.github/workflows/`) :
 
-- `ci.yml` : `npm ci`, `typecheck`, `test`, `test:http`, `build` (Node 24) ; sur pull request, push sur `main`, `workflow_dispatch` et `workflow_call`.
-- `image.yml` : sur push sur `main` (chemins de l'application, du `Dockerfile` et des workflows) ou déclenchement manuel (onglet Actions > « Publication de l'image » > Run workflow), lance `ci.yml` puis publie `docker.io/akhilian/sre-teams` en `linux/amd64,linux/arm64`.
+- `ci.yml` : `npm ci`, `typecheck`, `test`, `build`, `test:http` (Node 24 ; `test:http` exige le build préalable) ; sur pull request, push sur `main`, `workflow_dispatch` et `workflow_call`.
+- `image.yml` : sur push sur `main` (chemins de l'application, du `Dockerfile` et des workflows) ou déclenchement manuel (onglet Actions > « Publication de l'image » > Run workflow), lance `ci.yml` puis publie `docker.io/akhilian/sre-war-room` en `linux/amd64,linux/arm64`.
 
 Tags publiés : le sha complet du commit, la version de `package.json` (ex. `0.1.0`, sans `v`) et `latest`.
 
@@ -47,32 +47,32 @@ Secret requis : `DOCKERHUB_TOKEN`, un jeton Docker Hub en écriture, à créer d
 
 ## Kubernetes local (Colima)
 
-Le chart `deploy/chart/` installe l'application et Redis dans le namespace `sre-teams` d'un cluster Colima
+Le chart `deploy/chart/` installe l'application et Redis dans le namespace `sre-war-room` d'un cluster Colima
 (k3s). Tout reste dans ce namespace : aucune ressource à portée cluster.
 
 **Prérequis** : Colima avec Kubernetes (contexte `kubectl` `colima`, vérifié par le script), Docker, `kubectl`, `helm`.
 
 ```bash
-npm run k8s:up          # build de l'image sre-teams:local, copie des fiches, helm upgrade --install
-npm run k8s:down        # supprime le namespace sre-teams, PVC compris
+npm run k8s:up          # build de l'image sre-war-room:local, copie des fiches, helm upgrade --install
+npm run k8s:down        # supprime le namespace sre-war-room, PVC compris
 ```
 
 - **Accès** : `http://localhost:8088` ; code animateur de démonstration `demo-animateur`, remplaçable au déploiement : `FACILITATOR_CODE=mon-code npm run k8s:up`
   (`deploy/values-local.yaml`, aucun secret réel).
 - **Fiches de PNJ** : `up` (via `npm run k8s:personas`) copie `server/npc/personas/` dans `deploy/chart/files/personas/` (gitignoré) et le
-  chart en fait la ConfigMap `sre-teams-personas`, montée sur `/etc/sre-teams/personas` (`NPC_PERSONAS_DIR`).
-  Pour en modifier une : `kubectl -n sre-teams edit configmap sre-teams-personas` (clé
+  chart en fait la ConfigMap `sre-war-room-personas`, montée sur `/etc/sre-war-room/personas` (`NPC_PERSONAS_DIR`).
+  Pour en modifier une : `kubectl -n sre-war-room edit configmap sre-war-room-personas` (clé
   `<scénario>_<id>.md`), attendre la synchronisation du kubelet (environ 1 min), puis « Recharger » dans
   `/admin`. La modification est écrasée au prochain `up`. Sans fiches copiées, les fiches embarquées sont utilisées.
 - **LLM des PNJ** : le chart ne déploie plus de modèle. Avec `llm.enabled=true`, la ConfigMap passe les PNJ en
   `NPC_ENGINE: openai-compatible` vers `llm.baseUrl` (défaut `http://llm:8080/v1`, `llm.model`, `llm.timeoutMs`) ;
   le service est fourni par le chart `llm` de `workshop-platform`, installé séparément. `k8s:up` laisse
   `llm.enabled=false` : les PNJ restent en `keywords`.
-- **Chart `paging`** : `deploy/chart` est la source de vérité (version `appVersion` = `version` de `package.json`,
+- **Chart `war-room`** : `deploy/chart` est la source de vérité (version `appVersion` = `version` de `package.json`,
   label `app.kubernetes.io/version`, `metrics.enabled` pour le ServiceMonitor sur `/metrics`).
 - **NetworkPolicy** (`networkPolicy.enabled`, entrée seulement) : Redis n'accepte que les pods de
   l'application. Pas de règle de sortie. k3s les applique : depuis un pod
-  hors application, la connexion à `sre-teams-redis:6379` est refusée.
+  hors application, la connexion à `sre-war-room-redis:6379` est refusée.
 
 ## Outils d'animateur
 
@@ -303,7 +303,7 @@ refuse en 400 `temperature`, `top_p` et `top_k`, comme l'API réelle ; `FAKE_ANT
 
 `GET /metrics` expose les métriques au format texte Prometheus 0.0.4 (registre maison, sans `prom-client`). `METRICS_ENABLED=false` (ou `0`, `off`) répond 404 ; actif par défaut, coupé dans `render.yaml` (pas de Prometheus sur Render, l'URL est publique). Pas d'authentification : aucune métrique ne contient de secret, de code animateur, d'URL de modèle, de clé d'API, de texte de message ni d'identifiant de participant, de message ou de canal. `/metrics` et `/api/health` ne sont pas comptés. La collecte (ServiceMonitor) est dans `deploy/chart` ; les SLO Sloth sont dans `observability/sloth/` de ce dépôt ; les dashboards (`paging.json`, `paging-llm-compare.json`) restent dans le dépôt voisin `workshop-platform`.
 
-| Métrique (préfixe `paging_`) | Labels | Contenu |
+| Métrique (préfixe `war_room_`) | Labels | Contenu |
 | --- | --- | --- |
 | `http_requests_total` | `method`, `route`, `status_class` | requêtes ; `route` = motif Nitro (`/api/channels/:id/messages`), jamais l'URL ; inconnu ou page → `other` |
 | `http_request_duration_seconds` | `method`, `route` | histogramme 0,01 à 5 s |
@@ -324,7 +324,7 @@ Les métriques `npc_llm_*` ne concernent que les moteurs à modèle (`keywords` 
 
 ### SLO (définis dans `observability/sloth/`)
 
-Appliquer : `kubectl apply -n sre-teams -f observability/sloth/<fichier>` ; `tests/sloth-paging.test.ts` vérifie que les métriques, labels et buckets cités existent dans `server/utils/paging-metrics.ts`.
+Appliquer : `kubectl apply -n sre-war-room -f observability/sloth/<fichier>` ; `tests/sloth-war-room.test.ts` vérifie que les métriques, labels et buckets cités existent dans `server/utils/war-room-metrics.ts`.
 
 Fenêtre de 30 jours : c'est la période du contrôleur Sloth, commune à tous les SLO de la plateforme (la spec visait 28 jours ; la changer touche aussi DocShare).
 

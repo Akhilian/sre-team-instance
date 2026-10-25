@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Installe / retire l'instance dans le Kubernetes local Colima. Tout reste dans le namespace sre-teams.
+# Installe / retire l'instance dans le Kubernetes local Colima. Tout reste dans le namespace sre-war-room.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-NS=sre-teams
-RELEASE=sre-teams
+NS=sre-war-room
+RELEASE=sre-war-room
 URL=http://localhost:8088
 
 case "${1:-}" in up|down) [ "$#" -eq 1 ] || { echo "Usage: $0 up|down" >&2; exit 2; } ;; *) echo "Usage: $0 up|down" >&2; exit 2 ;; esac
@@ -19,7 +19,7 @@ fi
 
 case "${1:-}" in
   up)
-    docker build -t sre-teams:local .
+    docker build -t sre-war-room:local .
     # Fiches de PNJ : copie fraîche dans le chart (dossier gitignoré), rendue en ConfigMap
     npm run -s k8s:personas
     # Code animateur : FACILITATOR_CODE de l'environnement, sinon celui de démonstration de values-local.yaml

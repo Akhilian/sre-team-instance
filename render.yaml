@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: sre-team-instance
+    name: sre-war-room
     runtime: node
     plan: free
     buildCommand: npm ci && npm run build

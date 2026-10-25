@@ -2,7 +2,7 @@
 appVersion: "0.1.0"
 
 image:
-  repository: sre-teams
+  repository: sre-war-room
   tag: local
   pullPolicy: IfNotPresent
 
@@ -36,7 +36,7 @@ redis:
     limits: { memory: 256Mi }
 
 # Fiches de PNJ : files/personas/<scénario>/*.md -> ConfigMap <release>-personas, montée sur
-# /etc/sre-teams/personas (NPC_PERSONAS_DIR).
+# /etc/sre-war-room/personas (NPC_PERSONAS_DIR).
 
 # Modèle self-hosted (chart llm, même namespace). Désactivé : moteur `config.NPC_ENGINE` (keywords).
 llm:
@@ -50,7 +50,7 @@ networkPolicy:
   enabled: true
 
 # Métriques Prometheus (GET /metrics de l'app, voir README) : ServiceMonitor pour le Prometheus de
-# kube-prometheus-stack (sre-teams-monitoring). Désactivé par défaut : il exige les CRD de l'Operator
+# kube-prometheus-stack (sre-war-room-monitoring). Désactivé par défaut : il exige les CRD de l'Operator
 # (monitoring installé avant) ; activé sur eks (environments/eks/paging.yaml).
 metrics:
   enabled: false

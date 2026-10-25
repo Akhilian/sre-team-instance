@@ -1,0 +1,22 @@
+# SLO 4 : 90 % des générations du moteur à modèle en moins de 10 s. Mesure l'appel au moteur seul : le rythme pédagogique (NPC_PACE) n'y entre jamais.
+# Collecte : ServiceMonitor du chart war-room (metrics.enabled=true). Appliquer : kubectl apply -n sre-war-room -f observability/sloth/war-room-npc-generation.yaml
+apiVersion: sloth.slok.dev/v1
+kind: PrometheusServiceLevel
+metadata:
+  name: war-room-npc-generation
+spec:
+  service: war-room-npc
+  slos:
+    - name: npc-generation
+      objective: 90
+      description: "Le moteur à modèle génère la réponse en moins de 10 s."
+      sli:
+        events:
+          errorQuery: sum(rate(war_room_npc_generation_duration_seconds_count{engine!="keywords"}[{{.window}}])) - (sum(rate(war_room_npc_generation_duration_seconds_bucket{engine!="keywords",le="10"}[{{.window}}])) or vector(0))
+          totalQuery: sum(rate(war_room_npc_generation_duration_seconds_count{engine!="keywords"}[{{.window}}]))
+      alerting:
+        name: WarRoomNpcGeneration
+        pageAlert:
+          labels: { severity: page }
+        ticketAlert:
+          labels: { severity: ticket }

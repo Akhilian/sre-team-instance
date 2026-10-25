@@ -1,0 +1,22 @@
+# SLO 1 de l'app war-room : disponibilité de la publication de messages (POST /api/channels/:id/messages). Les 4xx (erreurs du client) sont exclus du total, comme l'exemple DocShare.
+# Collecte : ServiceMonitor du chart war-room (metrics.enabled=true). Appliquer : kubectl apply -n sre-war-room -f observability/sloth/war-room-availability.yaml
+apiVersion: sloth.slok.dev/v1
+kind: PrometheusServiceLevel
+metadata:
+  name: war-room-availability
+spec:
+  service: war-room-messaging
+  slos:
+    - name: availability
+      objective: 99.5
+      description: "Les messages sont publiés : réponse autre qu'une erreur serveur."
+      sli:
+        events:
+          errorQuery: sum(rate(war_room_http_requests_total{method="POST",route="/api/channels/:id/messages",status_class="5xx"}[{{.window}}])) or vector(0)
+          totalQuery: sum(rate(war_room_http_requests_total{method="POST",route="/api/channels/:id/messages",status_class!="4xx"}[{{.window}}]))
+      alerting:
+        name: WarRoomAvailability
+        pageAlert:
+          labels: { severity: page }
+        ticketAlert:
+          labels: { severity: ticket }

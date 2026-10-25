@@ -5,11 +5,11 @@ kind: NetworkPolicy
 metadata:
   name: {{ .Release.Name }}-app
   labels:
-    {{- include "sre-teams.labels" . | nindent 4 }}
+    {{- include "war-room.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: sre-teams
+      app.kubernetes.io/name: war-room
       app.kubernetes.io/instance: {{ .Release.Name }}
   policyTypes: [Ingress]
   ingress:
@@ -21,18 +21,18 @@ kind: NetworkPolicy
 metadata:
   name: {{ .Release.Name }}-redis
   labels:
-    {{- include "sre-teams.labels" . | nindent 4 }}
+    {{- include "war-room.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: sre-teams-redis
+      app.kubernetes.io/name: war-room-redis
       app.kubernetes.io/instance: {{ .Release.Name }}
   policyTypes: [Ingress]
   ingress:
     - from:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: sre-teams
+              app.kubernetes.io/name: war-room
               app.kubernetes.io/instance: {{ .Release.Name }}
       ports:
         - port: 6379
