@@ -93,7 +93,7 @@
 - Décisions : les SLO d'une application vivent avec son code ; la plateforme les consomme par chemin relatif puis retire ses copies. Écarts acceptés : test par regex (pas de dépendance YAML), noms de métriques vérifiés mais pas les valeurs de labels.
 - Dette / suite : dashboards `paging.json` et `paging-llm-compare.json` restent dans la plateforme (`generate.py` partagé), à rapatrier si le générateur est scindé ; labels de valeurs non testés ; retirer les copies côté platform.
 
-## 045 — Publication de l'image sur Docker Hub (2026-10-25, commit à renseigner)
+## 045 — Publication de l'image sur Docker Hub (2026-10-25, commit fa7ac5b)
 - Livré : `.github/workflows/ci.yml` (typecheck, test, test:http, build ; `workflow_call` + `pull_request`) et `image.yml` (push `main` + `workflow_dispatch` : image multi-arch `akhilian/sre-teams`, tags sha long, version `package.json`, `latest`) ; README « Publication de l'image » ; contrat d'agents. PASS (CA1-6).
 - Décisions : teams et docshare publient sur le Docker Hub `akhilian` ; le chart `deploy/chart` garde `image.repository=sre-teams`, surchargé par la plateforme (`environments/eks/paging.yaml` → `akhilian/sre-teams`). Écart accepté : `docs/**` dans les `paths` de `image.yml` (guides embarqués au build).
 - Dette / suite : créer le secret `DOCKERHUB_TOKEN` dans le dépôt GitHub (sinon le job de publication échoue au premier run) ; la plateforme doit épingler le tag (version/sha) au lieu de `latest` ; actionlint absent (validation par parse YAML).
