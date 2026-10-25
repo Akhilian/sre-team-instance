@@ -293,7 +293,7 @@ refuse en 400 `temperature`, `top_p` et `top_k`, comme l'API réelle ; `FAKE_ANT
 
 ## Métriques et SLO
 
-`GET /metrics` expose les métriques au format texte Prometheus 0.0.4 (registre maison, sans `prom-client`). `METRICS_ENABLED=false` (ou `0`, `off`) répond 404 ; actif par défaut, coupé dans `render.yaml` (pas de Prometheus sur Render, l'URL est publique). Pas d'authentification : aucune métrique ne contient de secret, de code animateur, d'URL de modèle, de clé d'API, de texte de message ni d'identifiant de participant, de message ou de canal. `/metrics` et `/api/health` ne sont pas comptés. La collecte (ServiceMonitor), les SLO Sloth et les dashboards vivent dans le dépôt voisin `platform`.
+`GET /metrics` expose les métriques au format texte Prometheus 0.0.4 (registre maison, sans `prom-client`). `METRICS_ENABLED=false` (ou `0`, `off`) répond 404 ; actif par défaut, coupé dans `render.yaml` (pas de Prometheus sur Render, l'URL est publique). Pas d'authentification : aucune métrique ne contient de secret, de code animateur, d'URL de modèle, de clé d'API, de texte de message ni d'identifiant de participant, de message ou de canal. `/metrics` et `/api/health` ne sont pas comptés. La collecte (ServiceMonitor), les SLO Sloth et les dashboards vivent dans le dépôt voisin `workshop-platform`.
 
 | Métrique (préfixe `paging_`) | Labels | Contenu |
 | --- | --- | --- |
@@ -314,7 +314,7 @@ refuse en 400 `temperature`, `top_p` et `top_k`, comme l'API réelle ; `FAKE_ANT
 
 Les métriques `npc_llm_*` ne concernent que les moteurs à modèle (`keywords` n'en émet pas). `model` est la valeur configurée (`NPC_LLM_MODEL`, `NPC_ANTHROPIC_MODEL`), au plus 10 valeurs distinctes par processus, puis `other`. Pas de métrique d'attente en file : l'application n'a pas de file devant le modèle (le plafond de débit des PNJ refuse, il ne met pas en attente). Un délai du dispatcher dépassé après la réponse tardive du moteur peut compter deux issues pour la même réponse (cas rare).
 
-### SLO (définis dans `platform/observability/sloth/`)
+### SLO (définis dans `workshop-platform/observability/sloth/`)
 
 Fenêtre de 30 jours : c'est la période du contrôleur Sloth, commune à tous les SLO de la plateforme (la spec visait 28 jours ; la changer touche aussi DocShare).
 

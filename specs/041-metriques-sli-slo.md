@@ -1,7 +1,7 @@
 # 041 — Métriques Prometheus et SLI/SLO de l'app de paging
 
 ## Pourquoi
-Objectif « Métriques et SLI/SLO pour sre-teams » (GOAL.md) : l'app expose `/metrics`, et le dépôt `platform` porte la collecte, les SLO Sloth et le dashboard, activables par valeur (VM Colima de 10 Gi). Les SLO serviront d'exemple dans la roadmap.
+Objectif « Métriques et SLI/SLO pour sre-teams » (GOAL.md) : l'app expose `/metrics`, et le dépôt `workshop-platform` porte la collecte, les SLO Sloth et le dashboard, activables par valeur (VM Colima de 10 Gi). Les SLO serviront d'exemple dans la roadmap.
 
 ## Périmètre
 **A. App (`workshop-paging`)** : registre maison (pas de `prom-client`) et `GET /metrics` au format texte Prometheus 0.0.4. Désactivable par `METRICS_ENABLED=false` (404). Aucun secret, aucun id de participant, de message ou de canal en label.
@@ -20,7 +20,7 @@ Métriques (préfixe `paging_`) :
 3. Réponses PNJ sans repli : `outcome="ok"` / (ok + fallback + timeout), `capped` et `rejected_repeat` exclus du total — 95 %.
 4. Génération PNJ : 90 % des générations du moteur à modèle (engine ≠ keywords) en < 10 s — 90 %. Le rythme pédagogique (`NPC_PACE`) n'entre jamais dans la mesure.
 
-**C. Dépôt `platform`** (tout désactivable, défaut `false`) :
+**C. Dépôt `workshop-platform`** (tout désactivable, défaut `false`) :
 - `charts/paging` : `metrics.enabled` (défaut false) → `templates/servicemonitor.yaml` (`monitoring.coreos.com/v1`, port `http`, path `/metrics`, intervalle `metrics.interval` 30s), rendu seulement si `metrics.enabled`. Pas d'impact sur la NetworkPolicy existante (l'ingress concerne Redis uniquement) : le vérifier.
 - `observability/sloth/paging-*.yaml` : un `PrometheusServiceLevel` par SLO (4), même style que `upload-availability.yaml`.
 - `observability/grafana/generate.py` : dashboard `paging.json` généré (trafic, latence p95, SLO, PNJ par outcome, stockage) ; README : option et coût mémoire.
@@ -34,9 +34,9 @@ Métriques (préfixe `paging_`) :
 - [x] CA2 — `GET /metrics` sur le build : 200, `text/plain; version=0.0.4`, contient `paging_http_requests_total` après une requête sur un canal ; une requête sur `/api/channels/<id-inventé>/messages` n'ajoute aucune série avec l'id ; avec `METRICS_ENABLED=false` : 404 ; la sortie ne contient ni le code animateur, ni `REDIS_URL`, ni clé d'API (le test fixe des valeurs sentinelles).
 - [x] CA3 — Test HTTP/unitaire PNJ (moteur factice existant `scripts/fake-openai.mjs` ou injection) : une réponse `ok`, un repli après erreur, un timeout et un rejet anti-répétition incrémentent `paging_npc_replies_total` avec les bons `outcome` ; `paging_npc_generation_duration_seconds` ne dépend pas du délai de rythme (rythme `occupé` + moteur instantané → génération < 1 s).
 - [x] CA4 — Stockage : test unitaire avec un stockage factice en échec → `storage_operations_total{result="error"}` augmente et `storage_up` passe à 0, puis 1 au retour.
-- [x] CA5 — `platform` : `helm lint` et `helm template` de `charts/paging` : sans `metrics.enabled` aucun ServiceMonitor ; avec `--set metrics.enabled=true` un ServiceMonitor ciblant le port `http` et `/metrics` ; `make lint` passe.
-- [x] CA6 — `platform` : les 4 fichiers Sloth sont des YAML valides (`sloth validate -i observability/sloth` si installé, sinon parse YAML + vérification que chaque `errorQuery`/`totalQuery` référence une métrique du CA2/CA3 et contient `{{.window}}`), et `paging.json` est du JSON valide régénéré par `generate.py` sans diff, ses requêtes n'utilisant que des métriques existantes.
-- [x] CA7 — Documentation : README de l'app (variable `METRICS_ENABLED`, liste des métriques, 4 SLO avec objectif et fenêtre) et README `platform` (option, coût mémoire) mis à jour.
+- [x] CA5 — `workshop-platform` : `helm lint` et `helm template` de `charts/paging` : sans `metrics.enabled` aucun ServiceMonitor ; avec `--set metrics.enabled=true` un ServiceMonitor ciblant le port `http` et `/metrics` ; `make lint` passe.
+- [x] CA6 — `workshop-platform` : les 4 fichiers Sloth sont des YAML valides (`sloth validate -i observability/sloth` si installé, sinon parse YAML + vérification que chaque `errorQuery`/`totalQuery` référence une métrique du CA2/CA3 et contient `{{.window}}`), et `paging.json` est du JSON valide régénéré par `generate.py` sans diff, ses requêtes n'utilisant que des métriques existantes.
+- [x] CA7 — Documentation : README de l'app (variable `METRICS_ENABLED`, liste des métriques, 4 SLO avec objectif et fenêtre) et README `workshop-platform` (option, coût mémoire) mis à jour.
 
 ## Vérification
 App : `npm run test`, `npm run build && npm run test:http`, `curl -s localhost:3000/metrics | head` après `node .output/server/index.mjs`.
@@ -44,9 +44,9 @@ Platform : `helm lint charts/paging -f values/local.yaml -f environments/local/p
 
 ## Notes d'implémentation
 - Fichiers `workshop-paging` : `server/utils/metrics.ts` (registre pur), `server/middleware/02-metrics.ts` (hooks `afterResponse`/durée), `server/routes/metrics.get.ts`, `server/npc/dispatcher.ts` + moteurs (points d'instrumentation via `onError`/deps, sans casser la pureté), `server/utils/chat-persistence.ts`, `tests/metrics.test.ts`, `tests/http/metrics.test.ts`, `README.md`.
-- Fichiers `platform` : `charts/paging/values.yaml`, `charts/paging/templates/servicemonitor.yaml`, `observability/sloth/paging-{availability,latency,npc-fallback,npc-generation}.yaml`, `observability/grafana/{generate.py,paging.json}`, `README.md`.
+- Fichiers `workshop-platform` : `charts/paging/values.yaml`, `charts/paging/templates/servicemonitor.yaml`, `observability/sloth/paging-{availability,latency,npc-fallback,npc-generation}.yaml`, `observability/grafana/{generate.py,paging.json}`, `README.md`.
 - Le contrôle de route normalisée s'appuie sur le motif Nitro/h3 (`event.context.matchedRoute?.route`), pas sur l'URL.
-- Le serveur Prometheus de `platform` a `serviceMonitorSelectorNilUsesHelmValues: false` : pas de label `release` requis.
+- Le serveur Prometheus de `workshop-platform` a `serviceMonitorSelectorNilUsesHelmValues: false` : pas de label `release` requis.
 
 ## Évolution 2026-10-24 — Performance des modèles de PNJ
 Demande : métriques et SLI/SLO sur la performance des modèles (durée de réponse, time to first token, débit…). Les CA1 à CA7 ne changent pas ; les CA8 à CA14 s'y ajoutent.
@@ -69,7 +69,7 @@ Demande : métriques et SLI/SLO sur la performance des modèles (durée de répo
 7. Réponse dans le temps imparti : `npc_llm_duration_seconds{outcome="ok"}` / (ok + timeout) avec `le="60"`, soit réponses terminées sous le plafond de 60 s (`NPC_LLM_TIMEOUT_MS` max) — 97 %. Distinct du SLO 4 (< 10 s, 90 %) qui reste le critère de confort.
 (SLO 3, repli, est déjà couvert : pas de doublon.)
 
-**G. Dépôt `platform`**
+**G. Dépôt `workshop-platform`**
 - `observability/sloth/paging-llm-{throughput,deadline}.yaml` : un `PrometheusServiceLevel` par SLO 6 et 7, même style que `paging-*.yaml`, requêtes agrégées par `sum(...)` sur `engine,model` retirés (SLO global) ; `{{.window}}`.
 - `observability/grafana/generate.py` : rangée « Performance du modèle » dans `paging.json` (p50/p95 durée, débit effectif médian, tokens/s entrée+sortie, issues par modèle, taille du prompt) et un dashboard `paging-llm-compare.json` (mêmes panneaux, une série par `model`, variable `$model` multi-valeurs) pour comparer 3b/7b ou moteurs.
 - Métriques llama.cpp (`charts/llm`) : ajouter `--metrics` aux args du serveur derrière `metrics.enabled` (défaut false) + `templates/servicemonitor.yaml` (port `http`, path `/metrics`) ; ne garder dans le dashboard que `llamacpp:prompt_tokens_seconds`, `llamacpp:predicted_tokens_seconds` (débit de prompt et de génération côté serveur), `llamacpp:requests_processing` / `llamacpp:requests_deferred` (files d'attente, saturation de `-np`) et `llamacpp:kv_cache_usage_ratio` (remplissage du KV cache). Ollama (chart de l'app) n'expose pas de /metrics natif : rien à scraper, les métriques de l'app suffisent. Aucun SLO sur les métriques llama.cpp (diagnostic seulement). Vérifier les noms exacts avec la version d'image fixée (context7 / `curl /metrics`) avant de les utiliser dans les requêtes.
@@ -83,8 +83,8 @@ Demande : métriques et SLI/SLO sur la performance des modèles (durée de répo
 - [x] CA10 — Durée et débit effectif : `paging_npc_llm_duration_seconds` observé par `engine`/`model`/`outcome` à chaque appel, `paging_npc_llm_effective_tokens_per_second` observé seulement avec `usage` d'au moins 2 tokens de sortie. (TTFT : écarté.)
 - [x] CA11 — Tokens et tailles : un faux serveur renvoyant `usage` (entrée 120, sortie 40) fait passer `paging_npc_llm_tokens_total{direction="input"|"output"}` à 120 et 40, pour les deux moteurs ; sans `usage`, aucune série de tokens n'est créée ; `prompt_chars` et `response_chars` sont observés.
 - [x] CA12 — Labels et sécurité : `/metrics` ne contient `engine`/`model` que pour les valeurs configurées (test avec modèle sentinelle `m-test` ; plus de 10 modèles distincts → `other`), jamais de texte de message, de prompt, d'URL du modèle ni de clé d'API (sentinelles) ; issues `timeout`, `error`, `fallback`, `rejected_repeat` correctes sur `paging_npc_llm_duration_seconds` ; `keywords` n'émet aucune série `paging_npc_llm_*` ; rythme `occupé` n'augmente pas les durées observées.
-- [x] CA13 — `platform` : 2 fichiers `paging-llm-{throughput,deadline}.yaml` valides (`sloth validate` ou parse YAML + chaque requête référence une métrique `paging_npc_llm_*` du CA10/CA11 et `{{.window}}`) ; `generate.py` régénère `paging.json` (rangée performance) et `paging-llm-compare.json` sans diff, requêtes limitées à des métriques existantes (app ou llama.cpp) ; `charts/llm` : `helm template` sans `metrics.enabled` ne contient ni `--metrics` ni ServiceMonitor, avec `--set metrics.enabled=true` les deux sont présents ; `helm lint` et `make lint` passent.
-- [x] CA14 — Documentation : README de l'app (métriques `paging_npc_llm_*`, SLO 6 et 7 avec objectif/fenêtre/hypothèse CPU qwen2.5:3b, débit effectif bout en bout) et README `platform` (nouveaux fichiers Sloth, dashboard de comparaison, option `--metrics` llama.cpp et métriques retenues).
+- [x] CA13 — `workshop-platform` : 2 fichiers `paging-llm-{throughput,deadline}.yaml` valides (`sloth validate` ou parse YAML + chaque requête référence une métrique `paging_npc_llm_*` du CA10/CA11 et `{{.window}}`) ; `generate.py` régénère `paging.json` (rangée performance) et `paging-llm-compare.json` sans diff, requêtes limitées à des métriques existantes (app ou llama.cpp) ; `charts/llm` : `helm template` sans `metrics.enabled` ne contient ni `--metrics` ni ServiceMonitor, avec `--set metrics.enabled=true` les deux sont présents ; `helm lint` et `make lint` passent.
+- [x] CA14 — Documentation : README de l'app (métriques `paging_npc_llm_*`, SLO 6 et 7 avec objectif/fenêtre/hypothèse CPU qwen2.5:3b, débit effectif bout en bout) et README `workshop-platform` (nouveaux fichiers Sloth, dashboard de comparaison, option `--metrics` llama.cpp et métriques retenues).
 
 ### Vérification (évolution)
 App : `npm run test` (tests CA10 à CA12, sans réseau), `npm run build && npm run test:http` (faux serveur `scripts/fake-openai.mjs`), puis `curl -s localhost:3000/metrics | grep paging_npc_llm_`.
