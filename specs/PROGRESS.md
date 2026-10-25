@@ -98,7 +98,7 @@
 - Dette / suite : platform doit suivre (image, chart, métriques `war_room_*`, dashboards) ; renommer dossier, dépôt GitHub, service Render, dépôt Docker Hub.
 - Écarts acceptés : helper renommé `war-room.*` ; 3 occurrences « paging » conservées (fichiers de la plateforme, ancienne URL du remote) ; glob CA1 élargi aux specs 006-009.
 
-## 047 — CI : build avant test:http (2026-10-25, commit à renseigner)
+## 047 — CI : build avant test:http (2026-10-25, 647e71f)
 - Livré : `ci.yml` dans l'ordre `npm ci`, typecheck, test, build, test:http ; `tests/http/health.test.ts` avec `server?.stop()` (plus de `TypeError` masquant l'erreur d'origine) ; README et CLAUDE.md mentionnent le build préalable (commités avec la 046). PASS (CA1-4).
 - Décisions : `test:http` exige `npm run build` ; la CI reprend l'ordre du contrat. Remote `origin` passé à `git@github.com:Akhilian/sre-war-room.git` (contrat mis à jour).
 - Dette / suite : avertissements Node 20 des actions (hors périmètre) ; aucun test instable reproduit (2 échecs vus à la 046).
