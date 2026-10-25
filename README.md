@@ -34,6 +34,17 @@ Le fichier [`render.yaml`](./render.yaml) décrit un *Web Service* Node (Bluepri
 - démarrage : `node .output/server/index.mjs` (écoute sur le `PORT` fourni par Render)
 - health check : `/api/health`
 
+## Publication de l'image
+
+Deux workflows GitHub Actions (`.github/workflows/`) :
+
+- `ci.yml` : `npm ci`, `typecheck`, `test`, `test:http`, `build` (Node 24) ; sur pull request, push sur `main`, `workflow_dispatch` et `workflow_call`.
+- `image.yml` : sur push sur `main` (chemins de l'application, du `Dockerfile` et des workflows) ou déclenchement manuel (onglet Actions > « Publication de l'image » > Run workflow), lance `ci.yml` puis publie `docker.io/akhilian/sre-teams` en `linux/amd64,linux/arm64`.
+
+Tags publiés : le sha complet du commit, la version de `package.json` (ex. `0.1.0`, sans `v`) et `latest`.
+
+Secret requis : `DOCKERHUB_TOKEN`, un jeton Docker Hub en écriture, à créer dans Settings > Secrets and variables > Actions du dépôt GitHub (utilisateur `akhilian`).
+
 ## Kubernetes local (Colima)
 
 Le chart `deploy/chart/` installe l'application et Redis dans le namespace `sre-teams` d'un cluster Colima

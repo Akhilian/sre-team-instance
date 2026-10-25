@@ -121,3 +121,6 @@ Terminé : métriques exposées et testées, SLI/SLO définis et validés sans d
 
 ## Évolution 2026-10-25 — SLO Sloth du paging dans teams
 Accueillir les SLO Sloth du paging (6 fichiers `paging-*.yaml`, actuellement dans `workshop-platform/observability/sloth/`) et, si pertinent, leurs dashboards ; la plateforme les consommera ensuite. Voir `SRE/specs/GOAL.md`. Aucun déploiement.
+
+## Évolution 2026-10-25 — publication de l'image sur Docker Hub (akhilian)
+Les deux dépôts de code publient leurs images sur le Docker Hub de l'utilisateur (`akhilian/*`). DocShare le fait déjà (`.github/workflows/image.yml` : `akhilian/docshare`, `akhilian/docshare-web`, secret `DOCKERHUB_TOKEN`). Teams n'a aucun workflow : ajouter la CI GitHub Actions qui, sur push `main` quand typecheck/tests sont verts, construit le `Dockerfile` et publie `akhilian/sre-teams` (tags : sha complet, version de `package.json`, `latest` ; multi-arch comme docshare), même secret `DOCKERHUB_TOKEN` à créer par l'utilisateur dans le dépôt GitHub. La plateforme consomme `akhilian/sre-teams` (`environments/eks/paging.yaml`). Aucun déploiement ; ne pas lancer le workflow depuis la session.

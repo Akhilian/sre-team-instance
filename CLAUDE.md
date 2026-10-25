@@ -30,4 +30,5 @@ Lu par les agents partagés de `SRE/.claude/agents/` (lancés depuis `/Users/adr
 - **Reset d'instance** : `POST /api/admin/reset` (corps `{"scope":"messages"|"all"}`, en-tête `x-facilitator-code`) efface messages et état de test et arrête le scénario ; à lancer après tout test.
 - **Réglages modifiables en test** : rythme des PNJ `NPC_PACE` (ou `/admin`), à remettre à sa valeur initiale.
 - **SLO** : les 6 SLO Sloth du paging vivent dans `observability/sloth/paging-*.yaml` (validés par `tests/sloth-paging.test.ts`) ; les dashboards paging restent dans `workshop-platform`.
+- **CI et publication** : `.github/workflows/ci.yml` (typecheck, tests, build) et `image.yml` (publie `akhilian/sre-teams` sur Docker Hub avec le secret `DOCKERHUB_TOKEN`). Le push sur `main` publie aussi l'image ; ne pas lancer le workflow depuis une session.
 - **Dépendances** : `workshop-platform` consomme l'image et les fiches de cette application ; faire la boucle de teams avant celle de platform.

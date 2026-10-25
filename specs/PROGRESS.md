@@ -81,10 +81,7 @@
 
 - 041 — Métriques Prometheus et SLI/SLO de l'app de paging (268d83b) : registre maison, `GET /metrics` (`METRICS_ENABLED`, false sur Render), métriques HTTP/messages/PNJ/Redis/`paging_npc_llm_*`, 6 SLO Sloth fenêtre 30 j ; dette : seuil débit à recalibrer sur qwen2.5:3b, double comptage d'issue possible.
 
-## 042 — Version dans /api/health (2026-10-25, commit eea7baf)
-- Livré : `GET /api/health` renvoie `version` lue depuis `package.json` (importé, inliné au build) ; `package.json` et `package-lock.json` à `"0.1.0"` ; test `tests/http/health.test.ts`. PASS (CA1-4), aucun écart.
-- Décisions : `package.json` est la source de vérité de la version (0.1.0), à consommer par `workshop-platform` via `appVersion`.
-- Dette / suite : aucune.
+- 042 — Version dans /api/health (eea7baf) : `version` lue depuis `package.json` (0.1.0), source de vérité pour `appVersion` côté platform.
 
 ## 043 — Chart paging : teams source de vérité (2026-10-25, commit 2453b2d)
 - Livré : `deploy/chart` aligné sur `platform/charts/paging` (appVersion + label `version`, bloc `metrics`, ServiceMonitor, ConfigMap vers le chart `llm`), Ollama retiré ; `local.sh` et scripts `k8s:up`, `k8s:down`, `k8s:personas` (copie gitignorée de `server/npc/personas`) ; README et contrat mis à jour (redéploiement `npm run -s k8s:up`). PASS (CA1-6).
@@ -95,3 +92,8 @@
 - Livré : 6 SLO `observability/sloth/paging-*.yaml` (identiques à ceux de la plateforme, validés Sloth v0.16.0), test `tests/sloth-paging.test.ts` (cohérence avec `server/utils/paging-metrics.ts`, cas négatif), README et contrat d'agents mis à jour ; 662 tests OK. PASS (CA1-6).
 - Décisions : les SLO d'une application vivent avec son code ; la plateforme les consomme par chemin relatif puis retire ses copies. Écarts acceptés : test par regex (pas de dépendance YAML), noms de métriques vérifiés mais pas les valeurs de labels.
 - Dette / suite : dashboards `paging.json` et `paging-llm-compare.json` restent dans la plateforme (`generate.py` partagé), à rapatrier si le générateur est scindé ; labels de valeurs non testés ; retirer les copies côté platform.
+
+## 045 — Publication de l'image sur Docker Hub (2026-10-25, commit à renseigner)
+- Livré : `.github/workflows/ci.yml` (typecheck, test, test:http, build ; `workflow_call` + `pull_request`) et `image.yml` (push `main` + `workflow_dispatch` : image multi-arch `akhilian/sre-teams`, tags sha long, version `package.json`, `latest`) ; README « Publication de l'image » ; contrat d'agents. PASS (CA1-6).
+- Décisions : teams et docshare publient sur le Docker Hub `akhilian` ; le chart `deploy/chart` garde `image.repository=sre-teams`, surchargé par la plateforme (`environments/eks/paging.yaml` → `akhilian/sre-teams`). Écart accepté : `docs/**` dans les `paths` de `image.yml` (guides embarqués au build).
+- Dette / suite : créer le secret `DOCKERHUB_TOKEN` dans le dépôt GitHub (sinon le job de publication échoue au premier run) ; la plateforme doit épingler le tag (version/sha) au lieu de `latest` ; actionlint absent (validation par parse YAML).
