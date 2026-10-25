@@ -24,7 +24,7 @@ Difficulté des incidents : P1 panne franche (`upload_error_rate`, `upload_laten
 
 ## Chantiers transverses
 1. **Orchestrateur de scénarios (Nuxt)** : timeline de pannes par équipe, déclenchement manuel par l'animateur, reset en un clic, journal des actions. Pièce centrale (aujourd'hui les pannes s'activent à la main).
-2. **Fusion d'outillage** : `workshop-paging` pilote `workshop-docshare` par API, sans copier le code (recommandé).
+2. **Fusion d'outillage** : `workshop-teams` pilote `workshop-docshare` par API, sans copier le code (recommandé).
 3. **Pannes d'infrastructure** : crash, OOM, Redis/Postgres indisponible, déploiement cassé, saturation CPU (illustrent l'alerting technique du palier 4 et ses limites).
 4. **Accessoires pédagogiques** : fiches de rôle, runbooks volontairement incomplets, modèle de postmortem, journal d'incident, grille d'évaluation par palier.
 5. **Pupitre animateur** : état des équipes, pannes actives, progression par palier, minuteur.

@@ -4,7 +4,7 @@
 Objectif « Métriques et SLI/SLO pour sre-teams » (GOAL.md) : l'app expose `/metrics`, et le dépôt `workshop-platform` porte la collecte, les SLO Sloth et le dashboard, activables par valeur (VM Colima de 10 Gi). Les SLO serviront d'exemple dans la roadmap.
 
 ## Périmètre
-**A. App (`workshop-paging`)** : registre maison (pas de `prom-client`) et `GET /metrics` au format texte Prometheus 0.0.4. Désactivable par `METRICS_ENABLED=false` (404). Aucun secret, aucun id de participant, de message ou de canal en label.
+**A. App (`workshop-teams`)** : registre maison (pas de `prom-client`) et `GET /metrics` au format texte Prometheus 0.0.4. Désactivable par `METRICS_ENABLED=false` (404). Aucun secret, aucun id de participant, de message ou de canal en label.
 Métriques (préfixe `paging_`) :
 - `http_requests_total{method,route,status_class}` (2xx/3xx/4xx/5xx) et `http_request_duration_seconds{method,route}` (histogramme, buckets 0.01 0.05 0.1 0.25 0.5 1 2.5 5). `route` = motif normalisé (`/api/channels/:id/messages`), jamais l'URL brute ; routes inconnues → `other`. `/metrics` et `/api/health` exclus.
 - `messages_posted_total{kind=human|npc|system}`.
@@ -43,7 +43,7 @@ App : `npm run test`, `npm run build && npm run test:http`, `curl -s localhost:3
 Platform : `helm lint charts/paging -f values/local.yaml -f environments/local/paging.yaml --set metrics.enabled=true`, `helm template t charts/paging -f values/local.yaml -f environments/local/paging.yaml --set metrics.enabled=true | grep -c ServiceMonitor`, `make lint`, `python3 observability/grafana/generate.py /tmp/x && diff -r /tmp/x observability/grafana`, `sloth validate -i observability/sloth` (sinon `python3 -c "import yaml,glob;[list(yaml.safe_load_all(open(f))) for f in glob.glob('observability/sloth/paging-*.yaml')]"`).
 
 ## Notes d'implémentation
-- Fichiers `workshop-paging` : `server/utils/metrics.ts` (registre pur), `server/middleware/02-metrics.ts` (hooks `afterResponse`/durée), `server/routes/metrics.get.ts`, `server/npc/dispatcher.ts` + moteurs (points d'instrumentation via `onError`/deps, sans casser la pureté), `server/utils/chat-persistence.ts`, `tests/metrics.test.ts`, `tests/http/metrics.test.ts`, `README.md`.
+- Fichiers `workshop-teams` : `server/utils/metrics.ts` (registre pur), `server/middleware/02-metrics.ts` (hooks `afterResponse`/durée), `server/routes/metrics.get.ts`, `server/npc/dispatcher.ts` + moteurs (points d'instrumentation via `onError`/deps, sans casser la pureté), `server/utils/chat-persistence.ts`, `tests/metrics.test.ts`, `tests/http/metrics.test.ts`, `README.md`.
 - Fichiers `workshop-platform` : `charts/paging/values.yaml`, `charts/paging/templates/servicemonitor.yaml`, `observability/sloth/paging-{availability,latency,npc-fallback,npc-generation}.yaml`, `observability/grafana/{generate.py,paging.json}`, `README.md`.
 - Le contrôle de route normalisée s'appuie sur le motif Nitro/h3 (`event.context.matchedRoute?.route`), pas sur l'URL.
 - Le serveur Prometheus de `workshop-platform` a `serviceMonitorSelectorNilUsesHelmValues: false` : pas de label `release` requis.
