@@ -89,7 +89,7 @@
 - Décisions : `package.json` est la source de vérité de la version (0.1.0), à consommer par `workshop-platform` via `appVersion`.
 - Dette / suite : aucune.
 
-## 043 — Chart paging : teams source de vérité (2026-10-25, commit à renseigner)
+## 043 — Chart paging : teams source de vérité (2026-10-25, commit 2453b2d)
 - Livré : `deploy/chart` aligné sur `platform/charts/paging` (appVersion + label `version`, bloc `metrics`, ServiceMonitor, ConfigMap vers le chart `llm`), Ollama retiré ; `local.sh` et scripts `k8s:up`, `k8s:down`, `k8s:personas` (copie gitignorée de `server/npc/personas`) ; README et contrat mis à jour (redéploiement `npm run -s k8s:up`). PASS (CA1-6).
 - Décisions : teams est la source unique du chart paging ; écarts acceptés : `redis.storageClass` "" par défaut (`local-path` dans `values-local.yaml`), chart renommé `sre-teams` → `paging`, PNJ en keywords en local sans `llm.enabled`.
 - Dette / suite : retirer `charts/paging` côté platform (étape 2 du transverse) ; platform consomme le chart par chemin relatif.
