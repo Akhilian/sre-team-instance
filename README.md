@@ -38,8 +38,8 @@ Le fichier [`render.yaml`](./render.yaml) décrit un *Web Service* Node (Bluepri
 
 Deux workflows GitHub Actions (`.github/workflows/`) :
 
-- `ci.yml` : `npm ci`, `typecheck`, `test`, `build`, `test:http` (Node 24 ; `test:http` exige le build préalable) ; sur pull request, push sur `main`, `workflow_dispatch` et `workflow_call`.
-- `image.yml` : sur push sur `main` (chemins de l'application, du `Dockerfile` et des workflows) ou déclenchement manuel (onglet Actions > « Publication de l'image » > Run workflow), lance `ci.yml` puis publie `docker.io/akhilian/sre-war-room` en `linux/amd64,linux/arm64`.
+- `ci.yml` : `npm ci`, `typecheck`, `test`, `build`, `test:http` (Node 24 ; `test:http` exige le build préalable) ; sur pull request, push sur `main` et `workflow_dispatch`.
+- `image.yml` (« Publication de l'image ») : enchaînée après la CI par `workflow_run` du workflow « CI » (branche `main`). Elle ne publie que si la CI du push est `success`, en checkout du commit testé (`head_sha`), `docker.io/akhilian/sre-war-room` en `linux/amd64,linux/arm64` (tags : sha complet, version de `package.json`, `latest`). Publication à chaque CI verte sur `main`, sans filtre de chemins (`workflow_run` n'en a pas ; le cache buildx limite le coût). Déclenchement manuel possible (onglet Actions > « Publication de l'image » > Run workflow), sans condition sur la CI.
 
 Tags publiés : le sha complet du commit, la version de `package.json` (ex. `0.1.0`, sans `v`) et `latest`.
 

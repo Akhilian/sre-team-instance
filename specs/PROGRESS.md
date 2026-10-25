@@ -87,10 +87,7 @@
 
 - 044 — SLO Sloth du paging dans teams (5850e42) : 6 SLO `observability/sloth/`, test de cohérence avec les métriques ; dashboards restent dans platform.
 
-## 045 — Publication de l'image sur Docker Hub (2026-10-25, commit fa7ac5b)
-- Livré : `.github/workflows/ci.yml` (typecheck, test, test:http, build ; `workflow_call` + `pull_request`) et `image.yml` (push `main` + `workflow_dispatch` : image multi-arch `akhilian/sre-teams`, tags sha long, version `package.json`, `latest`) ; README « Publication de l'image » ; contrat d'agents. PASS (CA1-6).
-- Décisions : teams et docshare publient sur le Docker Hub `akhilian` ; le chart `deploy/chart` garde `image.repository=sre-teams`, surchargé par la plateforme (`environments/eks/paging.yaml` → `akhilian/sre-teams`). Écart accepté : `docs/**` dans les `paths` de `image.yml` (guides embarqués au build).
-- Dette / suite : créer le secret `DOCKERHUB_TOKEN` dans le dépôt GitHub (sinon le job de publication échoue au premier run) ; la plateforme doit épingler le tag (version/sha) au lieu de `latest` ; actionlint absent (validation par parse YAML).
+- 045 — Publication de l'image sur Docker Hub (fa7ac5b) : `ci.yml` et `image.yml` (image multi-arch `akhilian/sre-teams`, tags sha/version/`latest`), secret `DOCKERHUB_TOKEN` à créer côté GitHub ; la plateforme doit épingler le tag.
 
 ## 046 — Renommage du produit en sre-war-room (2026-10-25, 1eb75b1)
 - Livré : produit, chart (`war-room`), namespace/release/image `sre-war-room`, métriques `war_room_*`, SLO `war-room-*.yaml`, test `tests/sloth-war-room.test.ts`, image `akhilian/sre-war-room`. 662 tests + 103 HTTP OK, Sloth OK. PASS (CA1-5).
@@ -102,3 +99,8 @@
 - Livré : `ci.yml` dans l'ordre `npm ci`, typecheck, test, build, test:http ; `tests/http/health.test.ts` avec `server?.stop()` (plus de `TypeError` masquant l'erreur d'origine) ; README et CLAUDE.md mentionnent le build préalable (commités avec la 046). PASS (CA1-4).
 - Décisions : `test:http` exige `npm run build` ; la CI reprend l'ordre du contrat. Remote `origin` passé à `git@github.com:Akhilian/sre-war-room.git` (contrat mis à jour).
 - Dette / suite : avertissements Node 20 des actions (hors périmètre) ; aucun test instable reproduit (2 échecs vus à la 046).
+
+## 048 — Publication de l'image après la CI (2026-10-25, commit à renseigner)
+- Livré : `ci.yml` sans `workflow_call` (`pull_request`, push `main`, `workflow_dispatch`) ; `image.yml` déclenché par `workflow_run` du workflow « CI » (success + push, ou `workflow_dispatch`), checkout et tag sha sur `head_sha`, plus de filtre `paths` ; README et CLAUDE.md décrivent CI → Publication. PASS (CA1-5).
+- Décisions : publication à chaque CI verte sur `main`. Écart accepté : le workflow garde le nom « Publication de l'image ».
+- Dette / suite : `workflow_run` n'est actif qu'une fois `image.yml` sur la branche par défaut, l'enchaînement ne se constate qu'au push suivant ; le workflow de docshare garde l'ancienne structure (hors périmètre).

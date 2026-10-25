@@ -1,12 +1,11 @@
 name: CI
 
 # Vérifie l'application : types, tests unitaires, build puis tests HTTP (qui exigent le build).
-# Réutilisé par image.yml (workflow_call) avant toute publication.
+# Suivi par image.yml (workflow_run) : la publication n'a lieu que si cette CI est verte sur main.
 on:
   pull_request:
   push:
     branches: [main]
-  workflow_call:
   workflow_dispatch:
 
 concurrency:
