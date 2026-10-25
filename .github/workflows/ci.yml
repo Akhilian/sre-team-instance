@@ -1,6 +1,6 @@
 name: CI
 
-# Vérifie l'application : types, tests unitaires, tests HTTP et build.
+# Vérifie l'application : types, tests unitaires, build puis tests HTTP (qui exigent le build).
 # Réutilisé par image.yml (workflow_call) avant toute publication.
 on:
   pull_request:
@@ -29,5 +29,5 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - run: npm run test:http
       - run: npm run build
+      - run: npm run test:http

@@ -11,7 +11,7 @@ beforeAll(async () => {
   server = await startServer()
 })
 afterAll(async () => {
-  await server.stop()
+  await server?.stop()
 })
 
 describe('GET /api/health', () => {

@@ -83,15 +83,9 @@
 
 - 042 — Version dans /api/health (eea7baf) : `version` lue depuis `package.json` (0.1.0), source de vérité pour `appVersion` côté platform.
 
-## 043 — Chart paging : teams source de vérité (2026-10-25, commit 2453b2d)
-- Livré : `deploy/chart` aligné sur `platform/charts/paging` (appVersion + label `version`, bloc `metrics`, ServiceMonitor, ConfigMap vers le chart `llm`), Ollama retiré ; `local.sh` et scripts `k8s:up`, `k8s:down`, `k8s:personas` (copie gitignorée de `server/npc/personas`) ; README et contrat mis à jour (redéploiement `npm run -s k8s:up`). PASS (CA1-6).
-- Décisions : teams est la source unique du chart paging ; écarts acceptés : `redis.storageClass` "" par défaut (`local-path` dans `values-local.yaml`), chart renommé `sre-teams` → `paging`, PNJ en keywords en local sans `llm.enabled`.
-- Dette / suite : retirer `charts/paging` côté platform (étape 2 du transverse) ; platform consomme le chart par chemin relatif.
+- 043 — Chart paging : teams source de vérité (2453b2d) : `deploy/chart` aligné sur platform (metrics, ServiceMonitor, ConfigMap llm), scripts `k8s:up|down|personas` ; reste : retirer `charts/paging` côté platform.
 
-## 044 — SLO Sloth du paging dans teams (2026-10-25, commit 5850e42)
-- Livré : 6 SLO `observability/sloth/paging-*.yaml` (identiques à ceux de la plateforme, validés Sloth v0.16.0), test `tests/sloth-paging.test.ts` (cohérence avec `server/utils/paging-metrics.ts`, cas négatif), README et contrat d'agents mis à jour ; 662 tests OK. PASS (CA1-6).
-- Décisions : les SLO d'une application vivent avec son code ; la plateforme les consomme par chemin relatif puis retire ses copies. Écarts acceptés : test par regex (pas de dépendance YAML), noms de métriques vérifiés mais pas les valeurs de labels.
-- Dette / suite : dashboards `paging.json` et `paging-llm-compare.json` restent dans la plateforme (`generate.py` partagé), à rapatrier si le générateur est scindé ; labels de valeurs non testés ; retirer les copies côté platform.
+- 044 — SLO Sloth du paging dans teams (5850e42) : 6 SLO `observability/sloth/`, test de cohérence avec les métriques ; dashboards restent dans platform.
 
 ## 045 — Publication de l'image sur Docker Hub (2026-10-25, commit fa7ac5b)
 - Livré : `.github/workflows/ci.yml` (typecheck, test, test:http, build ; `workflow_call` + `pull_request`) et `image.yml` (push `main` + `workflow_dispatch` : image multi-arch `akhilian/sre-teams`, tags sha long, version `package.json`, `latest`) ; README « Publication de l'image » ; contrat d'agents. PASS (CA1-6).
@@ -103,3 +97,8 @@
 - Décisions : les clés localStorage passent à `sre-war-room:*` (état d'onboarding, rôle, nom, code animateur réinitialisés côté navigateurs). Les entrées historiques ci-dessus gardent les anciens noms.
 - Dette / suite : platform doit suivre (image, chart, métriques `war_room_*`, dashboards) ; renommer dossier, dépôt GitHub, service Render, dépôt Docker Hub.
 - Écarts acceptés : helper renommé `war-room.*` ; 3 occurrences « paging » conservées (fichiers de la plateforme, ancienne URL du remote) ; glob CA1 élargi aux specs 006-009.
+
+## 047 — CI : build avant test:http (2026-10-25, commit à renseigner)
+- Livré : `ci.yml` dans l'ordre `npm ci`, typecheck, test, build, test:http ; `tests/http/health.test.ts` avec `server?.stop()` (plus de `TypeError` masquant l'erreur d'origine) ; README et CLAUDE.md mentionnent le build préalable (commités avec la 046). PASS (CA1-4).
+- Décisions : `test:http` exige `npm run build` ; la CI reprend l'ordre du contrat. Remote `origin` passé à `git@github.com:Akhilian/sre-war-room.git` (contrat mis à jour).
+- Dette / suite : avertissements Node 20 des actions (hors périmètre) ; aucun test instable reproduit (2 échecs vus à la 046).
