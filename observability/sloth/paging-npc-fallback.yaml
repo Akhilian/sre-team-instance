@@ -1,0 +1,22 @@
+# SLO 3 : réponses PNJ sans repli, moteurs à modèle seulement . capped (plafond atteint) et rejected_repeat (anti-répétition) sont exclus du total.
+# Collecte : ServiceMonitor du chart paging (metrics.enabled=true). Appliquer : kubectl apply -n sre-teams -f observability/sloth/paging-npc-fallback.yaml
+apiVersion: sloth.slok.dev/v1
+kind: PrometheusServiceLevel
+metadata:
+  name: paging-npc-fallback
+spec:
+  service: paging-npc
+  slos:
+    - name: npc-fallback
+      objective: 95
+      description: "Les réponses des PNJ viennent du modèle, sans repli sur les mots-clés."
+      sli:
+        events:
+          errorQuery: sum(rate(paging_npc_replies_total{engine!="keywords",outcome=~"fallback|timeout"}[{{.window}}])) or vector(0)
+          totalQuery: sum(rate(paging_npc_replies_total{engine!="keywords",outcome=~"ok|fallback|timeout"}[{{.window}}]))
+      alerting:
+        name: PagingNpcFallback
+        pageAlert:
+          labels: { severity: page }
+        ticketAlert:
+          labels: { severity: ticket }

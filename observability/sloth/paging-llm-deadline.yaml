@@ -1,0 +1,22 @@
+# SLO 7 : ok / (ok + timeout), terminés sous 60 s (NPC_LLM_TIMEOUT_MS plafonne à 60 s). Distinct du SLO 4 (< 10 s, 90 %), critère de confort.
+# Collecte : ServiceMonitor du chart paging (metrics.enabled=true). Appliquer : kubectl apply -n sre-teams -f observability/sloth/paging-llm-deadline.yaml
+apiVersion: sloth.slok.dev/v1
+kind: PrometheusServiceLevel
+metadata:
+  name: paging-llm-deadline
+spec:
+  service: paging-llm
+  slos:
+    - name: deadline
+      objective: 97
+      description: "Les appels au modèle se terminent avant le plafond de 60 s."
+      sli:
+        events:
+          errorQuery: sum(rate(paging_npc_llm_duration_seconds_count{outcome=~"ok|timeout"}[{{.window}}])) - (sum(rate(paging_npc_llm_duration_seconds_bucket{outcome="ok",le="60"}[{{.window}}])) or vector(0))
+          totalQuery: sum(rate(paging_npc_llm_duration_seconds_count{outcome=~"ok|timeout"}[{{.window}}]))
+      alerting:
+        name: PagingLlmDeadline
+        pageAlert:
+          labels: { severity: page }
+        ticketAlert:
+          labels: { severity: ticket }

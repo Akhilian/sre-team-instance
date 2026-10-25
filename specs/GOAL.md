@@ -118,3 +118,6 @@ Terminé : métriques exposées et testées, SLI/SLO définis et validés sans d
 
 ## Évolution 2026-10-25 — chart d'application source de vérité
 `deploy/chart` de teams devient la seule version du chart `paging` : y ramener les évolutions de `workshop-platform/charts/paging` (label `app.kubernetes.io/version` + `appVersion`, bloc `metrics`, ServiceMonitor, configmap vers le chart `llm`, retrait d'Ollama et de `ollama.yaml`). Garder le build de l'image et les fiches PNJ ici. Adapter scripts npm `k8s:*`, `local.sh`, README et contrat d'agents (redéploiement, instance). Aucun déploiement. Transverse : `SRE/specs/GOAL.md`. La plateforme retirera ensuite sa copie.
+
+## Évolution 2026-10-25 — SLO Sloth du paging dans teams
+Accueillir les SLO Sloth du paging (6 fichiers `paging-*.yaml`, actuellement dans `workshop-platform/observability/sloth/`) et, si pertinent, leurs dashboards ; la plateforme les consommera ensuite. Voir `SRE/specs/GOAL.md`. Aucun déploiement.

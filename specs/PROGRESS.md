@@ -79,10 +79,7 @@
 
 - 040 — Qualité et rythme des réponses des PNJ (ff8d7bc) : extrait de fiche dans le tour, anti-répétition, avis « pas dans ce scénario », rythme `NPC_PACE` (instantané|réaliste|occupé), Ollama `qwen2.5:3b` par défaut (7b rejeté sur Colima 10 Gi).
 
-## 041 — Métriques Prometheus et SLI/SLO de l'app de paging (2026-10-24, commit 268d83b)
-- Livré : registre de métriques maison, `GET /metrics` (désactivable par `METRICS_ENABLED`, false sur Render), métriques HTTP/messages/PNJ/Redis, `paging_npc_llm_*` par engine+model (durée par issue, débit effectif, tokens, tailles), 6 SLO Sloth, dashboards, ServiceMonitor optionnels dans `platform`. PASS (CA1-7, CA10-14 ; CA8/CA9 écartés).
-- Décisions : pas de streaming donc pas de TTFT (moteurs en `stream:false`) ; débit effectif = tokens de sortie / durée totale de l'appel (bout en bout) ; fenêtre SLO 30 j (période globale du contrôleur Sloth) ; SLI de génération mesuré après le délai de rythme, indépendant de `NPC_PACE` ; SLO 3 et 4 excluent `engine="keywords"` ; label `model` borné à 10 puis `other` ; Sloth et Prometheus font partie du socle de `platform`.
-- Dette / suite : seuil du SLO débit (1 token/s) à recalibrer sur qwen2.5:3b ; double comptage possible d'issue (timeout du dispatcher puis réponse tardive) ; aucun scrape réel testé ; ServiceMonitor exige les CRD de l'Operator ; tag llama.cpp non épinglé, noms des métriques llama.cpp à vérifier sur l'image ; TTFT possible si streaming. Prochaine : tester `make up` sur Colima dans un namespace `sre-teams-*`, puis orchestrateur de scénarios.
+- 041 — Métriques Prometheus et SLI/SLO de l'app de paging (268d83b) : registre maison, `GET /metrics` (`METRICS_ENABLED`, false sur Render), métriques HTTP/messages/PNJ/Redis/`paging_npc_llm_*`, 6 SLO Sloth fenêtre 30 j ; dette : seuil débit à recalibrer sur qwen2.5:3b, double comptage d'issue possible.
 
 ## 042 — Version dans /api/health (2026-10-25, commit eea7baf)
 - Livré : `GET /api/health` renvoie `version` lue depuis `package.json` (importé, inliné au build) ; `package.json` et `package-lock.json` à `"0.1.0"` ; test `tests/http/health.test.ts`. PASS (CA1-4), aucun écart.
@@ -93,3 +90,8 @@
 - Livré : `deploy/chart` aligné sur `platform/charts/paging` (appVersion + label `version`, bloc `metrics`, ServiceMonitor, ConfigMap vers le chart `llm`), Ollama retiré ; `local.sh` et scripts `k8s:up`, `k8s:down`, `k8s:personas` (copie gitignorée de `server/npc/personas`) ; README et contrat mis à jour (redéploiement `npm run -s k8s:up`). PASS (CA1-6).
 - Décisions : teams est la source unique du chart paging ; écarts acceptés : `redis.storageClass` "" par défaut (`local-path` dans `values-local.yaml`), chart renommé `sre-teams` → `paging`, PNJ en keywords en local sans `llm.enabled`.
 - Dette / suite : retirer `charts/paging` côté platform (étape 2 du transverse) ; platform consomme le chart par chemin relatif.
+
+## 044 — SLO Sloth du paging dans teams (2026-10-25, commit à renseigner)
+- Livré : 6 SLO `observability/sloth/paging-*.yaml` (identiques à ceux de la plateforme, validés Sloth v0.16.0), test `tests/sloth-paging.test.ts` (cohérence avec `server/utils/paging-metrics.ts`, cas négatif), README et contrat d'agents mis à jour ; 662 tests OK. PASS (CA1-6).
+- Décisions : les SLO d'une application vivent avec son code ; la plateforme les consomme par chemin relatif puis retire ses copies. Écarts acceptés : test par regex (pas de dépendance YAML), noms de métriques vérifiés mais pas les valeurs de labels.
+- Dette / suite : dashboards `paging.json` et `paging-llm-compare.json` restent dans la plateforme (`generate.py` partagé), à rapatrier si le générateur est scindé ; labels de valeurs non testés ; retirer les copies côté platform.

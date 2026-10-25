@@ -1,0 +1,22 @@
+# SLO 6 : débit effectif = tokens de sortie / durée totale de l'appel, bout en bout (prompt processing inclus, ce n'est pas le débit de génération pur). Seuil prudent pour qwen2.5:3b sur CPU, à recalibrer après mesure. Agrège tous les moteurs et modèles (engine, model retirés).
+# Collecte : ServiceMonitor du chart paging (metrics.enabled=true). Appliquer : kubectl apply -n sre-teams -f observability/sloth/paging-llm-throughput.yaml
+apiVersion: sloth.slok.dev/v1
+kind: PrometheusServiceLevel
+metadata:
+  name: paging-llm-throughput
+spec:
+  service: paging-llm
+  slos:
+    - name: throughput
+      objective: 90
+      description: "Les appels au modèle ont un débit effectif d'au moins 1 token/s."
+      sli:
+        events:
+          errorQuery: sum(rate(paging_npc_llm_effective_tokens_per_second_count[{{.window}}])) - (sum(rate(paging_npc_llm_effective_tokens_per_second_bucket{le="1"}[{{.window}}])) or vector(0))
+          totalQuery: sum(rate(paging_npc_llm_effective_tokens_per_second_count[{{.window}}]))
+      alerting:
+        name: PagingLlmThroughput
+        pageAlert:
+          labels: { severity: page }
+        ticketAlert:
+          labels: { severity: ticket }

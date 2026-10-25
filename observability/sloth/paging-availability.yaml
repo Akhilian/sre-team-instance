@@ -1,0 +1,22 @@
+# SLO 1 de l'app paging : disponibilité de la publication de messages (POST /api/channels/:id/messages). Les 4xx (erreurs du client) sont exclus du total, comme l'exemple DocShare.
+# Collecte : ServiceMonitor du chart paging (metrics.enabled=true). Appliquer : kubectl apply -n sre-teams -f observability/sloth/paging-availability.yaml
+apiVersion: sloth.slok.dev/v1
+kind: PrometheusServiceLevel
+metadata:
+  name: paging-availability
+spec:
+  service: paging-messaging
+  slos:
+    - name: availability
+      objective: 99.5
+      description: "Les messages sont publiés : réponse autre qu'une erreur serveur."
+      sli:
+        events:
+          errorQuery: sum(rate(paging_http_requests_total{method="POST",route="/api/channels/:id/messages",status_class="5xx"}[{{.window}}])) or vector(0)
+          totalQuery: sum(rate(paging_http_requests_total{method="POST",route="/api/channels/:id/messages",status_class!="4xx"}[{{.window}}]))
+      alerting:
+        name: PagingAvailability
+        pageAlert:
+          labels: { severity: page }
+        ticketAlert:
+          labels: { severity: ticket }
