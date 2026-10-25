@@ -75,10 +75,7 @@
 
 - 038 — Onboarding des participants et rôles d'incident (48dec84) : parcours en 5 étapes rejouable, 5 rôles d'incident, rôle côté serveur (`role-store.ts`, `POST /api/roles`), section `/admin` « Participants et rôles ».
 
-## 039 — Bug rôle écrasé ; évolutions 007 (`/admin` deux colonnes) et 038 (textes) (2026-10-24, commit 4db86ab)
-- Livré : circuit court. `/admin` ≥ 1100 px : code en haut, colonne pilotage (scénario, participants, annonce, alerte) et colonne suivi (PNJ, chronologie, entre deux groupes, architecture), guide pleine largeur dessous ; une colonne en dessous (`display: contents`). Choix de rôle local conservé et renvoyé tant que le serveur ne l'a pas confirmé (`shared/onboarding/role-sync.ts`, `decideRoleSync`). Textes d'onboarding nuancés (nom en clair sans @mention, section « Conversations »). PASS, deux colonnes contrôlées dans Chrome.
-- Décisions : spec amendée pour les ajustements (007, 038), nouvelle spec pour le bug (039).
-- Dette / suite : rendu à deux colonnes vérifié par simulation (fenêtre Chrome limitée à 500 px).
+- 039 — Bug rôle écrasé ; évolutions 007 (`/admin` deux colonnes) et 038 (textes) (4db86ab) : `/admin` en deux colonnes ≥ 1100 px, choix de rôle local conservé tant que non confirmé (`role-sync.ts`), textes d'onboarding nuancés.
 
 ## 040 — Qualité et rythme des réponses des PNJ (2026-10-24, commit ff8d7bc)
 - Livré : extrait de fiche dans le tour utilisateur, `STYLE_EXAMPLES` supprimés, anti-répétition (3 dernières réponses, `server/npc/anti-repeat.ts`), synonymes dans les fiches Sarah et Julien, avis « X n'est pas dans ce scénario » pour un PNJ d'un autre scénario, « @Julien ? » reprend la dernière question, spontanées non répétées ; rythme de réponse `instantané|réaliste|occupé` (`NPC_PACE`, `/admin`, `NPC_DELAY_SCALE`, section `## Disponibilité`, accusé en mode occupé) ; modèle Ollama par défaut `qwen2.5:3b`. Vérifié dans Chrome sur Colima.
@@ -89,3 +86,8 @@
 - Livré : registre de métriques maison, `GET /metrics` (désactivable par `METRICS_ENABLED`, false sur Render), métriques HTTP/messages/PNJ/Redis, `paging_npc_llm_*` par engine+model (durée par issue, débit effectif, tokens, tailles), 6 SLO Sloth, dashboards, ServiceMonitor optionnels dans `platform`. PASS (CA1-7, CA10-14 ; CA8/CA9 écartés).
 - Décisions : pas de streaming donc pas de TTFT (moteurs en `stream:false`) ; débit effectif = tokens de sortie / durée totale de l'appel (bout en bout) ; fenêtre SLO 30 j (période globale du contrôleur Sloth) ; SLI de génération mesuré après le délai de rythme, indépendant de `NPC_PACE` ; SLO 3 et 4 excluent `engine="keywords"` ; label `model` borné à 10 puis `other` ; Sloth et Prometheus font partie du socle de `platform`.
 - Dette / suite : seuil du SLO débit (1 token/s) à recalibrer sur qwen2.5:3b ; double comptage possible d'issue (timeout du dispatcher puis réponse tardive) ; aucun scrape réel testé ; ServiceMonitor exige les CRD de l'Operator ; tag llama.cpp non épinglé, noms des métriques llama.cpp à vérifier sur l'image ; TTFT possible si streaming. Prochaine : tester `make up` sur Colima dans un namespace `sre-teams-*`, puis orchestrateur de scénarios.
+
+## 042 — Version dans /api/health (2026-10-25, commit à renseigner)
+- Livré : `GET /api/health` renvoie `version` lue depuis `package.json` (importé, inliné au build) ; `package.json` et `package-lock.json` à `"0.1.0"` ; test `tests/http/health.test.ts`. PASS (CA1-4), aucun écart.
+- Décisions : `package.json` est la source de vérité de la version (0.1.0), à consommer par `workshop-platform` via `appVersion`.
+- Dette / suite : aucune.

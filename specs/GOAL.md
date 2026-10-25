@@ -112,3 +112,6 @@ Terminé : spec 040 (qualité des réponses, bug) et évolution de la spec 019 (
 Demande de l'utilisateur : « Ajoute des métriques et des SLI/SLO pour sre-teams » (l'application de paging elle-même). Découpage : l'app expose des métriques Prometheus (`/metrics`) ; le câblage de collecte (ServiceMonitor/PodMonitor), les SLO (Sloth) et les dashboards vivent dans le dépôt `workshop-platform` (source de vérité de l'infra, voir `/Users/adrien/Desktop/projets/SRE/workshop-platform`), activables par valeur car la VM Colima (10 Gi) est juste.
 Contraintes : pas de nouvelle dépendance lourde si évitable ; aucune métrique à forte cardinalité (pas d'identifiant de participant ou de message en label) ; `/metrics` ne doit révéler aucun secret ; kubectl uniquement dans les namespaces `sre-teams` / `sre-teams-*`.
 Terminé : métriques exposées et testées, SLI/SLO définis et validés sans déploiement (sloth validate / helm template), dashboard, documentation ; l'objectif pédagogique est que ces SLI/SLO servent d'exemple dans la roadmap (`specs/ROADMAP.md`).
+
+## Évolution 2026-10-25 — version dans /api/health
+`GET /api/health` renvoie en plus `version` (chaîne lue depuis `package.json`), champs existants inchangés. Test dans `test:http`. Pas de Chrome, pas de redéploiement. Transverse : voir `SRE/specs/GOAL.md`.
