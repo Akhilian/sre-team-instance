@@ -5,8 +5,6 @@ export type TimelineEventType =
   | 'reply'
   | 'announcement'
   | 'alert'
-  | 'alert-acknowledged'
-  | 'alert-resolved'
 
 export interface TimelineEvent {
   /** Date ISO 8601 */

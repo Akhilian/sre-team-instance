@@ -5,7 +5,7 @@ Application full-stack [Nuxt 4](https://nuxt.com/docs) : front Vue et API dans l
 ## Structure
 
 - `app/` : front façon Teams (pages dans `app/pages/` : `/` redirige vers le canal d'incident, `/channels/:id` affiche le fil avec rafraîchissement toutes les 3 s ; composants dans `app/components/`, nom d'affichage mémorisé dans le `localStorage`)
-- `server/api/` : back-end (routes API Nitro, ex. `GET /api/health`, `GET /api/channels`, `GET|POST /api/channels/:id/messages`, `POST /api/channels/:id/messages/:messageId/reactions`, `POST /api/channels/:id/messages/:messageId/alert-status` (acquitter / résoudre une alerte), `POST /api/presence` (présence et frappe, en mémoire), `GET /api/npcs`, `POST /api/direct` (conversation directe avec un PNJ), et pour l'animateur `GET|POST /api/admin/npcs`, `POST /api/admin/announcements`, `POST /api/admin/alerts`, `POST /api/admin/reset` et les scénarios `GET /api/admin/scenarios`, `POST /api/admin/scenarios/:id/start`, `POST /api/admin/scenarios/stop`)
+- `server/api/` : back-end (routes API Nitro, ex. `GET /api/health`, `GET /api/channels`, `GET|POST /api/channels/:id/messages`, `POST /api/channels/:id/messages/:messageId/reactions`, `POST /api/presence` (présence et frappe, en mémoire), `GET /api/npcs`, `POST /api/direct` (conversation directe avec un PNJ), et pour l'animateur `GET|POST /api/admin/npcs`, `POST /api/admin/announcements`, `POST /api/admin/alerts`, `POST /api/admin/reset` et les scénarios `GET /api/admin/scenarios`, `POST /api/admin/scenarios/:id/start`, `POST /api/admin/scenarios/stop`)
 - `server/utils/` : logique serveur (store en mémoire des canaux et messages, persistance de l'instantané, exécuteur de scénarios)
 - `server/plugins/`, `server/middleware/` : branchement de la persistance (réhydratation au démarrage, attente avant les routes `/api/`)
 - `server/scenarios/` : scénarios d'incident pré-écrits (un fichier TypeScript par scénario, déclaré dans `index.ts`)
@@ -185,7 +185,7 @@ fiche dont l'id est déjà porté par une fiche placée avant elle dans l'ordre 
   « en train d'écrire » (`typing` de `POST /api/presence`). `GET /api/channels` ne liste que les canaux
   d'équipe ; `?participant=<nom>` y ajoute les conversations de ce participant. **Pas d'authentification
   réelle** : « privé » signifie seulement « non listé pour les autres » ; quiconque connaît l'URL peut lire
-  la conversation. Seule l'écriture est gardée : un message, une réaction ou un acquittement d'alerte
+  la conversation. Seule l'écriture est gardée : un message ou une réaction
   signé d'un autre nom que son propriétaire est refusé en 403 (nom vide ou invalide : 400). La chronologie de l'animateur les inclut ; « Tout réinitialiser » les supprime,
   « Effacer les messages » aussi. Le budget de réponses des conversations directes est séparé de celui
   des canaux d'équipe : une salle (une quinzaine de participants) qui interroge les PNJ en direct n'empêche

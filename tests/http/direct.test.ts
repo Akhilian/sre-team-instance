@@ -112,9 +112,6 @@ describe('conversations directes (022)', () => {
     expect((await react(DM, reply!.id, { emoji: '👍' })).status).toBe(400)
     expect((await react(DM, reply!.id, { emoji: '👍', author: '  ' })).status).toBe(400)
 
-    const status = await postJson(`${server.url}/api/channels/${DM}/messages/${reply!.id}/alert-status`, { status: 'acknowledged', name: 'Bob' })
-    expect(status.status).toBe(403)
-
     // Canaux d'équipe inchangés : Bob y réagit librement
     const team = await postJson(`${server.url}/api/channels/incident-en-cours/messages`, { author: 'Alice', text: 'Je regarde le checkout' })
     expect(team.status).toBe(201)

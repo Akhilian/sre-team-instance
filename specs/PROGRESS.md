@@ -95,10 +95,7 @@
 
 - 048 — Publication de l'image après la CI (766d1c2) : `image.yml` déclenché par `workflow_run` du workflow « CI » (success sur `main`), `ci.yml` sans `workflow_call` ; enchaînement constaté au push suivant.
 
-## 049 — Références au dossier workshop-war-room (2026-10-25, c95f110)
-- Livré : `workshop-teams` remplacé par `workshop-war-room` dans CLAUDE.md (contrat), `deploy/chart/Chart.yaml`, `deploy/chart/values.yaml`, `specs/ROADMAP.md`. Typecheck, 662 tests, build, 103 tests HTTP, helm lint/template OK. PASS (CA1-2).
-- Décisions : le dossier local s'appelle `workshop-war-room` ; les `teams/NNN` des anciennes entrées de PROGRESS désignent ce dépôt.
-- Dette / suite : renommer le dépôt GitHub, le service Render et le dépôt Docker Hub (utilisateur) ; premier passage de platform-conformity. Écarts acceptés : README sans occurrence (inchangé) ; `helm template` sans values échoue sur `facilitatorCode` (préexistant).
+- 049 — Références au dossier workshop-war-room (c95f110) : `workshop-teams` remplacé par `workshop-war-room` (contrat, chart, ROADMAP) ; reste : renommer dépôt GitHub, service Render, dépôt Docker Hub.
 
 ## 050 — Chart : annotations et sources autorisées du Service (2026-10-26, b399b5a)
 - Livré : `service.yaml` rend `annotations` et `loadBalancerSourceRanges` seulement s'ils sont non vides ; `values.yaml` (`service.annotations: {}`, `service.loadBalancerSourceRanges: []`, exemple NLB internet-facing) ; README « Exposition sur EKS ». Rendu local identique (diff nul depuis HEAD), 662 tests, build, 103 tests HTTP, helm lint OK. PASS (CA1-4).
@@ -109,3 +106,8 @@
 - Livré : section « Ce que les autres PNJ ont déjà dit » (6 réponses pairs au plus), règle ne pas contredire/répéter (hors spontané), génération chaînée des cibles sans changer délais ni ordre de publication, anti-redite inter-PNJ (`isNearDuplicate` ≥ 0,8, issue `rejected_repeat`). PASS (CA1-6).
 - Décisions : option A (historique brut borné, aucun appel LLM de plus) choisie par l'utilisateur ; `flush()` des tests passe de 5 à 50 ticks à cause du chaînage.
 - Dette / suite : `respondTimeoutMs` est par PNJ, la chaîne cumule les délais si le LLM est lent.
+
+## 052 — Alertes informatives (2026-10-26, commit à renseigner)
+- Livré : retrait des boutons Acquitter/Résoudre, du badge et du suivi de statut des alertes (route `alert-status` supprimée, chat-store, shared, chronologie) ; anciens états persistés tolérés ; références nettoyées (README, rate-limit, `limits.ts`, onboarding, guides animateur). PASS (CA1-6).
+- Décisions : option A (suppression complète) choisie par l'utilisateur. Écart accepté : CA1 vérifié par analyse du template d'`AlertCard.vue` (pas d'outillage de test de composant).
+- Dette / suite : aucune.

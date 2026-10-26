@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { Message } from '~~/shared/types/chat'
-import type { AlertStatus } from '~~/shared/utils/alerts'
 import { ALERT_SEVERITY_COLORS } from '~~/shared/utils/alerts'
 import type { MentionCandidate } from '~~/shared/utils/mentions'
 import { mentionsName } from '~~/shared/utils/mentions'
@@ -21,8 +20,6 @@ const props = defineProps<{
   reply: (parentId: string, text: string) => Promise<void>
   /** Bascule la réaction emoji du participant courant sur un message */
   react: (messageId: string, emoji: string) => Promise<void>
-  /** Acquitte ou résout une carte d'alerte au nom du participant courant */
-  setAlertStatus: (messageId: string, status: Exclude<AlertStatus, 'triggered'>) => Promise<void>
 }>()
 
 const emit = defineEmits<{
@@ -132,8 +129,6 @@ watch(
                 v-if="thread.kind === 'alert' && thread.alert"
                 :alert="thread.alert"
                 :text="thread.text"
-                :me="me"
-                :set-status="status => setAlertStatus(thread.id, status)"
               />
               <MessageText v-else :text="thread.text" :known-names="knownNames" :me="me" />
             </div>

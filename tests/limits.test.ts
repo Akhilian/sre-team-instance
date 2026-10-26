@@ -117,8 +117,7 @@ const corrupted: [string, unknown][] = [
   ['réaction sans authors', snapshotWith({ reactions: [{ emoji: '👍' }] })],
   ['authors non-chaînes', snapshotWith({ reactions: [{ emoji: '👍', authors: [42] }] })],
   ['emoji inconnu', snapshotWith({ reactions: [{ emoji: '🦄', authors: ['Bob'] }] })],
-  ['sévérité inconnue', snapshotWith({ kind: 'alert', alert: { severity: 'SEV9', title: 't', service: 's', status: 'triggered' } })],
-  ['statut inconnu', snapshotWith({ kind: 'alert', alert: { severity: 'SEV1', title: 't', service: 's', status: 'oublié' } })],
+  ['sévérité inconnue', snapshotWith({ kind: 'alert', alert: { severity: 'SEV9', title: 't', service: 's' } })],
   ['accesseur qui lève', { version: 1, get channels() { throw new Error('corrompu') } }],
 ]
 
@@ -129,8 +128,10 @@ describe('importSnapshot (M3)', () => {
     expect(importSnapshot(snapshotWith({
       reactions: [{ emoji: '❤️', authors: ['Bob'] }],
       kind: 'alert',
-      alert: { severity: 'SEV2', title: 't', service: 's', status: 'acknowledged' },
+      alert: { severity: 'SEV2', title: 't', service: 's', status: 'acknowledged', acknowledgedBy: 'Bob', resolvedAt: 'x' },
     }))).toBe(true)
+    // anciens champs de statut : ignorés, jamais exposés
+    expect(listMessages('a')[0]!.alert).toEqual({ severity: 'SEV2', title: 't', service: 's' })
     expect(listMessages('a')[0]!.reactions).toEqual([{ emoji: '❤️', authors: ['Bob'] }])
   })
 

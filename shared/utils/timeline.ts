@@ -8,8 +8,6 @@ export const TIMELINE_TYPE_LABELS: Record<TimelineEventType, string> = {
   'reply': 'Réponse',
   'announcement': 'Annonce',
   'alert': 'Alerte',
-  'alert-acknowledged': 'Acquittement',
-  'alert-resolved': 'Résolution',
 }
 
 /** Auteur des événements de création d'alerte, comme le connecteur des cartes */
@@ -20,32 +18,13 @@ function messageEvents(channel: Channel, message: Message): TimelineEvent[] {
   if (message.kind === 'alert' && message.alert) {
     const { alert } = message
     const label = `[${alert.severity}] ${alert.title}`
-    const events: TimelineEvent[] = [{
+    return [{
       ...base,
       at: message.createdAt,
       author: ALERT_EVENT_AUTHOR,
       type: 'alert',
       text: `${label} — ${alert.service} : ${message.text}`,
     }]
-    if (alert.acknowledgedAt) {
-      events.push({
-        ...base,
-        at: alert.acknowledgedAt,
-        author: alert.acknowledgedBy ?? '',
-        type: 'alert-acknowledged',
-        text: `Alerte acquittée : ${label}`,
-      })
-    }
-    if (alert.resolvedAt) {
-      events.push({
-        ...base,
-        at: alert.resolvedAt,
-        author: alert.resolvedBy ?? '',
-        type: 'alert-resolved',
-        text: `Alerte résolue : ${label}`,
-      })
-    }
-    return events
   }
   if (message.kind === 'announcement') {
     return [{ ...base, at: message.createdAt, author: message.author, type: 'announcement', text: message.text }]
@@ -58,7 +37,7 @@ function messageEvents(channel: Channel, message: Message): TimelineEvent[] {
 
 /**
  * Événements de tous les canaux donnés, triés par date croissante ; à égalité, ordre d'origine
- * (canaux dans l'ordre donné, messages dans l'ordre du canal, création → acquittement → résolution).
+ * (canaux dans l'ordre donné, messages dans l'ordre du canal, création de l'alerte).
  * Un canal absent de messagesByChannel est traité comme vide.
  */
 export function buildTimeline(

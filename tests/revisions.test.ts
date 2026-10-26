@@ -14,7 +14,6 @@ import {
   listMessagesSince,
   resetAll,
   resetChatStore,
-  setAlertStatus,
   toggleReaction,
 } from '../server/utils/chat-store'
 import { CHANNEL_MESSAGES_MAX } from '../shared/utils/limits'
@@ -41,21 +40,13 @@ describe('rev (curseur de révision)', () => {
     expect(reacted.rev).toBe(currentRev())
     toggleReaction('general', root.id, { emoji: '👍', author: 'Bob' })
     revs.push(currentRev())
-    const alert = addAlert('incident-en-cours', alertInput)
-    revs.push(currentRev())
-    const acked = setAlertStatus('incident-en-cours', alert.id, { status: 'acknowledged', name: 'Alice' })
-    revs.push(currentRev())
-    expect(acked.rev).toBeGreaterThan(alert.rev)
-    setAlertStatus('incident-en-cours', alert.id, { status: 'resolved', name: 'Alice' })
+    addAlert('incident-en-cours', alertInput)
     revs.push(currentRev())
     for (let i = 1; i < revs.length; i++) expect(revs[i]).toBeGreaterThan(revs[i - 1]!)
   })
 
   it('ne bouge pas sur une mutation refusée', () => {
-    const alert = addAlert('incident-en-cours', alertInput)
-    setAlertStatus('incident-en-cours', alert.id, { status: 'resolved', name: 'Alice' })
     const before = currentRev()
-    expect(() => setAlertStatus('incident-en-cours', alert.id, { status: 'acknowledged', name: 'Bob' })).toThrow()
     expect(() => addMessage('general', { author: '', text: 'x' })).toThrow()
     expect(currentRev()).toBe(before)
   })

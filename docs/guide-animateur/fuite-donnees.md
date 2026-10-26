@@ -99,7 +99,7 @@ Montez d'un niveau seulement après quelques minutes sans progrès. Les PNJ spon
 
 ## Débrief
 
-Appuyez-vous sur la chronologie exportée depuis `/admin` (section « Chronologie (post-mortem) » : afficher, ou « Télécharger .md »). Elle fusionne alertes, annonces, messages de PNJ, réponses et acquittements, avec l'heure de Paris. Comparez-la à la chronologie des injections ci-dessus.
+Appuyez-vous sur la chronologie exportée depuis `/admin` (section « Chronologie (post-mortem) » : afficher, ou « Télécharger .md »). Elle fusionne alertes, annonces, messages de PNJ, et réponses, avec l'heure de Paris. Comparez-la à la chronologie des injections ci-dessus.
 
 | Question | Où la lire dans l'export |
 | --- | --- |

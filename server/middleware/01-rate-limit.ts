@@ -10,11 +10,11 @@ const limiter = createWriteRateLimiter({
   windowMs: WRITE_RATE_WINDOW_MS,
 })
 
-/** author (messages, réactions), name (acquittement d'alerte, choix de rôle) ou participant (conversation directe) ; vide pour la création de canal */
+/** author (messages, réactions), name (choix de rôle) ou participant (conversation directe) ; vide pour la création de canal */
 function authorOf(path: string, body: unknown): string {
   if (!body || typeof body !== 'object') return ''
   const record = body as Record<string, unknown>
-  const raw = path.endsWith('/alert-status') || path === '/api/roles' ? record.name : path === '/api/direct' ? record.participant : record.author
+  const raw = path === '/api/roles' ? record.name : path === '/api/direct' ? record.participant : record.author
   // Tronqué : la clé reste bornée quoi qu'envoie le client
   return typeof raw === 'string' ? raw.trim().slice(0, AUTHOR_MAX_LENGTH) : ''
 }

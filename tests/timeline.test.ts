@@ -67,7 +67,7 @@ describe('buildTimeline', () => {
     expect(events[2]).toMatchObject({ type: 'announcement', author: 'Animateur', text: 'Point dans 10 min' })
   })
 
-  it('une alerte acquittée puis résolue par deux personnes produit 3 événements dans l\'ordre', () => {
+  it('une alerte ne produit qu\'un événement, même avec d\'anciens champs de statut', () => {
     const events = buildTimeline([INCIDENT], {
       [INCIDENT.id]: [
         message({
@@ -81,28 +81,25 @@ describe('buildTimeline', () => {
             severity: 'SEV1',
             title: '5xx checkout',
             service: 'checkout-api',
+            // anciens champs persistés : ignorés
             status: 'resolved',
             acknowledgedBy: 'Alice',
             acknowledgedAt: '2026-10-23T08:03:00.000Z',
             resolvedBy: 'Chloé',
             resolvedAt: '2026-10-23T08:10:00.000Z',
-          },
+          } as never,
         }),
         message({ id: 'm', channelId: INCIDENT.id, createdAt: '2026-10-23T08:05:00.000Z', text: 'rollback lancé' }),
       ],
     })
     expect(events.map(e => [e.type, e.author, e.at])).toEqual([
       ['alert', 'Alerting', '2026-10-23T08:00:00.000Z'],
-      ['alert-acknowledged', 'Alice', '2026-10-23T08:03:00.000Z'],
       ['message', 'Alice', '2026-10-23T08:05:00.000Z'],
-      ['alert-resolved', 'Chloé', '2026-10-23T08:10:00.000Z'],
     ])
     expect(events[0]!.text).toBe('[SEV1] 5xx checkout — checkout-api : Taux 5xx > 20 %')
-    expect(events[1]!.text).toContain('5xx checkout')
-    expect(events[3]!.text).toContain('5xx checkout')
   })
 
-  it('une alerte seulement déclenchée ne produit qu\'un événement', () => {
+  it('une alerte produit un événement d\'apparition', () => {
     const events = buildTimeline([INCIDENT], {
       [INCIDENT.id]: [message({
         id: 'al',
@@ -111,7 +108,7 @@ describe('buildTimeline', () => {
         author: 'Alerting',
         kind: 'alert',
         text: 'Latence p99 > 2 s',
-        alert: { severity: 'SEV2', title: 'Latence', service: 'orders-db', status: 'triggered' },
+        alert: { severity: 'SEV2', title: 'Latence', service: 'orders-db' },
       })],
     })
     expect(events).toHaveLength(1)
@@ -141,9 +138,9 @@ describe('timelineToMarkdown', () => {
   })
 
   it('libellés de type en français', () => {
-    const types = ['message', 'reply', 'announcement', 'alert', 'alert-acknowledged', 'alert-resolved'] as const
+    const types = ['message', 'reply', 'announcement', 'alert'] as const
     const md = timelineToMarkdown(types.map(type => event({ type })), { title: 'T', generatedAt })
-    for (const label of ['Message', 'Réponse', 'Annonce', 'Alerte', 'Acquittement', 'Résolution']) {
+    for (const label of ['Message', 'Réponse', 'Annonce', 'Alerte']) {
       expect(md).toContain(`| ${label} |`)
     }
   })

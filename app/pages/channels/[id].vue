@@ -269,23 +269,6 @@ async function react(messageId: string, emoji: string) {
   applyLocal(targetChannel, updated)
 }
 
-// Acquitte ou résout une alerte ; le message renvoyé remplace l'ancien sans attendre le polling.
-// En cas de refus (déjà acquittée ailleurs…), un poll immédiat affiche l'état réel, puis on remonte l'erreur.
-async function setAlertStatus(messageId: string, status: 'acknowledged' | 'resolved') {
-  const targetChannel = channelId.value
-  try {
-    const updated = await $fetch<Message>(`/api/channels/${targetChannel}/messages/${messageId}/alert-status`, {
-      method: 'POST',
-      body: { status, name: displayName.value },
-    })
-    applyLocal(targetChannel, updated)
-  }
-  catch (error) {
-    await pollOnce()
-    throw error
-  }
-}
-
 // Panneau des canaux en tiroir sur écran étroit : fermé au SSR, refermé à chaque navigation
 const channelPanelOpen = ref(false)
 watch(channelId, () => {
@@ -528,7 +511,7 @@ onBeforeUnmount(() => {
           {{ directNpc.name }} n'est pas disponible pour le moment.
         </p>
 
-        <MessageList :messages="messages ?? []" :me="displayName" :npc-names="npcNames" :mention-candidates="mentionCandidates" :roles="roles" :reply="reply" :react="react" :set-alert-status="setAlertStatus" @typing="onTyping" />
+        <MessageList :messages="messages ?? []" :me="displayName" :npc-names="npcNames" :mention-candidates="mentionCandidates" :roles="roles" :reply="reply" :react="react" @typing="onTyping" />
         <p class="typing-indicator" data-testid="typing-indicator" aria-live="polite">{{ typingText }}</p>
         <p v-if="npcNotice" class="npc-notice" data-testid="npc-notice" role="status">{{ npcNotice }}</p>
         <Composer

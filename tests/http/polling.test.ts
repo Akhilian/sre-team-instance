@@ -34,7 +34,7 @@ describe('polling incrémental (?since)', () => {
     const created = await (await postJson(messagesUrl(), { author: 'Bob', text: 'nouveau' })).json()
     const reply = await (await postJson(messagesUrl(), { author: 'Bob', text: 'réponse', parentId: old.id })).json()
     expect((await postJson(`${messagesUrl()}/${old.id}/reactions`, { emoji: '👍', author: 'Bob' })).status).toBe(200)
-    expect((await postJson(`${messagesUrl()}/${alert.id}/alert-status`, { status: 'acknowledged', name: 'Bob' })).status).toBe(200)
+    expect((await postJson(`${messagesUrl()}/${alert.id}/reactions`, { emoji: '👍', author: 'Bob' })).status).toBe(200)
 
     const delta = await since(cursor)
     expect(delta.full).toBe(false)
@@ -42,7 +42,7 @@ describe('polling incrémental (?since)', () => {
     const revs = delta.messages.map(message => message.rev)
     expect([...revs].sort((a, b) => a - b)).toEqual(revs)
     expect(delta.messages[2]!.reactions).toHaveLength(1)
-    expect(delta.messages[3]!.alert!.status).toBe('acknowledged')
+    expect(delta.messages[3]!.reactions).toHaveLength(1)
     expect(delta.rev).toBe(revs.at(-1))
 
     // Après un reset, l'ancien curseur donne la liste complète (vide)

@@ -7,9 +7,7 @@ import { isReactionEmoji } from '../../shared/utils/reactions'
 import {
   ALERT_SERVICE_MAX_LENGTH,
   ALERT_TITLE_MAX_LENGTH,
-  canTransition,
   isAlertSeverity,
-  isAlertStatus,
 } from '../../shared/utils/alerts'
 import {
   AUTHOR_MAX_LENGTH,
@@ -89,14 +87,6 @@ export class ChannelValidationError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'ChannelValidationError'
-  }
-}
-
-/** Changement de statut d'alerte interdit (déjà acquittée, déjà résolue) : 409 */
-export class AlertTransitionError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'AlertTransitionError'
   }
 }
 
@@ -215,7 +205,7 @@ function copyMessage(message: Message): Message {
   if (message.reactions) {
     copy.reactions = message.reactions.map(reaction => ({ emoji: reaction.emoji, authors: [...reaction.authors] }))
   }
-  if (message.alert) copy.alert = { ...message.alert }
+  if (message.alert) copy.alert = { severity: message.alert.severity, title: message.alert.title, service: message.alert.service }
   if (message.npc) copy.npc = { ...message.npc }
   return copy
 }
@@ -404,7 +394,7 @@ export function addAnnouncement(channelId: string, input: { text?: unknown }): M
 
 export const ALERT_AUTHOR = 'Alerting'
 
-/** Carte d'alerte publiée par l'animateur : message racine signé « Alerting », au statut triggered. */
+/** Carte d'alerte publiée par l'animateur : message racine signé « Alerting », sans suivi de statut. */
 export function addAlert(
   channelId: string,
   input: { severity?: unknown, title?: unknown, service?: unknown, text?: unknown },
@@ -428,51 +418,9 @@ export function addAlert(
     createdAt: new Date().toISOString(),
     rev: 0,
     kind: 'alert',
-    alert: { severity, title, service, status: 'triggered' },
+    alert: { severity, title, service },
   }
   pushMessage(messages, message)
-  notifyChange()
-  return copyMessage(message)
-}
-
-/**
- * Acquitte ou résout une alerte au nom de name. Transitions : triggered → acknowledged,
- * triggered|acknowledged → resolved ; toute autre transition lève AlertTransitionError.
- */
-export function setAlertStatus(
-  channelId: string,
-  messageId: string,
-  input: { status?: unknown, name?: unknown },
-): Message {
-  const messages = messagesByChannel.get(channelId)
-  if (!messages) throw new ChannelNotFoundError(channelId)
-  const message = messages.find(candidate => candidate.id === messageId)
-  if (!message) throw new MessageNotFoundError(messageId)
-
-  const status = input?.status
-  if (status !== 'acknowledged' && status !== 'resolved') {
-    throw new MessageValidationError('status doit valoir acknowledged ou resolved')
-  }
-  const name = requireText(input?.name, 'name', AUTHOR_MAX_LENGTH)
-  const alert = message.alert
-  if (message.kind !== 'alert' || !alert) {
-    throw new MessageValidationError('Ce message n\'est pas une alerte')
-  }
-  if (!canTransition(alert.status, status)) {
-    throw new AlertTransitionError(alert.status === 'resolved' ? 'Alerte déjà résolue' : 'Alerte déjà acquittée')
-  }
-
-  const at = new Date().toISOString()
-  alert.status = status
-  if (status === 'acknowledged') {
-    alert.acknowledgedBy = name
-    alert.acknowledgedAt = at
-  }
-  else {
-    alert.resolvedBy = name
-    alert.resolvedAt = at
-  }
-  bumpRev(message)
   notifyChange()
   return copyMessage(message)
 }
@@ -697,9 +645,9 @@ function isValidReaction(value: unknown): boolean {
     && value.authors.every(author => typeof author === 'string')
 }
 
-/** Alerte : sévérité et statut connus */
+/** Alerte : sévérité connue (d'anciens champs de statut sont tolérés et ignorés) */
 function isValidAlert(value: unknown): boolean {
-  return isRecord(value) && isAlertSeverity(value.severity) && isAlertStatus(value.status)
+  return isRecord(value) && isAlertSeverity(value.severity)
 }
 
 /** Signature de PNJ : id et rôle en chaînes */

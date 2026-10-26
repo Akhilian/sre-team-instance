@@ -1,5 +1,5 @@
 // Types partagés entre l'API (server/) et le front (app/)
-import type { AlertSeverity, AlertStatus } from '../utils/alerts'
+import type { AlertSeverity } from '../utils/alerts'
 
 export interface Channel {
   id: string
@@ -68,13 +68,6 @@ export interface Alert {
   severity: AlertSeverity
   title: string
   service: string
-  status: AlertStatus
-  acknowledgedBy?: string
-  /** Date ISO 8601 */
-  acknowledgedAt?: string
-  resolvedBy?: string
-  /** Date ISO 8601 */
-  resolvedAt?: string
 }
 
 export interface Reaction {

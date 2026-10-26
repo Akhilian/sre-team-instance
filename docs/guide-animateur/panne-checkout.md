@@ -94,18 +94,18 @@ Montez d'un niveau seulement après quelques minutes sans progrès. Les PNJ spon
 
 ## Débrief
 
-Appuyez-vous sur la chronologie exportée depuis `/admin` (section « Chronologie (post-mortem) » : afficher, ou « Télécharger .md »). Elle fusionne alertes, annonces, messages de PNJ, réponses et acquittements, avec l'heure de Paris. Comparez-la à la chronologie des injections ci-dessus.
+Appuyez-vous sur la chronologie exportée depuis `/admin` (section « Chronologie (post-mortem) » : afficher, ou « Télécharger .md »). Elle fusionne alertes, annonces, messages de PNJ, et réponses, avec l'heure de Paris. Comparez-la à la chronologie des injections ci-dessus.
 
 | Question | Où la lire dans l'export |
 | --- | --- |
-| Quand la première alerte a-t-elle été vue, et par qui ? | Premier acquittement après 0:20. |
+| Quand la première alerte a-t-elle été vue, et par qui ? | Premier message d'un participant sur l'alerte, après 0:20. |
 | Quand la personne qui pilote a-t-elle été désignée ? | Premier message qui l'annonce ; Marc Lefort la demande à 12:40 ; Claire Dumont réclame un point écrit à 9:10 et par ses relances spontanées. |
 | Combien de temps avant d'interroger Julien Moreau ? | Premier message qui mentionne `@Julien` ou son nom, comparé à l'alerte de 10:20. |
 | Le prestataire a-t-il été soupçonné à tort ? | Messages avant et après la réponse de Thomas Keller. |
 | Quand le retour arrière a-t-il été décidé ? | Message de feu vert à Julien Moreau. |
 | La newsletter a-t-elle été décidée avant 14h15 ? | Échange avec Claire Dumont et Inès Garnier. |
 | Quelle première communication, validée par qui, avec quelle heure de prochain point ? | Messages à Inès Garnier et à Sarah Benali ; recherchez toute promesse de remboursement. |
-| Les alertes ont-elles été acquittées puis résolues ? | Lignes « Acquittement » et « Résolution ». |
+| Les alertes ont-elles été prises en charge dans le canal ? | Messages et réponses qui suivent la ligne « Alerte ». |
 
 Questions ouvertes : qu'est-ce qui a aidé ou gêné la circulation de l'information ? Quel signal aurait permis d'agir plus tôt (changement récent, déploiement sans canary, tests de charge non rejoués) ? Que mettre dans un runbook ?
 

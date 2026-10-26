@@ -30,11 +30,10 @@ describe('40 participants derrière une même IP', () => {
       channelId: 'incident-en-cours', severity: 'SEV1', title: 'Checkout KO', service: 'checkout-api', text: '5xx',
     }, { 'x-facilitator-code': 'atelier', ...NAT })
     expect(alert.status).toBe(201)
-    const alertId = (await alert.json()).id as string
     const root = await post(messagesUrl, { author: names[0], text: 'Qui prend le lead ?' })
 
     // Par participant, sur la fenêtre : 5 frappes (≤ 1 / 2 s) et 4 battements (3 s) de présence ;
-    // 4 messages, 1 réponse, 4 réactions, 1 acquittement, soit 10 écritures limitées (400 pour l'IP)
+    // 4 messages, 1 réponse, 4 réactions, soit 9 écritures limitées (400 pour l'IP)
     for (let round = 0; round < 4; round++) {
       await Promise.all(names.map(async (name) => {
         await post(presenceUrl, { name, channelId: 'incident-en-cours', typing: true })
@@ -46,12 +45,11 @@ describe('40 participants derrière une même IP', () => {
     await Promise.all(names.map(async (name) => {
       await post(presenceUrl, { name, channelId: 'incident-en-cours', typing: true })
       await post(messagesUrl, { author: name, text: 'réponse', parentId: root.id })
-      await post(`${messagesUrl}/${alertId}/alert-status`, { status: 'acknowledged', name })
     }))
 
     expect(statuses.filter(status => status === 429)).toHaveLength(0)
-    expect(statuses).toHaveLength(1 + PARTICIPANTS * (4 * 4 + 3))
-    // Un seul acquittement réussit, les autres sont des 409 (déjà acquittée), jamais des 429
+    expect(statuses).toHaveLength(1 + PARTICIPANTS * (4 * 4 + 2))
+    // Jamais de 5xx
     expect(statuses.filter(status => status >= 500)).toHaveLength(0)
   })
 })

@@ -33,7 +33,7 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
           'Les mentions : tapez @ pour obtenir une liste de personnes et choisissez-en une. Si votre message ne contient pas déjà de @mention, écrire le nom de quelqu\'un en clair suffit aussi à l\'interpeller.',
           'Les conversations directes : quand des collègues sont disponibles, la section « Conversations » permet de leur écrire en tête à tête, à l\'abri du canal.',
           'Les réactions : un emoji sous un message pour approuver ou signaler que vous avez vu, sans ajouter de bruit.',
-          'Les cartes d\'alerte : une alerte arrive sous forme de carte. Acquittez-la pour dire que vous la prenez en charge, puis résolvez-la quand le problème est réglé.',
+          'Les cartes d\'alerte : une alerte arrive sous forme de carte. Elle est informative : dites dans le canal que vous la prenez en charge.',
           'La présence : les avatars en haut du canal montrent qui est là. Passez dessus pour voir le nom et le rôle de chacun.',
         ],
       },

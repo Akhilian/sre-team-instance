@@ -17,7 +17,6 @@ import {
   listMessages,
   onChatChange,
   resetChatStore,
-  setAlertStatus,
   toggleReaction,
 } from '../server/utils/chat-store'
 
@@ -29,8 +28,7 @@ function populate() {
   const root = addMessage('persist-test', { author: 'Alice', text: 'survit ?' })
   addMessage('persist-test', { author: 'Bob', text: 'oui', parentId: root.id })
   toggleReaction('persist-test', root.id, { emoji: '👍', author: 'Bob' })
-  const alert = addAlert('incident-en-cours', { severity: 'SEV1', title: 'Checkout KO', service: 'checkout-api', text: '5xx' })
-  setAlertStatus('incident-en-cours', alert.id, { status: 'acknowledged', name: 'Alice' })
+  addAlert('incident-en-cours', { severity: 'SEV1', title: 'Checkout KO', service: 'checkout-api', text: '5xx' })
 }
 
 function state() {
@@ -53,7 +51,7 @@ describe('chat-persistence', () => {
     expect(listChannels().map(channel => channel.id)).not.toContain('persist-test')
     expect(importSnapshot(snapshot)).toBe(true)
     expect(state()).toEqual(before)
-    expect(listMessages('incident-en-cours')[0]!.alert?.acknowledgedBy).toBe('Alice')
+    expect(listMessages('incident-en-cours')[0]!.alert).toMatchObject({ severity: 'SEV1', title: 'Checkout KO' })
   })
 
   it('aller-retour par le driver unstorage memory', async () => {
@@ -143,11 +141,11 @@ describe('chat-persistence', () => {
       try {
         populate()
         clearMessages()
-        // addChannel, 2 addMessage, toggleReaction, addAlert, setAlertStatus, clearMessages
-        expect(listener).toHaveBeenCalledTimes(7)
+        // addChannel, 2 addMessage, toggleReaction, addAlert, clearMessages
+        expect(listener).toHaveBeenCalledTimes(6)
         resetChatStore()
         importSnapshot(exportSnapshot())
-        expect(listener).toHaveBeenCalledTimes(7)
+        expect(listener).toHaveBeenCalledTimes(6)
       }
       finally {
         unsubscribe()
