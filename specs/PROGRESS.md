@@ -107,7 +107,7 @@
 - Décisions : option A (historique brut borné, aucun appel LLM de plus) choisie par l'utilisateur ; `flush()` des tests passe de 5 à 50 ticks à cause du chaînage.
 - Dette / suite : `respondTimeoutMs` est par PNJ, la chaîne cumule les délais si le LLM est lent.
 
-## 052 — Alertes informatives (2026-10-26, commit à renseigner)
+## 052 — Alertes informatives (2026-10-26, 1543823)
 - Livré : retrait des boutons Acquitter/Résoudre, du badge et du suivi de statut des alertes (route `alert-status` supprimée, chat-store, shared, chronologie) ; anciens états persistés tolérés ; références nettoyées (README, rate-limit, `limits.ts`, onboarding, guides animateur). PASS (CA1-6).
 - Décisions : option A (suppression complète) choisie par l'utilisateur. Écart accepté : CA1 vérifié par analyse du template d'`AlertCard.vue` (pas d'outillage de test de composant).
 - Dette / suite : aucune.
