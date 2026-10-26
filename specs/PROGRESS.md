@@ -103,7 +103,7 @@
 - Décisions : le dossier local s'appelle `workshop-war-room` ; les `teams/NNN` des anciennes entrées de PROGRESS désignent ce dépôt.
 - Dette / suite : renommer le dépôt GitHub, le service Render et le dépôt Docker Hub (utilisateur) ; premier passage de platform-conformity. Écarts acceptés : README sans occurrence (inchangé) ; `helm template` sans values échoue sur `facilitatorCode` (préexistant).
 
-## 050 — Chart : annotations et sources autorisées du Service (2026-10-26, commit à renseigner)
+## 050 — Chart : annotations et sources autorisées du Service (2026-10-26, b399b5a)
 - Livré : `service.yaml` rend `annotations` et `loadBalancerSourceRanges` seulement s'ils sont non vides ; `values.yaml` (`service.annotations: {}`, `service.loadBalancerSourceRanges: []`, exemple NLB internet-facing) ; README « Exposition sur EKS ». Rendu local identique (diff nul depuis HEAD), 662 tests, build, 103 tests HTTP, helm lint OK. PASS (CA1-4).
 - Décisions : exposition publique du cluster de test voulue par l'utilisateur ; platform pose l'annotation dans `environments/eks/war-room.yaml` (platform/010).
 - Dette / suite : TLS/Ingress absents ; code animateur de test faible. Écart accepté : « avant » d'abord rendu depuis le working tree, refait depuis HEAD par le vérificateur.
