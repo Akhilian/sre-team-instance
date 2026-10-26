@@ -93,10 +93,7 @@
 
 - 047 — CI : build avant test:http (647e71f) : ordre `npm ci`, typecheck, test, build, test:http ; remote `origin` passé à `Akhilian/sre-war-room`.
 
-## 048 — Publication de l'image après la CI (2026-10-25, 766d1c2)
-- Livré : `ci.yml` sans `workflow_call` (`pull_request`, push `main`, `workflow_dispatch`) ; `image.yml` déclenché par `workflow_run` du workflow « CI » (success + push, ou `workflow_dispatch`), checkout et tag sha sur `head_sha`, plus de filtre `paths` ; README et CLAUDE.md décrivent CI → Publication. PASS (CA1-5).
-- Décisions : publication à chaque CI verte sur `main`. Écart accepté : le workflow garde le nom « Publication de l'image ».
-- Dette / suite : `workflow_run` n'est actif qu'une fois `image.yml` sur la branche par défaut, l'enchaînement ne se constate qu'au push suivant ; le workflow de docshare garde l'ancienne structure (hors périmètre).
+- 048 — Publication de l'image après la CI (766d1c2) : `image.yml` déclenché par `workflow_run` du workflow « CI » (success sur `main`), `ci.yml` sans `workflow_call` ; enchaînement constaté au push suivant.
 
 ## 049 — Références au dossier workshop-war-room (2026-10-25, c95f110)
 - Livré : `workshop-teams` remplacé par `workshop-war-room` dans CLAUDE.md (contrat), `deploy/chart/Chart.yaml`, `deploy/chart/values.yaml`, `specs/ROADMAP.md`. Typecheck, 662 tests, build, 103 tests HTTP, helm lint/template OK. PASS (CA1-2).
@@ -107,3 +104,8 @@
 - Livré : `service.yaml` rend `annotations` et `loadBalancerSourceRanges` seulement s'ils sont non vides ; `values.yaml` (`service.annotations: {}`, `service.loadBalancerSourceRanges: []`, exemple NLB internet-facing) ; README « Exposition sur EKS ». Rendu local identique (diff nul depuis HEAD), 662 tests, build, 103 tests HTTP, helm lint OK. PASS (CA1-4).
 - Décisions : exposition publique du cluster de test voulue par l'utilisateur ; platform pose l'annotation dans `environments/eks/war-room.yaml` (platform/010).
 - Dette / suite : TLS/Ingress absents ; code animateur de test faible. Écart accepté : « avant » d'abord rendu depuis le working tree, refait depuis HEAD par le vérificateur.
+
+## 051 — Cohérence collective des PNJ (2026-10-26, commit à renseigner)
+- Livré : section « Ce que les autres PNJ ont déjà dit » (6 réponses pairs au plus), règle ne pas contredire/répéter (hors spontané), génération chaînée des cibles sans changer délais ni ordre de publication, anti-redite inter-PNJ (`isNearDuplicate` ≥ 0,8, issue `rejected_repeat`). PASS (CA1-6).
+- Décisions : option A (historique brut borné, aucun appel LLM de plus) choisie par l'utilisateur ; `flush()` des tests passe de 5 à 50 ticks à cause du chaînage.
+- Dette / suite : `respondTimeoutMs` est par PNJ, la chaîne cumule les délais si le LLM est lent.

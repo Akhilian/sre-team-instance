@@ -2,7 +2,7 @@
 // seules la fiche (personnalité, pas la phrase d'ouverture de keywords), les extraits retenus par le
 // retriever et le contexte de lecture du canal y entrent, jamais les entrées « Sur question précise » non retenues.
 import type { Message } from '../../shared/types/chat'
-import { isGenericPhrase } from './anti-repeat'
+import { isGenericPhrase, recentPeerMessages } from './anti-repeat'
 import type { NpcRequest } from '../../shared/types/npc'
 import { NPC_CONTEXT_LINE_MAX_LENGTH, NPC_CONTEXT_SECTION_MAX_LENGTH } from '../../shared/utils/limits'
 
@@ -27,6 +27,9 @@ const RULES = [
 /** Consigne d'une intervention spontanée (pas de question : la fiche et le canal suffisent) */
 const SPONTANEOUS_RULE = 'Tu interviens de toi-même dans le canal : reformule le message de base qu\'on te donne en une courte intervention spontanée, dans ton style, sans ajouter aucune information nouvelle : aucun chiffre, nom, version ni fait qui ne soit pas dans le message de base. Ta réponse est le message seul, tel qu\'il apparaîtra dans le canal : sans introduction, sans guillemets, sans ton nom.'
 
+/** Règle de cohérence collective (réponses de PNJ, hors intervention spontanée) */
+const PEER_RULE = 'Ne contredis pas ce que les autres PNJ ont déjà dit et ne répète pas ce qu\'un autre a déjà dit : renvoie vers lui ou complète.'
+
 const PARIS_TIME = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hourCycle: 'h23', hour: '2-digit', minute: '2-digit' })
 
 function bullets(items: readonly string[]): string {
@@ -48,12 +51,20 @@ function contextLine(message: Message, personaId: string): string {
 
 /** Section « conversation récente » : les plus anciens messages sont retirés au-delà de la borne ; vide sans message */
 function contextSection(request: NpcRequest): string | undefined {
-  const messages = request.channelContext ?? []
+  const peerIds = new Set(recentPeerMessages(request).map(message => message.id))
+  const messages = (request.channelContext ?? []).filter(message => !peerIds.has(message.id))
   const lines = messages.map(message => contextLine(message, request.persona.id))
   let size = lines.reduce((total, line) => total + line.length + 1, 0)
   while (lines.length > 0 && size > NPC_CONTEXT_SECTION_MAX_LENGTH) size -= lines.shift()!.length + 1
   if (lines.length === 0) return undefined
   return `Conversation récente du canal (lecture seule) :\n${lines.join('\n')}`
+}
+
+/** Section « Ce que les autres PNJ ont déjà dit » : absente sans réponse d'un autre PNJ */
+function peerSection(request: NpcRequest): string | undefined {
+  const peers = recentPeerMessages(request)
+  if (peers.length === 0) return undefined
+  return `Ce que les autres PNJ ont déjà dit :\n${peers.map(message => contextLine(message, request.persona.id)).join('\n')}`
 }
 
 function systemMessage(request: NpcRequest): string {
@@ -69,9 +80,12 @@ function systemMessage(request: NpcRequest): string {
       sections.push(`Extraits de ta fiche pertinents pour la question :\n${bullets(excerpts.map(excerpt => excerpt.text))}`)
     }
   }
+  const peers = peerSection(request)
+  if (peers) sections.push(peers)
   const context = contextSection(request)
   if (context) sections.push(context)
   const rules = request.spontaneous ? RULES.filter(rule => !rule.startsWith('N\'invente')) : [...RULES]
+  if (!request.spontaneous) rules.push(PEER_RULE)
   if (request.questionAuthor !== undefined) {
     rules.push(`Tu réponds à ${request.questionAuthor}. Si tu t'adresses à quelqu'un, c'est à lui, par son prénom ; n'emploie jamais un autre prénom pour lui.`)
   }

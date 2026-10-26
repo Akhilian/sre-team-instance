@@ -79,6 +79,8 @@ export const NPC_CHANNEL_CONTEXT_MAX = 30
 export const NPC_CONTEXT_LINE_MAX_LENGTH = 280
 /** Taille maximale de la section « conversation récente » du prompt : les plus anciens messages sont retirés au-delà */
 export const NPC_CONTEXT_SECTION_MAX_LENGTH = 6000
+/** Réponses d'autres PNJ du canal reprises dans la section « Ce que les autres PNJ ont déjà dit » du prompt (les plus récentes) */
+export const NPC_PEER_REPLIES_MAX = 6
 /** Écart minimal, en minutes, entre deux interventions spontanées d'un même PNJ */
 export const NPC_SPONTANEOUS_GAP_MINUTES = 4
 /** Interventions spontanées par minute, tous PNJ confondus */

@@ -1,6 +1,8 @@
 // Anti-répétition des PNJ (040) : un petit modèle recopie ses dernières phrases ou celles de l'historique.
 // Une réponse identique (après normalisation) à l'une des dernières du même PNJ est rejetée au profit de
 // l'extrait de fiche, puis du repli keywords. Module pur.
+import type { Message } from '../../shared/types/chat'
+import { NPC_PEER_REPLIES_MAX } from '../../shared/utils/limits'
 import type { NpcPersona, NpcRequest, NpcResponder } from '../../shared/types/npc'
 import { NPC_ACK_TEXTS, NPC_BUSY_REPLY } from './generic-phrases'
 import { allWords } from './lexical-retriever'
@@ -58,6 +60,24 @@ export function recentOwnReplies(request: Pick<NpcRequest, 'persona' | 'history'
 }
 
 /**
+ * Réponses des autres PNJ (canal lu et réponses déjà formulées des cibles précédentes), ordre chronologique,
+ * hors alertes, annonces, système et accusés ; les NPC_PEER_REPLIES_MAX plus récentes. Vide pour une intervention spontanée.
+ */
+export function recentPeerMessages(request: Pick<NpcRequest, 'persona' | 'channelContext' | 'peerReplies' | 'spontaneous'>): Message[] {
+  if (request.spontaneous) return []
+  const seen = new Set<string>()
+  const isPeer = (message: Message) => message.npc !== undefined && message.npc.id !== request.persona.id
+    && message.kind === undefined && !isSystemPhrase(message.text) && !seen.has(message.id) && seen.add(message.id)
+  const channel = (request.channelContext ?? []).filter(isPeer).sort((a, b) => a.rev - b.rev)
+  const formulated = (request.peerReplies ?? []).filter(isPeer)
+  return [...channel, ...formulated].slice(-NPC_PEER_REPLIES_MAX)
+}
+
+export function recentPeerReplies(request: Pick<NpcRequest, 'persona' | 'channelContext' | 'peerReplies' | 'spontaneous'>): string[] {
+  return recentPeerMessages(request).map(message => message.text)
+}
+
+/**
  * Enveloppe un moteur à modèle : si sa réponse répète l'une des dernières du PNJ, on retombe sur le premier
  * extrait de fiche non répété, puis sur le repli. Les interventions spontanées ne sont pas concernées
  * (leur doublon est filtré à la publication).
@@ -68,9 +88,10 @@ export function withoutRepeats(responder: NpcResponder, fallback: NpcResponder):
       const text = await responder.respond(request)
       if (request.spontaneous) return text
       const recent = recentOwnReplies(request)
-      if (!isRepeat(text, recent)) return text
+      const peers = recentPeerReplies(request)
+      if (!isRepeat(text, recent) && !isNearDuplicate(text, peers)) return text
       markReplyOutcome(request, 'rejected_repeat')
-      const fresh = request.excerpts.find(excerpt => !isRepeat(excerpt.text, recent))
+      const fresh = request.excerpts.find(excerpt => !isRepeat(excerpt.text, recent) && !isNearDuplicate(excerpt.text, peers))
       if (fresh) return fresh.text
       return fallback.respond(request)
     },

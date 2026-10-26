@@ -178,3 +178,54 @@ describe('dispatcher : requête transmise au moteur', () => {
     expect(requests[0]!.channelContext!.map(m => m.text)).toEqual(['le paiement est tombé'])
   })
 })
+
+describe('051 : cohérence collective, section des autres PNJ', () => {
+  const CFO = personaById('cfo')
+  const PEERS = 'Ce que les autres PNJ ont déjà dit :'
+  const systemOf = (request: NpcRequest) => buildNpcPrompt(request)[0]!.content
+  const peerMessage = (text: string) => message(CFO.name, text, { npc: { id: CFO.id, role: CFO.role } })
+
+  it('CA1 : les 6 plus récents des pairs, chronologiques, sans soi-même, alerte ni système ; absente sans pair', async () => {
+    const peers = Array.from({ length: 10 }, (_, index) => peerMessage(`réponse pair ${index}`))
+    const own = message(RELEASE.name, 'ma propre réponse', { npc: { id: RELEASE.id, role: RELEASE.role } })
+    const alert = message('Monitoring', 'alerte x', { kind: 'alert', alert: { severity: 'critical', title: 'T' } as never })
+    const system = message('Système', 'avis système', { kind: 'system' })
+    const channelContext = [own, ...peers.slice(0, 5), alert, ...peers.slice(5), system]
+    const prompt = systemOf(await request('Où en est-on ?', { channelContext }))
+    const section = prompt.slice(prompt.indexOf(PEERS), prompt.indexOf('Conversation récente'))
+    expect(section).not.toContain('réponse pair 3')
+    for (let index = 4; index < 10; index++) expect(section).toContain(`réponse pair ${index}`)
+    expect(section.indexOf('réponse pair 4')).toBeLessThan(section.indexOf('réponse pair 9'))
+    expect(section).not.toMatch(/ma propre réponse|alerte x|avis système/)
+    expect(systemOf(await request('Où en est-on ?', { channelContext: [own, alert, system] }))).not.toContain(PEERS)
+  })
+
+  it('CA2 : règle hors spontané ; prompt spontané sans section ni règle (égal à celui sans pair)', async () => {
+    const withPeer = await request('Où en est-on ?', { channelContext: [peerMessage('un pair')] })
+    expect(systemOf(withPeer)).toContain('Ne contredis pas ce que les autres PNJ')
+    const base = { persona: RELEASE, excerpts: [], history: [], question: '', spontaneous: { base: 'On en est où ?' } }
+    const context = [message('Alice', 'salut'), peerMessage('un pair')]
+    const system = buildNpcPrompt({ ...base, channelContext: context })[0]!.content
+    expect(system).not.toContain(PEERS)
+    expect(system).not.toContain('Ne contredis pas')
+    // le pair reste dans la conversation récente, comme avant
+    expect(system).toContain('Conversation récente du canal (lecture seule) :\n')
+    expect(system).toContain(': salut\n')
+    expect(system).toMatch(/: un pair\n\nRègles/)
+  })
+
+  it('CA5 : taille bornée, aucun message dans les deux sections', async () => {
+    const channelContext = Array.from({ length: 30 }, (_, index) => index % 2 === 0
+      ? peerMessage(`pair-${index} ${'x'.repeat(600)}`)
+      : message('Alice', `humain-${index} ${'y'.repeat(600)}`))
+    const prompt = systemOf(await request('Où en est-on ?', { channelContext }))
+    const start = prompt.indexOf(PEERS)
+    const recentAt = prompt.indexOf('Conversation récente')
+    const end = prompt.indexOf('\n\nRègles :')
+    expect(start).toBeGreaterThan(-1)
+    expect(end - start).toBeLessThanOrEqual(6000 + 6 * (280 + 40))
+    const peerSection = prompt.slice(start, recentAt)
+    const recentSection = prompt.slice(recentAt, end)
+    for (const match of peerSection.matchAll(/pair-(\d+)/g)) expect(recentSection).not.toContain(`pair-${match[1]} `)
+  })
+})

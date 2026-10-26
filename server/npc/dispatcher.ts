@@ -361,7 +361,7 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
       .slice(-NPC_CHANNEL_CONTEXT_MAX)
   }
 
-  async function reply(persona: NpcPersona, message: Message, question: string, parentId: string | undefined, history: Message[]): Promise<NpcReply> {
+  async function reply(persona: NpcPersona, message: Message, question: string, parentId: string | undefined, history: Message[], peerReplies: Message[] = []): Promise<NpcReply> {
     // Récupération et formulation sous le même délai maximal (retriever ou moteur distants possibles)
     const text = await withTimeout(
       deps.retriever.retrieve(persona, question)
@@ -372,6 +372,7 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
           question,
           questionAuthor: message.author,
           channelContext: readChannel(message, history),
+          ...(peerReplies.length > 0 ? { peerReplies } : {}),
         })),
       deps.respondTimeoutMs ?? NPC_RESPOND_TIMEOUT_MS,
     )
@@ -454,6 +455,9 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
       const question = questionOf(message, direct)
       const scheduled: string[] = []
       const startGeneration = generation
+      // Génération séquentielle : la formulation de chaque cible attend celle de la précédente et en reçoit le texte
+      const formulated: Message[] = []
+      let chain: Promise<void> | undefined
       targets.forEach((persona) => {
         if (!takeRateSlot(persona, message.channelId, direct)) {
           publishBusyReply(persona, message.channelId, parentId)
@@ -522,7 +526,21 @@ export function createNpcDispatcher<Handle>(deps: NpcDispatcherDeps<Handle>): Np
           }, ack.atMs)
           pending.add(ackHandle)
         }
-        reply(persona, message, question, parentId, history)
+        const run = chain === undefined
+          ? reply(persona, message, question, parentId, history)
+          : chain.then(() => reply(persona, message, question, parentId, history, [...formulated]))
+        chain = run.then((value) => {
+          formulated.push({
+            id: `peer-${persona.id}-${formulated.length}`,
+            channelId: message.channelId,
+            author: persona.name,
+            text: value.text,
+            createdAt: new Date(deps.now()).toISOString(),
+            rev: message.rev + formulated.length + 1,
+            npc: { id: persona.id, role: persona.role },
+          })
+        }, () => {})
+        run
           .then((value) => {
             result = value
             settle()

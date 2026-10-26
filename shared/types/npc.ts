@@ -94,6 +94,11 @@ export interface NpcRequest {
    * auteurs), ordre chronologique, hors fil courant et hors question ; absent = vide
    */
   channelContext?: Message[]
+  /**
+   * Réponses des PNJ ciblés avant celui-ci par le même message, formulées mais pas forcément publiées
+   * (génération séquentielle) ; s'ajoutent aux réponses de pairs du canal
+   */
+  peerReplies?: Message[]
   /** Intervention spontanée : reformuler ce message de base, sans ajouter d'information */
   spontaneous?: { base: string }
 }

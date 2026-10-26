@@ -67,6 +67,6 @@ export function fakeClock() {
 }
 
 export async function flush() {
-  for (let index = 0; index < 5; index++) await Promise.resolve()
+  for (let index = 0; index < 50; index++) await Promise.resolve()
 }
 

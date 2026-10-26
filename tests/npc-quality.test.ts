@@ -258,3 +258,35 @@ describe('interventions spontanées sans doublon (CA7)', () => {
   })
 })
 
+
+describe('051 CA4 : anti-redite inter-PNJ', () => {
+  it('B quasi identique à A : repli, issue rejected_repeat', async () => {
+    const cfo = personaById('cfo')
+    const same = 'Le rollback vers la version précédente est prêt, on attend seulement votre feu vert pour lancer.'
+    const seen: NpcRequest[] = []
+    const model: NpcResponder = { respond: async (req) => { seen.push(req); return same } }
+    const responder = withoutRepeats(model, keywords)
+    const clock = fakeClock()
+    const dispatcher = createNpcDispatcher({
+      ...clock,
+      retriever,
+      responder,
+      personas: loadPersonas(),
+      delayMs: () => 1000,
+      history: message => listMessages(message.channelId),
+      publish: reply => addNpcMessage(reply.channelId, { npc: reply.persona, text: reply.text, parentId: reply.parentId }),
+    })
+    dispatcher.setEnabled(true)
+    resetChatStore()
+    const question = addMessage(CHANNEL, { author: 'Alice', text: `@${RELEASE.name} @${cfo.name} on fait le point ?` })
+    dispatcher.handle(question)
+    await clock.advance(5000)
+    const replies = listMessages(CHANNEL).filter(message => message.npc)
+    expect(replies).toHaveLength(2)
+    expect(replies[0]!.text).toBe(same)
+    expect(replies[1]!.text).not.toBe(same)
+    const { takeReplyOutcome } = await import('../server/utils/war-room-metrics')
+    expect(takeReplyOutcome(seen[0]!)).toBe('ok')
+    expect(takeReplyOutcome(seen[1]!)).toBe('rejected_repeat')
+  })
+})

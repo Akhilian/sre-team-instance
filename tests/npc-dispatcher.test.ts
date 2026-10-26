@@ -522,3 +522,33 @@ describe('029 CA4 : plafond atteint, réponse fixe', () => {
     expect(busy[0]).toMatchObject({ parentId: root.id, npc: { id: 'release-manager' } })
   })
 })
+
+describe('051 : génération séquentielle des PNJ ciblés', () => {
+  beforeEach(() => {
+    resetChatStore()
+  })
+
+  it('CA3 : la requête de B contient le texte de A ; ordre et délais de publication inchangés', async () => {
+    const requests: NpcRequest[] = []
+    const responder: NpcResponder = {
+      async respond(request) {
+        requests.push(request)
+        return `Réponse de ${request.persona.name}`
+      },
+    }
+    const { clock, dispatcher } = setup({ responder })
+    dispatcher.setEnabled(true)
+    const question = post(`@${RELEASE.name} @${CFO.name} on fait le point ?`)
+    expect(dispatcher.handle(question)).toEqual(['release-manager', 'cfo'])
+    await clock.advance(0)
+    expect(requests.map(request => request.persona.id)).toEqual(['release-manager', 'cfo'])
+    expect(requests[0]!.peerReplies).toBeUndefined()
+    expect(requests[1]!.peerReplies?.map(peer => peer.text)).toEqual([`Réponse de ${RELEASE.name}`])
+    await clock.advance(1499)
+    expect(npcReplies()).toHaveLength(0)
+    await clock.advance(1)
+    expect(npcReplies().map(reply => reply.npc!.id)).toEqual(['release-manager'])
+    await clock.advance(700)
+    expect(npcReplies().map(reply => reply.npc!.id)).toEqual(['release-manager', 'cfo'])
+  })
+})
