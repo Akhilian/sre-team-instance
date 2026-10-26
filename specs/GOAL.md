@@ -127,3 +127,20 @@ Les deux dépôts de code publient leurs images sur le Docker Hub de l'utilisate
 
 ## Évolution 2026-10-25 — renommage en sre-war-room
 Voir `SRE/specs/GOAL.md`. Dans teams : `package.json` name, chart `paging` → `war-room`, métriques `paging_*` → `war_room_*`, SLO, namespaces `sre-war-room*`, image `akhilian/sre-war-room`, UI/README/docs/tests. Dossier local inchangé jusqu'à la dernière étape. Aucun déploiement.
+
+# Phase 4 — Interventions des PNJ et immersion (2026-10-26)
+
+## Demande de l'utilisateur
+Améliorer le système d'intervention des personnages et travailler sur une meilleure immersion. Constat : les interventions sont **réactives** (le PNJ ne parle que lorsqu'on l'interpelle) et **ne tiennent pas forcément compte des réponses des autres PNJ** (incohérences, redites, pas de coordination).
+
+## Axes (à préciser par la feature-spec ; l'utilisateur tranche les choix de conception)
+1. Cohérence collective : chaque PNJ voit l'historique pertinent des autres PNJ avant de répondre (pas de contradiction ni de répétition).
+2. Proactivité : des PNJ peuvent intervenir sans sollicitation, sur des événements du scénario (escalade, silence prolongé, mauvaise piste, SLO dégradé), avec rôle, urgence et personnalité propres.
+3. Immersion : délais réalistes (voir « Qualité et réalisme des PNJ »), indicateurs de présence/frappe ; autres leviers à proposer.
+
+## Contraintes
+- Qualité avant latence ; délais PNJ réalistes ; modèle par défaut `qwen2.5:3b` (limites mémoire Colima), toute montée en modèle est une décision de l'utilisateur.
+- Aucun déploiement ni `kubectl` ; l'environnement EKS est détruit.
+
+## Définition de « terminé » (phase 4)
+À définir avec la première spec (feature-spec) ; au minimum : un PNJ ne contredit ni ne répète les réponses des autres PNJ de la même session, et au moins un type d'intervention proactive fonctionne et est testé.
