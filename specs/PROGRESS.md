@@ -105,7 +105,7 @@
 - Décisions : exposition publique du cluster de test voulue par l'utilisateur ; platform pose l'annotation dans `environments/eks/war-room.yaml` (platform/010).
 - Dette / suite : TLS/Ingress absents ; code animateur de test faible. Écart accepté : « avant » d'abord rendu depuis le working tree, refait depuis HEAD par le vérificateur.
 
-## 051 — Cohérence collective des PNJ (2026-10-26, commit à renseigner)
+## 051 — Cohérence collective des PNJ (2026-10-26, 7c0e70f)
 - Livré : section « Ce que les autres PNJ ont déjà dit » (6 réponses pairs au plus), règle ne pas contredire/répéter (hors spontané), génération chaînée des cibles sans changer délais ni ordre de publication, anti-redite inter-PNJ (`isNearDuplicate` ≥ 0,8, issue `rejected_repeat`). PASS (CA1-6).
 - Décisions : option A (historique brut borné, aucun appel LLM de plus) choisie par l'utilisateur ; `flush()` des tests passe de 5 à 50 ticks à cause du chaînage.
 - Dette / suite : `respondTimeoutMs` est par PNJ, la chaîne cumule les délais si le LLM est lent.
