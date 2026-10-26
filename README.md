@@ -74,6 +74,16 @@ npm run k8s:down        # supprime le namespace sre-war-room, PVC compris
   l'application. Pas de règle de sortie. k3s les applique : depuis un pod
   hors application, la connexion à `sre-war-room-redis:6379` est refusée.
 
+## Exposition sur EKS
+Sur EKS, le Service `LoadBalancer` est géré par le contrôleur AWS (NLB) et sort en interne par défaut. Pour l'exposer publiquement, poser l'annotation via `service.annotations` :
+
+```bash
+helm upgrade --install war-room deploy/chart \
+  --set 'service.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-scheme=internet-facing'
+```
+
+Pour limiter les sources, renseigner `service.loadBalancerSourceRanges` (liste de CIDR), par exemple `--set 'service.loadBalancerSourceRanges[0]=1.2.3.4/32'`. Les deux clés sont vides par défaut (rendu inchangé en local). Rappel : `FACILITATOR_CODE` protège les routes d'animation ; choisir un code robuste avant d'exposer l'application.
+
 ## Outils d'animateur
 
 La page `/admin` (non liée dans la navigation) permet de publier une annonce ou une carte d'alerte (SEV1 à SEV3) dans un canal et de

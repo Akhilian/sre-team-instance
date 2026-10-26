@@ -89,16 +89,9 @@
 
 - 045 — Publication de l'image sur Docker Hub (fa7ac5b) : `ci.yml` et `image.yml` (image multi-arch `akhilian/sre-teams`, tags sha/version/`latest`), secret `DOCKERHUB_TOKEN` à créer côté GitHub ; la plateforme doit épingler le tag.
 
-## 046 — Renommage du produit en sre-war-room (2026-10-25, 1eb75b1)
-- Livré : produit, chart (`war-room`), namespace/release/image `sre-war-room`, métriques `war_room_*`, SLO `war-room-*.yaml`, test `tests/sloth-war-room.test.ts`, image `akhilian/sre-war-room`. 662 tests + 103 HTTP OK, Sloth OK. PASS (CA1-5).
-- Décisions : les clés localStorage passent à `sre-war-room:*` (état d'onboarding, rôle, nom, code animateur réinitialisés côté navigateurs). Les entrées historiques ci-dessus gardent les anciens noms.
-- Dette / suite : platform doit suivre (image, chart, métriques `war_room_*`, dashboards) ; renommer dossier, dépôt GitHub, service Render, dépôt Docker Hub.
-- Écarts acceptés : helper renommé `war-room.*` ; 3 occurrences « paging » conservées (fichiers de la plateforme, ancienne URL du remote) ; glob CA1 élargi aux specs 006-009.
+- 046 — Renommage du produit en sre-war-room (1eb75b1) : produit, chart, image, métriques `war_room_*`, SLO renommés ; clés localStorage `sre-war-room:*` ; platform doit suivre.
 
-## 047 — CI : build avant test:http (2026-10-25, 647e71f)
-- Livré : `ci.yml` dans l'ordre `npm ci`, typecheck, test, build, test:http ; `tests/http/health.test.ts` avec `server?.stop()` (plus de `TypeError` masquant l'erreur d'origine) ; README et CLAUDE.md mentionnent le build préalable (commités avec la 046). PASS (CA1-4).
-- Décisions : `test:http` exige `npm run build` ; la CI reprend l'ordre du contrat. Remote `origin` passé à `git@github.com:Akhilian/sre-war-room.git` (contrat mis à jour).
-- Dette / suite : avertissements Node 20 des actions (hors périmètre) ; aucun test instable reproduit (2 échecs vus à la 046).
+- 047 — CI : build avant test:http (647e71f) : ordre `npm ci`, typecheck, test, build, test:http ; remote `origin` passé à `Akhilian/sre-war-room`.
 
 ## 048 — Publication de l'image après la CI (2026-10-25, 766d1c2)
 - Livré : `ci.yml` sans `workflow_call` (`pull_request`, push `main`, `workflow_dispatch`) ; `image.yml` déclenché par `workflow_run` du workflow « CI » (success + push, ou `workflow_dispatch`), checkout et tag sha sur `head_sha`, plus de filtre `paths` ; README et CLAUDE.md décrivent CI → Publication. PASS (CA1-5).
@@ -109,3 +102,8 @@
 - Livré : `workshop-teams` remplacé par `workshop-war-room` dans CLAUDE.md (contrat), `deploy/chart/Chart.yaml`, `deploy/chart/values.yaml`, `specs/ROADMAP.md`. Typecheck, 662 tests, build, 103 tests HTTP, helm lint/template OK. PASS (CA1-2).
 - Décisions : le dossier local s'appelle `workshop-war-room` ; les `teams/NNN` des anciennes entrées de PROGRESS désignent ce dépôt.
 - Dette / suite : renommer le dépôt GitHub, le service Render et le dépôt Docker Hub (utilisateur) ; premier passage de platform-conformity. Écarts acceptés : README sans occurrence (inchangé) ; `helm template` sans values échoue sur `facilitatorCode` (préexistant).
+
+## 050 — Chart : annotations et sources autorisées du Service (2026-10-26, commit à renseigner)
+- Livré : `service.yaml` rend `annotations` et `loadBalancerSourceRanges` seulement s'ils sont non vides ; `values.yaml` (`service.annotations: {}`, `service.loadBalancerSourceRanges: []`, exemple NLB internet-facing) ; README « Exposition sur EKS ». Rendu local identique (diff nul depuis HEAD), 662 tests, build, 103 tests HTTP, helm lint OK. PASS (CA1-4).
+- Décisions : exposition publique du cluster de test voulue par l'utilisateur ; platform pose l'annotation dans `environments/eks/war-room.yaml` (platform/010).
+- Dette / suite : TLS/Ingress absents ; code animateur de test faible. Écart accepté : « avant » d'abord rendu depuis le working tree, refait depuis HEAD par le vérificateur.

@@ -9,6 +9,11 @@ image:
 # Port exposé par le Service LoadBalancer (servicelb de k3s)
 service:
   port: 8088
+  # Annotations du Service (map). Exemple NLB public sur EKS :
+  #   service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+  annotations: {}
+  # Sources autorisées (liste de CIDR), ex. ["1.2.3.4/32"] ; vide = pas de restriction
+  loadBalancerSourceRanges: []
 
 # Secrets : obligatoires, JAMAIS commités (--set-string ou variables d'environnement via le Makefile)
 facilitatorCode: ""
