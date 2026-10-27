@@ -21,6 +21,16 @@ facilitatorCode: ""
 # Clé d'API Claude, optionnelle (moteur NPC_ENGINE=anthropic)
 anthropicApiKey: ""
 
+# DocShare piloté par les scénarios (étapes `fault`) ; vide = variable absente (pilotage désactivé)
+docshare:
+  baseUrl: ""
+  # Jeton X-Ops-Token des routes /ops/* : JAMAIS commité (--set-string)
+  opsToken: ""
+
+# Lien « Voir la santé du service » du panneau d'équipe ; vide = pas de lien
+grafana:
+  dashboardUrl: ""
+
 config:
   NODE_ENV: production
   NPC_ENGINE: keywords

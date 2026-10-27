@@ -8,6 +8,12 @@
 {{- $_ := set $cfg "NPC_LLM_MODEL" .Values.llm.model }}
 {{- $_ := set $cfg "NPC_LLM_TIMEOUT_MS" (toString .Values.llm.timeoutMs) }}
 {{- end }}
+{{- with .Values.docshare.baseUrl }}
+{{- $_ := set $cfg "DOCSHARE_BASE_URL" . }}
+{{- end }}
+{{- with .Values.grafana.dashboardUrl }}
+{{- $_ := set $cfg "GRAFANA_DASHBOARD_URL" . }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

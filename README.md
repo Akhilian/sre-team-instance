@@ -363,6 +363,10 @@ sur un DocShare via `POST /admin/faults`, et toute étape peut être conditionn�
 
 Les trois sont déclarées dans `render.yaml` avec `sync: false`.
 
+Chart Helm : `docshare.baseUrl` (`DOCSHARE_BASE_URL`) et `grafana.dashboardUrl` (`GRAFANA_DASHBOARD_URL`) vont
+dans la ConfigMap, `docshare.opsToken` (`DOCSHARE_OPS_TOKEN`) dans le Secret (à passer par `--set-string`, jamais
+commité). Chaque valeur vide (défaut) n'émet pas la variable ; le changement redéploie le pod (checksum).
+
 ### Actions d'équipe (ChatOps)
 
 Un scénario peut déclarer `actions` (`{ id, label, type?, delaySeconds?, startText?, doneText?, faults?, text? }`,
