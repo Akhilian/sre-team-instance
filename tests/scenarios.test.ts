@@ -15,9 +15,9 @@ function validText(value: string, maxLength: number): boolean {
 }
 
 describe('scénarios fournis', () => {
-  it('contient panne-checkout, fuite-donnees et demo-express, avec des id uniques', () => {
+  it('contient panne-checkout, fuite-donnees, demo-express et rollback-inutile, avec des id uniques', () => {
     const ids = SCENARIOS.map(scenario => scenario.id)
-    expect(ids).toEqual(['panne-checkout', 'fuite-donnees', 'demo-express'])
+    expect(ids).toEqual(['panne-checkout', 'fuite-donnees', 'demo-express', 'rollback-inutile'])
     expect(new Set(ids).size).toBe(ids.length)
   })
 
@@ -79,7 +79,8 @@ describe('scénarios fournis', () => {
     for (const scenario of SCENARIOS) {
       for (const step of scenario.steps) {
         const content = JSON.stringify(step).toLowerCase()
-        for (const word of forbidden) expect(content, `${scenario.id} à ${step.at} s`).not.toContain(word)
+        // rollback-inutile parle de rollback dans ses messages conditionnels (spec 056) : sa cause n'est pas une version
+        for (const word of forbidden.filter(word => word !== 'rollback' || scenario.id !== 'rollback-inutile')) expect(content, `${scenario.id} à ${step.at} s`).not.toContain(word)
       }
     }
     // L'indice de t=620 reste neutre : il renvoie vers l'équipe Release
@@ -117,13 +118,14 @@ describe('scénarios fournis', () => {
       ['panne-checkout', 'panne-checkout'],
       ['fuite-donnees', 'fuite-donnees'],
       ['demo-express', 'panne-checkout'],
+      ['rollback-inutile', 'rollback-inutile'],
     ])
     expect(npcScenarioIdFor('demo-express')).toBe('panne-checkout')
     expect(npcScenarioIdFor('inconnu')).toBe('inconnu')
   })
 
   it('027 : tout npcId d\'une étape npc-message appartient au scénario de PNJ du scénario', () => {
-    const all = [...loadPersonas('panne-checkout'), ...loadPersonas('fuite-donnees')]
+    const all = [...loadPersonas('panne-checkout'), ...loadPersonas('fuite-donnees'), ...loadPersonas('rollback-inutile')]
     for (const scenario of SCENARIOS) {
       for (const step of scenario.steps) {
         if (step.kind !== 'npc-message') continue
@@ -155,6 +157,7 @@ describe('scénarios fournis', () => {
 
     it('ne cible que des canaux pré-créés, avec des champs valides', () => {
       for (const step of scenario.steps) {
+        if (step.kind === 'fault') continue
         expect(PRESET_CHANNEL_IDS).toContain(step.channelId)
         expect(validText(step.text, TEXT_MAX_LENGTH)).toBe(true)
         if (step.kind === 'alert') {

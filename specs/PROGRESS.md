@@ -101,10 +101,7 @@
 
 - 051 — Cohérence collective des PNJ (7c0e70f) : section « Ce que les autres PNJ ont déjà dit », anti-redite inter-PNJ (`isNearDuplicate` ≥ 0,8, `rejected_repeat`), génération chaînée ; dette : `respondTimeoutMs` cumulé sur la chaîne.
 
-## 052 — Alertes informatives (2026-10-26, 1543823)
-- Livré : retrait des boutons Acquitter/Résoudre, du badge et du suivi de statut des alertes (route `alert-status` supprimée, chat-store, shared, chronologie) ; anciens états persistés tolérés ; références nettoyées (README, rate-limit, `limits.ts`, onboarding, guides animateur). PASS (CA1-6).
-- Décisions : option A (suppression complète) choisie par l'utilisateur. Écart accepté : CA1 vérifié par analyse du template d'`AlertCard.vue` (pas d'outillage de test de composant).
-- Dette / suite : aucune.
+- 052 — Alertes informatives (1543823) : boutons Acquitter/Résoudre, badge et route `alert-status` supprimés (option A) ; CA1 vérifié par analyse du template.
 
 ## 054 — Client DocShare et étape de scénario fault (2026-10-27, 18b303c)
 - Livré : `server/utils/docshare-client.ts` (fetch injectable, timeout 3 s, erreurs génériques), `fault-state.ts` (registre singleton), étape `fault` et condition `when:{fault,active}` dans le runner (annulée si condition fausse, `failed` sans casser le scénario), stop/reset coupent les pannes activées, `DOCSHARE_BASE_URL` / `DOCSHARE_OPS_TOKEN` (README, `render.yaml` sync:false), `/admin` masque le canal des étapes fault. 663 tests, 104 HTTP, typecheck, build OK. PASS (CA1-6).
@@ -115,3 +112,8 @@
 - Livré : `team-actions.ts` (exécuteur à deps injectées), `GET /api/actions` et `POST /api/actions/:id`, `ActionPanel.vue`, `OpsCard.vue`, message `kind:'ops'`, `ScenarioAction` (simulated|index-check|reindex|changelog, effets en donnée), client DocShare étendu (indexCheck, startReindex, getReindex ; `X-Ops-Token` seulement sur `/ops/*`), `GRAFANA_DASHBOARD_URL` (README, `render.yaml`). 677 tests, 105 HTTP, typecheck, build OK. PASS CA1-6 ; CA7 (Chrome) non exécuté, à faire après redéploiement demandé.
 - Décisions : auteur = nom déclaré (pas d'authentification) ; anti-doublon 409 + bouton désactivé ; sondage reindex 5 s plafonné à 10 min ; le fil sert de journal d'incident. Écarts acceptés : `channelId` dans `GET /api/actions` ; panneau masqué à `finished` sans annulation des timers (tranche 3 : garder le scénario `running` jusqu'à la fin de séance) ; pas de tests de composant.
 - Dette et suite : aucun test de composant ; HTTP ne couvre pas un scénario avec actions ; tranche 3 (scénario et PNJ).
+
+## 056 — Scénario « Le rollback qui ne sert à rien » (2026-10-27, commit à renseigner)
+- Livré : `server/scenarios/rollback-inutile.ts` (23 étapes, 9 alertes SEV2 conditionnelles tant que A active, 5 actions, étape finale 5400 s), `when` en liste (ET) dans le runner, 3 fiches PNJ minimales (`support-docshare`, `direction-docshare`, `communication-docshare`), guide `docs/guide-animateur/rollback-inutile.md`. 698 tests, 105 HTTP, typecheck, build OK. PASS (CA1-6).
+- Décisions : causes indépendantes (rollback coupe `stale_index` en 20 s, redémarrage coupe `upload_latency` en 45 s) ; scénario `running` jusqu'à 5400 s (055 non amendée) ; messages conditionnels à instants fixes (si A coupée entre deux instants, message au suivant). Écarts acceptés : npcId `*-docshare` (support-n1/communication pris par panne-checkout) ; test « aucune étape ne livre rollback » assoupli pour ce scénario ; durées 20/45 s dans « Actions et délais » du guide.
+- Dette et suite : guide à préciser (remise à l'état sain = UN POST `/admin/faults` par panne `{"name","value":0}`, pas de reset global) ; fiches minimales et release manager = 057 ; aucun test de composant ; CA7 de la 055 (Chrome) à faire après redéploiement ; tranche 4 (débrief), câblage plateforme.

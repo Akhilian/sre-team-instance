@@ -139,7 +139,7 @@ export function createScenarioRunner<Handle>(deps: ScenarioRunnerDeps<Handle>): 
     const runStep = current.steps[index]
     // Run remplacé ou arrêté entre-temps : rien à publier
     if (run !== current || current.status !== 'running' || !runStep || runStep.status !== 'pending') return
-    if (step.when && faults.isActive(step.when.fault) !== step.when.active) {
+    if (step.when && [step.when].flat().some(condition => faults.isActive(condition.fault) !== condition.active)) {
       runStep.status = 'cancelled'
       finishIfDone(current)
       return

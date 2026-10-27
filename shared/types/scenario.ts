@@ -4,8 +4,11 @@ import type { AlertSeverity } from '../utils/alerts'
 interface ScenarioStepBase {
   /** Délai en secondes depuis le lancement du scénario */
   at: number
-  /** Condition évaluée à l'instant d'émission sur le registre des pannes ; fausse → étape cancelled */
-  when?: ScenarioCondition
+  /**
+   * Condition, ou liste de conditions évaluées en ET (liste vide : toujours vraie), à l'instant d'émission
+   * sur le registre des pannes ; fausse → étape cancelled
+   */
+  when?: ScenarioCondition | ScenarioCondition[]
 }
 
 export interface ScenarioCondition {

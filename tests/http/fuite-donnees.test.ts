@@ -62,9 +62,9 @@ describe('scénario fuite-donnees (027)', () => {
     expect(state.npcs.map(npc => npc.id)).toEqual(PANNE_IDS)
   })
 
-  it('CA1 : GET /api/admin/npc-personas liste 11 fiches, dont les 5 de fuite-donnees', async () => {
+  it('CA1 : GET /api/admin/npc-personas liste 14 fiches, dont les 5 de fuite-donnees', async () => {
     const state = await (await fetch(`${server.url}/api/admin/npc-personas`, { headers: ADMIN })).json() as NpcPersonasAdminState
-    expect(state.personas).toHaveLength(11)
+    expect(state.personas).toHaveLength(14)
     expect(state.personas.filter(entry => entry.scenarioId === 'fuite-donnees').map(entry => entry.path))
       .toEqual(FUITE_IDS.map(id => `fuite-donnees/${id}.md`))
   })

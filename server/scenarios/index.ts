@@ -3,11 +3,12 @@ import type { Scenario } from '../../shared/types/scenario'
 import { demoExpress } from './demo-express'
 import { fuiteDonnees } from './fuite-donnees'
 import { panneCheckout } from './panne-checkout'
+import { rollbackInutile } from './rollback-inutile'
 
 /** Canal d'incident des scénarios : celui qui reçoit les alertes, que suivent les PNJ */
 export const INCIDENT_CHANNEL_ID = 'incident-en-cours'
 
-export const SCENARIOS: readonly Scenario[] = [panneCheckout, fuiteDonnees, demoExpress]
+export const SCENARIOS: readonly Scenario[] = [panneCheckout, fuiteDonnees, demoExpress, rollbackInutile]
 
 /** Scénario de PNJ activé au lancement de scenario : npcScenarioId, sinon son propre id */
 export function npcScenarioIdOf(scenario: Scenario): string {

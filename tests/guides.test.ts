@@ -61,6 +61,7 @@ function personasOf(scenarioId: string) {
 }
 
 function expectedAuthor(step: ScenarioStep, scenarioId: string): string {
+  if (step.kind === 'fault') return 'Système'
   if (step.kind === 'alert') return ALERT_AUTHOR
   if (step.kind === 'announcement') return ANNOUNCEMENT_AUTHOR
   const persona = personasOf(scenarioId).find(candidate => candidate.id === step.npcId)
@@ -103,7 +104,7 @@ describe('guides de l\'animateur', () => {
     })
   }
 
-  for (const scenarioId of ['panne-checkout', 'fuite-donnees']) {
+  for (const scenarioId of ['panne-checkout', 'fuite-donnees', 'rollback-inutile']) {
     describe(`${scenarioId} : fiches, vérité terrain, pitch`, () => {
       const guide = readGuide(scenarioId)
 
@@ -140,13 +141,14 @@ describe('guides de l\'animateur', () => {
     const FORBIDDEN: Record<string, string[]> = {
       'panne-checkout': ['v2.41.0', 'rollback', 'pool'],
       'fuite-donnees': ['#482', 'Routilo', '48 210'],
+      'rollback-inutile': ['stale_index', 'upload_latency', 'index', 'rollback'],
     }
     for (const [scenarioId, words] of Object.entries(FORBIDDEN)) {
       it(scenarioId, () => {
         const pitch = sectionText(readGuide(scenarioId), 'Pitch').toLowerCase()
         expect(pitch.length).toBeGreaterThan(100)
         for (const word of words) expect(pitch, word).not.toContain(word.toLowerCase())
-        expect(pitch.replace(/\s/g, '')).not.toContain('48210')
+        if (scenarioId === 'fuite-donnees') expect(pitch.replace(/\s/g, '')).not.toContain('48210')
       })
     }
   })
