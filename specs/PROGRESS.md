@@ -109,7 +109,7 @@
 - Décisions : option A (suppression complète) choisie par l'utilisateur. Écart accepté : CA1 vérifié par analyse du template d'`AlertCard.vue` (pas d'outillage de test de composant).
 - Dette / suite : aucune.
 
-## 054 — Client DocShare et étape de scénario fault (2026-10-27, commit à renseigner)
+## 054 — Client DocShare et étape de scénario fault (2026-10-27, 18b303c)
 - Livré : `server/utils/docshare-client.ts` (fetch injectable, timeout 3 s, erreurs génériques), `fault-state.ts` (registre singleton), étape `fault` et condition `when:{fault,active}` dans le runner (annulée si condition fausse, `failed` sans casser le scénario), stop/reset coupent les pannes activées, `DOCSHARE_BASE_URL` / `DOCSHARE_OPS_TOKEN` (README, `render.yaml` sync:false), `/admin` masque le canal des étapes fault. 663 tests, 104 HTTP, typecheck, build OK. PASS (CA1-6).
 - Décisions : jeton prévu pour les futurs appels /ops, jamais renvoyé au navigateur ; pannes non persistées au redémarrage ; `getFaults` fourni mais non appelé.
 - Dette / suite : `POST /admin/faults` de DocShare sans authentification (côté DocShare) ; tranche 2 du scénario « biais cognitifs » (actions ChatOps).
