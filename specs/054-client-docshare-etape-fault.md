@@ -27,7 +27,7 @@ Contexte : câblage du scénario « biais cognitifs » ; la spec n'avait documen
 ### Périmètre
 - Chart `deploy/chart` : valeurs `docshare.baseUrl` (vide), `docshare.opsToken` (vide), `grafana.dashboardUrl` (vide). `DOCSHARE_BASE_URL` et `GRAFANA_DASHBOARD_URL` dans le ConfigMap, **seulement si non vides** ; `DOCSHARE_OPS_TOKEN` dans le Secret, seulement si non vide (le checksum existant redéploie le pod au changement). Valeurs vides = comportement actuel inchangé. Documenter dans le README du dépôt et dans le contrat de compatibilité de la plateforme (valeurs d'environnement consommées : `docshare.*`, `grafana.dashboardUrl`).
 ### Critères d'acceptation
-- [ ] CA7 — `helm template` du chart avec les valeurs par défaut : aucune des trois variables ; avec les trois valeurs posées : `DOCSHARE_BASE_URL` et `GRAFANA_DASHBOARD_URL` dans le ConfigMap, `DOCSHARE_OPS_TOKEN` dans le Secret et nulle part ailleurs ; `helm lint` passe (valeurs locales et eks de la plateforme comprises).
-- [ ] CA8 — Le README du dépôt décrit ces trois valeurs ; les contrôles du contrat (typecheck, tests, build, test:http) passent, les fiches PNJ étant générées si le lint du chart l'exige.
+- [x] CA7 — `helm template` du chart avec les valeurs par défaut : aucune des trois variables ; avec les trois valeurs posées : `DOCSHARE_BASE_URL` et `GRAFANA_DASHBOARD_URL` dans le ConfigMap, `DOCSHARE_OPS_TOKEN` dans le Secret et nulle part ailleurs ; `helm lint` passe (valeurs locales et eks de la plateforme comprises).
+- [x] CA8 — Le README du dépôt décrit ces trois valeurs ; les contrôles du contrat (typecheck, tests, build, test:http) passent, les fiches PNJ étant générées si le lint du chart l'exige.
 ### Vérification
 `helm lint` / `helm template` (défauts et valeurs posées) ; contrôles du contrat.
