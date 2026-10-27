@@ -36,6 +36,11 @@ services:
         sync: false
       - key: NPC_ANTHROPIC_MODEL
         sync: false
+      # DocShare piloté par les scénarios (optionnel) : URL de base et jeton des routes /ops/* (secret, jamais renvoyé au navigateur)
+      - key: DOCSHARE_BASE_URL
+        sync: false
+      - key: DOCSHARE_OPS_TOKEN
+        sync: false
       # /metrics (Prometheus) coupé sur Render : l'URL est publique et rien ne le collecte (voir README)
       - key: METRICS_ENABLED
         value: "false"

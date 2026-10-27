@@ -10,6 +10,9 @@ import type {
 } from '../../shared/types/scenario'
 import { scenarioStepLabel } from '../../shared/utils/scenarios'
 import { INCIDENT_CHANNEL_ID, SCENARIOS } from '../scenarios'
+import { docshareClientFromEnv } from './docshare-client'
+import { faultState } from './fault-state'
+import type { FaultState } from './fault-state'
 import { addAlert, addAnnouncement, addNpcMessage } from './chat-store'
 import { findLoadedNpcPersona, startSpontaneousInterventions, stopSpontaneousInterventions } from './npc'
 
@@ -42,6 +45,10 @@ export interface ScenarioRunnerDeps<Handle = unknown> {
   publish: (step: ScenarioStep, npc?: NpcPersona) => void
   /** Fiche de PNJ d'id npcId (synchrone : fiches déjà chargées) ; absente → étapes npc-message failed */
   findNpc?: (npcId: string) => NpcPersona | undefined
+  /** Applique une panne DocShare (étapes fault) ; rejet → étape failed. Absent : toute étape fault échoue */
+  applyFault?: (name: string, value: number) => Promise<void>
+  /** Registre des pannes (défaut : singleton du module fault-state) */
+  faults?: FaultState
   scenarios?: readonly Scenario[]
   /** Appelé quand un scénario est lancé (après la publication des étapes à at <= 0) */
   onStart?: (run: ScenarioRun) => void
@@ -67,6 +74,59 @@ export function createScenarioRunner<Handle>(deps: ScenarioRunnerDeps<Handle>): 
   const scenarios = deps.scenarios ?? SCENARIOS
   let run: ScenarioRun | null = null
   let handles: Handle[] = []
+  const faults = deps.faults ?? faultState
+  // Pannes activées avec succès par le scénario (valeur > 0), à couper à l'arrêt
+  const activated = new Set<string>()
+
+  async function cutFault(name: string) {
+    try {
+      if (!deps.applyFault) throw new Error('applyFault absent')
+      await deps.applyFault(name, 0)
+    }
+    catch (error) {
+      console.error(`[scenario] échec de coupure de la panne ${name} : ${error instanceof Error ? error.message : 'erreur'}`)
+    }
+  }
+
+  function cutActivatedFaults() {
+    const names = [...activated]
+    activated.clear()
+    faults.clear()
+    for (const name of names) void cutFault(name)
+  }
+
+  function publishFault(current: ScenarioRun, step: Extract<ScenarioStep, { kind: 'fault' }>, runStep: ScenarioRun['steps'][number]) {
+    const apply = deps.applyFault
+    if (!apply) {
+      runStep.status = 'failed'
+      return
+    }
+    // Reste pending jusqu'à la résolution de l'appel
+    let promise: Promise<void>
+    try {
+      promise = apply(step.name, step.value)
+    }
+    catch {
+      promise = Promise.reject(new Error('échec'))
+    }
+    promise.then(() => {
+      if (run !== current || current.status !== 'running') {
+        // Scénario arrêté pendant l'appel : la panne vient d'être posée, on la coupe aussitôt
+        if (step.value > 0) void cutFault(step.name)
+        return
+      }
+      faults.set(step.name, step.value)
+      if (step.value > 0) activated.add(step.name)
+      else activated.delete(step.name)
+      runStep.status = 'published'
+      runStep.publishedAt = new Date(deps.now()).toISOString()
+      finishIfDone(current)
+    }, () => {
+      if (run !== current || current.status !== 'running') return
+      runStep.status = 'failed'
+      finishIfDone(current)
+    })
+  }
 
   function finishIfDone(current: ScenarioRun) {
     if (current.status === 'running' && current.steps.every(step => step.status !== 'pending')) {
@@ -79,6 +139,16 @@ export function createScenarioRunner<Handle>(deps: ScenarioRunnerDeps<Handle>): 
     const runStep = current.steps[index]
     // Run remplacé ou arrêté entre-temps : rien à publier
     if (run !== current || current.status !== 'running' || !runStep || runStep.status !== 'pending') return
+    if (step.when && faults.isActive(step.when.fault) !== step.when.active) {
+      runStep.status = 'cancelled'
+      finishIfDone(current)
+      return
+    }
+    if (step.kind === 'fault') {
+      publishFault(current, step, runStep)
+      finishIfDone(current)
+      return
+    }
     try {
       if (step.kind === 'npc-message') {
         const npc = deps.findNpc?.(step.npcId)
@@ -124,7 +194,7 @@ export function createScenarioRunner<Handle>(deps: ScenarioRunnerDeps<Handle>): 
           index,
           at: step.at,
           kind: step.kind,
-          channelId: step.channelId,
+          channelId: step.kind === 'fault' ? '' : step.channelId,
           label: scenarioStepLabel(step, step.kind === 'npc-message' ? deps.findNpc?.(step.npcId)?.name : undefined),
           status: 'pending',
         })),
@@ -142,13 +212,18 @@ export function createScenarioRunner<Handle>(deps: ScenarioRunnerDeps<Handle>): 
     },
 
     stop() {
-      if (!run || run.status !== 'running') return null
+      if (!run || run.status !== 'running') {
+        // Rien en cours, mais des pannes d'un scénario terminé peuvent rester actives
+        cutActivatedFaults()
+        return null
+      }
       for (const handle of handles) deps.cancel(handle)
       handles = []
       run.status = 'stopped'
       for (const step of run.steps) {
         if (step.status === 'pending') step.status = 'cancelled'
       }
+      cutActivatedFaults()
       deps.onStop?.(copyRun(run))
       return copyRun(run)
     },
@@ -162,6 +237,7 @@ export function publishScenarioStep(step: ScenarioStep, npc?: NpcPersona): void 
     if (!npc) throw new Error(`Fiche PNJ non résolue : ${step.npcId}`)
     addNpcMessage(step.channelId, { npc, text: step.text })
   }
+  else if (step.kind === 'fault') throw new Error('Étape fault : appliquée par le runner')
   else addAnnouncement(step.channelId, { text: step.text })
 }
 
@@ -170,6 +246,7 @@ const defaultRunner = createScenarioRunner({
   cancel: handle => clearTimeout(handle),
   now: () => Date.now(),
   publish: publishScenarioStep,
+  applyFault: (name, value) => docshareClientFromEnv().setFault(name, value),
   // Fiches chargées par useNpcDispatcher(), attendu par la route de lancement avant startScenario
   findNpc: findLoadedNpcPersona,
   // Interventions spontanées des PNJ : actives du lancement à l'arrêt (stop, reset) du scénario

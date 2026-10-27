@@ -349,6 +349,19 @@ Fenêtre de 30 jours : c'est la période du contrôleur Sloth, commune à tous l
 
 Hypothèse de calibrage : qwen2.5:3b sur CPU (≈ 0,2 s à chaud pour 60 tokens, ≈ 15 s de bout en bout) ; un 7b à froid (104 s) ne tiendrait pas ces objectifs, c'est assumé. Le seuil de débit (1 token/s) est prudent et à recalibrer après mesure. Le time to first token n'est pas mesuré : il exigerait le streaming, écarté (le message reste publié en une fois, appel non-stream).
 
+## DocShare piloté par les scénarios
+
+Une étape de scénario `fault` (`{at, kind:'fault', name, value}`) active ou coupe (`value: 0`) une panne
+sur un DocShare via `POST /admin/faults`, et toute étape peut être conditionnée par l'état d'une panne
+(`when: { fault, active }`). À l'arrêt du scénario ou au reset, les pannes activées sont coupées.
+
+| Variable | Rôle |
+| --- | --- |
+| `DOCSHARE_BASE_URL` | URL de base de DocShare ; absente : pilotage désactivé, les étapes `fault` échouent |
+| `DOCSHARE_OPS_TOKEN` | jeton `X-Ops-Token` des routes `/ops/*` (secret, jamais renvoyé au navigateur) |
+
+Les deux sont déclarées dans `render.yaml` avec `sync: false`.
+
 ## Persistance des conversations
 
 Canaux et messages (réactions et statut d'alerte compris) sont sauvegardés dans un instantané unique

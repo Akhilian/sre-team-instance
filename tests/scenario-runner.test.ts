@@ -7,6 +7,7 @@ import {
   createScenarioRunner,
   publishScenarioStep,
 } from '../server/utils/scenario-runner'
+import { createFaultState } from '../server/utils/fault-state'
 import { clearMessages, listMessages, resetChatStore } from '../server/utils/chat-store'
 import { SCENARIO_LABEL_MAX_LENGTH, formatScenarioOffset, scenarioStepLabel } from '../shared/utils/scenarios'
 import { personaById } from './npc-helpers'
@@ -266,5 +267,124 @@ describe('shared/utils/scenarios', () => {
     const long = scenarioStepLabel({ at: 0, channelId: 'general', kind: 'announcement', text: 'mot '.repeat(50) })
     expect(long.length).toBeLessThanOrEqual(SCENARIO_LABEL_MAX_LENGTH)
     expect(long.endsWith('…')).toBe(true)
+  })
+})
+
+describe('scenario-runner : étapes fault', () => {
+  beforeEach(() => resetChatStore())
+
+  const flush = () => new Promise<void>(resolve => setTimeout(resolve, 0))
+
+  function faultSetup(applyFault: (name: string, value: number) => Promise<void>, steps: ScenarioStep[]) {
+    const clock = fakeClock()
+    const faults = createFaultState()
+    const scenario: Scenario = { id: 'f', title: 'Pannes', description: 'Test', steps }
+    const runner = createScenarioRunner({ ...clock, publish: publishScenarioStep, applyFault, faults, scenarios: [scenario] })
+    return { clock, faults, runner }
+  }
+
+  const ann = (at: number, text: string, when?: ScenarioStep['when']): ScenarioStep =>
+    ({ at, channelId: 'general', kind: 'announcement', text, when })
+
+  it('applique la panne à at exactement, met à jour le registre et publie l\'étape (CA2)', async () => {
+    const applyFault = vi.fn(async () => {})
+    const { clock, faults, runner } = faultSetup(applyFault, [{ at: 60, kind: 'fault', name: 'upload_latency', value: 3 }])
+    const run = runner.start('f')
+    expect(run.steps[0]).toMatchObject({ kind: 'fault', label: 'Panne upload_latency=3', channelId: '' })
+    clock.advance(59_000)
+    await flush()
+    expect(applyFault).not.toHaveBeenCalled()
+    clock.advance(1_000)
+    await flush()
+    expect(applyFault).toHaveBeenCalledTimes(1)
+    expect(applyFault).toHaveBeenCalledWith('upload_latency', 3)
+    expect(faults.isActive('upload_latency')).toBe(true)
+    expect(runner.getRun()!.steps[0]!.status).toBe('published')
+    expect(runner.getRun()!.status).toBe('finished')
+  })
+
+  it('étape failed si le client rejette, registre inchangé, le scénario continue (CA3)', async () => {
+    const { clock, faults, runner } = faultSetup(async () => { throw new Error('HTTP 500') }, [
+      { at: 1, kind: 'fault', name: 'upload_latency', value: 3 },
+      ann(2, 'Suite'),
+    ])
+    runner.start('f')
+    clock.advance(1_000)
+    await flush()
+    expect(runner.getRun()!.steps[0]!.status).toBe('failed')
+    expect(faults.activeNames()).toEqual([])
+    clock.advance(1_000)
+    await flush()
+    expect(runner.getRun()!.steps[1]!.status).toBe('published')
+    expect(runner.getRun()!.status).toBe('finished')
+    expect(listMessages('general').map(m => m.text)).toEqual(['Suite'])
+  })
+
+  it('applyFault qui lève de façon synchrone donne aussi failed', async () => {
+    const { runner } = faultSetup((() => { throw new Error('x') }) as never, [{ at: 0, kind: 'fault', name: 'a', value: 1 }])
+    runner.start('f')
+    await flush()
+    expect(runner.getRun()!.steps[0]!.status).toBe('failed')
+  })
+
+  it('condition when évaluée à at : active true / false, panne activée puis coupée (CA4)', async () => {
+    const steps: ScenarioStep[] = [
+      { at: 1, kind: 'fault', name: 'upload_latency', value: 3 },
+      ann(2, 'si-active', { fault: 'upload_latency', active: true }),
+      ann(2, 'si-inactive', { fault: 'upload_latency', active: false }),
+      { at: 3, kind: 'fault', name: 'upload_latency', value: 0 },
+      ann(4, 'apres-active', { fault: 'upload_latency', active: true }),
+      ann(4, 'apres-inactive', { fault: 'upload_latency', active: false }),
+    ]
+    const { clock, runner } = faultSetup(async () => {}, steps)
+    runner.start('f')
+    for (let i = 0; i < 4; i++) {
+      clock.advance(1_000)
+      await flush()
+    }
+    expect(runner.getRun()!.steps.map(s => s.status)).toEqual([
+      'published', 'published', 'cancelled', 'published', 'cancelled', 'published',
+    ])
+    expect(listMessages('general').map(m => m.text)).toEqual(['si-active', 'apres-inactive'])
+    expect(runner.getRun()!.status).toBe('finished')
+  })
+
+  it('stop coupe exactement les pannes activées avec succès et vide le registre (CA5)', async () => {
+    const applyFault = vi.fn(async (name: string, value: number) => {
+      if (name === 'b' && value === 0) throw new Error('coupure impossible')
+    })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { clock, faults, runner } = faultSetup(applyFault, [
+      { at: 1, kind: 'fault', name: 'a', value: 2 },
+      { at: 1, kind: 'fault', name: 'b', value: 5 },
+      { at: 1, kind: 'fault', name: 'c', value: 0 },
+      { at: 1, kind: 'fault', name: 'd', value: 1 },
+      ann(100, 'tard'),
+    ])
+    runner.start('f')
+    clock.advance(1_000)
+    await flush()
+    applyFault.mockClear()
+    expect(faults.activeNames().sort()).toEqual(['a', 'b', 'd'])
+    runner.stop()
+    await flush()
+    expect(applyFault.mock.calls.sort()).toEqual([['a', 0], ['b', 0], ['d', 0]])
+    expect(faults.activeNames()).toEqual([])
+    expect(faults.get('a')).toBeUndefined()
+    expect(errors).toHaveBeenCalledTimes(1)
+    errors.mockRestore()
+  })
+
+  it('coupe une panne dont l\'appel se résout après l\'arrêt', async () => {
+    let resolve!: () => void
+    const applyFault = vi.fn((_name: string, value: number) => value === 0 ? Promise.resolve() : new Promise<void>((r) => { resolve = r }))
+    const { clock, faults, runner } = faultSetup(applyFault, [{ at: 1, kind: 'fault', name: 'a', value: 2 }])
+    runner.start('f')
+    clock.advance(1_000)
+    runner.stop()
+    resolve()
+    await flush()
+    expect(applyFault).toHaveBeenLastCalledWith('a', 0)
+    expect(faults.activeNames()).toEqual([])
   })
 })

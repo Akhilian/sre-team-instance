@@ -649,7 +649,7 @@ function reset(scope: ResetScope) {
                 <span class="scenario-step__at">{{ formatScenarioOffset(step.at) }}</span>
                 <span class="scenario-step__label">
                   {{ step.label }}
-                  <small>{{ SCENARIO_STEP_KIND_LABELS[step.kind] }} · {{ channelName(step.channelId) }}</small>
+                  <small>{{ SCENARIO_STEP_KIND_LABELS[step.kind] }}{{ step.channelId ? ` · ${channelName(step.channelId)}` : '' }}</small>
                 </span>
                 <span
                   class="scenario-step__status"

@@ -4,10 +4,20 @@ import type { AlertSeverity } from '../utils/alerts'
 interface ScenarioStepBase {
   /** Délai en secondes depuis le lancement du scénario */
   at: number
+  /** Condition évaluée à l'instant d'émission sur le registre des pannes ; fausse → étape cancelled */
+  when?: ScenarioCondition
+}
+
+export interface ScenarioCondition {
+  fault: string
+  active: boolean
+}
+
+interface ScenarioChannelStepBase extends ScenarioStepBase {
   channelId: string
 }
 
-export interface ScenarioAlertStep extends ScenarioStepBase {
+export interface ScenarioAlertStep extends ScenarioChannelStepBase {
   kind: 'alert'
   severity: AlertSeverity
   title: string
@@ -15,20 +25,27 @@ export interface ScenarioAlertStep extends ScenarioStepBase {
   text: string
 }
 
-export interface ScenarioAnnouncementStep extends ScenarioStepBase {
+export interface ScenarioAnnouncementStep extends ScenarioChannelStepBase {
   kind: 'announcement'
   text: string
 }
 
 /** Message racine d'un PNJ (lanceur d'alerte, direction…), publié même si les PNJ sont coupés */
-export interface ScenarioNpcMessageStep extends ScenarioStepBase {
+export interface ScenarioNpcMessageStep extends ScenarioChannelStepBase {
   kind: 'npc-message'
   /** Id d'une fiche, cherché parmi toutes les fiches chargées ; introuvable → étape failed */
   npcId: string
   text: string
 }
 
-export type ScenarioStep = ScenarioAlertStep | ScenarioAnnouncementStep | ScenarioNpcMessageStep
+/** Active (value > 0) ou coupe (value 0) une panne DocShare ; pas de canal */
+export interface ScenarioFaultStep extends ScenarioStepBase {
+  kind: 'fault'
+  name: string
+  value: number
+}
+
+export type ScenarioStep = ScenarioFaultStep | ScenarioAlertStep | ScenarioAnnouncementStep | ScenarioNpcMessageStep
 
 export type ScenarioStepKind = ScenarioStep['kind']
 
@@ -64,6 +81,7 @@ export interface ScenarioRunStep {
   index: number
   at: number
   kind: ScenarioStepKind
+  /** Vide pour une étape fault */
   channelId: string
   /** Titre de l'alerte, début de l'annonce, ou « Nom : début du texte » pour un message de PNJ */
   label: string

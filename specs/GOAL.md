@@ -144,3 +144,8 @@ Améliorer le système d'intervention des personnages et travailler sur une meil
 
 ## Définition de « terminé » (phase 4)
 À définir avec la première spec (feature-spec) ; au minimum : un PNJ ne contredit ni ne répète les réponses des autres PNJ de la même session, et au moins un type d'intervention proactive fonctionne et est testé.
+
+## Scénario « Le rollback qui ne sert à rien » : monde DocShare piloté (2026-10-27)
+Objectif transverse : `/Users/adrien/Desktop/projets/SRE/specs/GOAL.md` (sections « Le rollback qui ne sert à rien » et « Cadrage MVP »). Rôle de war-room : porter le « monde » du scénario sur un DocShare réel, **une seule équipe**, MVP pour tester l'expérience (biais cognitifs de généralistes), sans sur-conception.
+Livré côté DocShare (specs 010 et 011) : API d'exploitation `/ops/*` (en-tête `X-Ops-Token`, jeton `OPS_TOKEN`), `GET /ops/index-check`, `POST|GET /ops/reindex`. Pannes via `POST /admin/faults` (réservé animateur, sans authentification : dette). Rythme accéléré réglable dans la donnée du scénario (rollback ≈ 20 s, redémarrage ≈ 45 s, réindexation ≈ 90 s).
+Tranches prévues (une spec chacune) : 1) client DocShare côté serveur Nuxt (config URL + jetons, faute proprement gérée) + étape de scénario `fault` + condition d'étape sur l'état des pannes (alertes qui n'émettent que tant qu'une panne est active) ; 2) actions d'équipe ChatOps (boutons en langage métier dans le canal d'incident, compte « Ops », effets différés : rollback coupe B, redémarrage base coupe A, contrôle d'index et réindexation = appels réels, changelog narratif) ; 3) scénario et fiches PNJ (release manager, support, direction, communication) ; 4) débrief des biais (fil du canal vs chronologie réelle des pannes).

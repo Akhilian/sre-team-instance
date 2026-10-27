@@ -12,6 +12,7 @@ export const SCENARIO_STEP_KIND_LABELS: Record<ScenarioStepKind, string> = {
   'alert': 'Alerte',
   'announcement': 'Annonce',
   'npc-message': 'PNJ',
+  'fault': 'Panne',
 }
 
 export const SCENARIO_RUN_STATUS_LABELS: Record<ScenarioRunStatus, string> = {
@@ -35,6 +36,7 @@ export function formatScenarioOffset(seconds: number): string {
  */
 export function scenarioStepLabel(step: ScenarioStep, npcName?: string): string {
   if (step.kind === 'alert') return step.title
+  if (step.kind === 'fault') return `Panne ${step.name}=${step.value}`
   const body = step.kind === 'npc-message' ? `${npcName ?? step.npcId} : ${step.text}` : step.text
   const text = body.trim().replace(/\s+/g, ' ')
   if (text.length <= SCENARIO_LABEL_MAX_LENGTH) return text

@@ -97,10 +97,7 @@
 
 - 049 — Références au dossier workshop-war-room (c95f110) : `workshop-teams` remplacé par `workshop-war-room` (contrat, chart, ROADMAP) ; reste : renommer dépôt GitHub, service Render, dépôt Docker Hub.
 
-## 050 — Chart : annotations et sources autorisées du Service (2026-10-26, b399b5a)
-- Livré : `service.yaml` rend `annotations` et `loadBalancerSourceRanges` seulement s'ils sont non vides ; `values.yaml` (`service.annotations: {}`, `service.loadBalancerSourceRanges: []`, exemple NLB internet-facing) ; README « Exposition sur EKS ». Rendu local identique (diff nul depuis HEAD), 662 tests, build, 103 tests HTTP, helm lint OK. PASS (CA1-4).
-- Décisions : exposition publique du cluster de test voulue par l'utilisateur ; platform pose l'annotation dans `environments/eks/war-room.yaml` (platform/010).
-- Dette / suite : TLS/Ingress absents ; code animateur de test faible. Écart accepté : « avant » d'abord rendu depuis le working tree, refait depuis HEAD par le vérificateur.
+- 050 — Chart : annotations et sources autorisées du Service (b399b5a) : `service.annotations` et `loadBalancerSourceRanges` rendus seulement si non vides ; README « Exposition sur EKS » ; TLS/Ingress absents.
 
 ## 051 — Cohérence collective des PNJ (2026-10-26, 7c0e70f)
 - Livré : section « Ce que les autres PNJ ont déjà dit » (6 réponses pairs au plus), règle ne pas contredire/répéter (hors spontané), génération chaînée des cibles sans changer délais ni ordre de publication, anti-redite inter-PNJ (`isNearDuplicate` ≥ 0,8, issue `rejected_repeat`). PASS (CA1-6).
@@ -111,3 +108,8 @@
 - Livré : retrait des boutons Acquitter/Résoudre, du badge et du suivi de statut des alertes (route `alert-status` supprimée, chat-store, shared, chronologie) ; anciens états persistés tolérés ; références nettoyées (README, rate-limit, `limits.ts`, onboarding, guides animateur). PASS (CA1-6).
 - Décisions : option A (suppression complète) choisie par l'utilisateur. Écart accepté : CA1 vérifié par analyse du template d'`AlertCard.vue` (pas d'outillage de test de composant).
 - Dette / suite : aucune.
+
+## 054 — Client DocShare et étape de scénario fault (2026-10-27, commit à renseigner)
+- Livré : `server/utils/docshare-client.ts` (fetch injectable, timeout 3 s, erreurs génériques), `fault-state.ts` (registre singleton), étape `fault` et condition `when:{fault,active}` dans le runner (annulée si condition fausse, `failed` sans casser le scénario), stop/reset coupent les pannes activées, `DOCSHARE_BASE_URL` / `DOCSHARE_OPS_TOKEN` (README, `render.yaml` sync:false), `/admin` masque le canal des étapes fault. 663 tests, 104 HTTP, typecheck, build OK. PASS (CA1-6).
+- Décisions : jeton prévu pour les futurs appels /ops, jamais renvoyé au navigateur ; pannes non persistées au redémarrage ; `getFaults` fourni mais non appelé.
+- Dette / suite : `POST /admin/faults` de DocShare sans authentification (côté DocShare) ; tranche 2 du scénario « biais cognitifs » (actions ChatOps).
