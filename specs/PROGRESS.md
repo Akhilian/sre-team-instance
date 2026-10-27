@@ -111,7 +111,7 @@
 - Décisions : jeton prévu pour les futurs appels /ops, jamais renvoyé au navigateur ; pannes non persistées au redémarrage ; `getFaults` fourni mais non appelé.
 - Dette / suite : `POST /admin/faults` de DocShare sans authentification (côté DocShare) ; tranche 2 du scénario « biais cognitifs » (actions ChatOps).
 
-## 055 — Actions d'équipe ChatOps (panneau d'actions et compte Ops) (2026-10-27, commit à renseigner)
+## 055 — Actions d'équipe ChatOps (panneau d'actions et compte Ops) (2026-10-27, 4c71e3f)
 - Livré : `team-actions.ts` (exécuteur à deps injectées), `GET /api/actions` et `POST /api/actions/:id`, `ActionPanel.vue`, `OpsCard.vue`, message `kind:'ops'`, `ScenarioAction` (simulated|index-check|reindex|changelog, effets en donnée), client DocShare étendu (indexCheck, startReindex, getReindex ; `X-Ops-Token` seulement sur `/ops/*`), `GRAFANA_DASHBOARD_URL` (README, `render.yaml`). 677 tests, 105 HTTP, typecheck, build OK. PASS CA1-6 ; CA7 (Chrome) non exécuté, à faire après redéploiement demandé.
 - Décisions : auteur = nom déclaré (pas d'authentification) ; anti-doublon 409 + bouton désactivé ; sondage reindex 5 s plafonné à 10 min ; le fil sert de journal d'incident. Écarts acceptés : `channelId` dans `GET /api/actions` ; panneau masqué à `finished` sans annulation des timers (tranche 3 : garder le scénario `running` jusqu'à la fin de séance) ; pas de tests de composant.
 - Dette et suite : aucun test de composant ; HTTP ne couvre pas un scénario avec actions ; tranche 3 (scénario et PNJ).
