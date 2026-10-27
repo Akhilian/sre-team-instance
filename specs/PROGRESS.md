@@ -99,10 +99,7 @@
 
 - 050 — Chart : annotations et sources autorisées du Service (b399b5a) : `service.annotations` et `loadBalancerSourceRanges` rendus seulement si non vides ; README « Exposition sur EKS » ; TLS/Ingress absents.
 
-## 051 — Cohérence collective des PNJ (2026-10-26, 7c0e70f)
-- Livré : section « Ce que les autres PNJ ont déjà dit » (6 réponses pairs au plus), règle ne pas contredire/répéter (hors spontané), génération chaînée des cibles sans changer délais ni ordre de publication, anti-redite inter-PNJ (`isNearDuplicate` ≥ 0,8, issue `rejected_repeat`). PASS (CA1-6).
-- Décisions : option A (historique brut borné, aucun appel LLM de plus) choisie par l'utilisateur ; `flush()` des tests passe de 5 à 50 ticks à cause du chaînage.
-- Dette / suite : `respondTimeoutMs` est par PNJ, la chaîne cumule les délais si le LLM est lent.
+- 051 — Cohérence collective des PNJ (7c0e70f) : section « Ce que les autres PNJ ont déjà dit », anti-redite inter-PNJ (`isNearDuplicate` ≥ 0,8, `rejected_repeat`), génération chaînée ; dette : `respondTimeoutMs` cumulé sur la chaîne.
 
 ## 052 — Alertes informatives (2026-10-26, 1543823)
 - Livré : retrait des boutons Acquitter/Résoudre, du badge et du suivi de statut des alertes (route `alert-status` supprimée, chat-store, shared, chronologie) ; anciens états persistés tolérés ; références nettoyées (README, rate-limit, `limits.ts`, onboarding, guides animateur). PASS (CA1-6).
@@ -113,3 +110,8 @@
 - Livré : `server/utils/docshare-client.ts` (fetch injectable, timeout 3 s, erreurs génériques), `fault-state.ts` (registre singleton), étape `fault` et condition `when:{fault,active}` dans le runner (annulée si condition fausse, `failed` sans casser le scénario), stop/reset coupent les pannes activées, `DOCSHARE_BASE_URL` / `DOCSHARE_OPS_TOKEN` (README, `render.yaml` sync:false), `/admin` masque le canal des étapes fault. 663 tests, 104 HTTP, typecheck, build OK. PASS (CA1-6).
 - Décisions : jeton prévu pour les futurs appels /ops, jamais renvoyé au navigateur ; pannes non persistées au redémarrage ; `getFaults` fourni mais non appelé.
 - Dette / suite : `POST /admin/faults` de DocShare sans authentification (côté DocShare) ; tranche 2 du scénario « biais cognitifs » (actions ChatOps).
+
+## 055 — Actions d'équipe ChatOps (panneau d'actions et compte Ops) (2026-10-27, commit à renseigner)
+- Livré : `team-actions.ts` (exécuteur à deps injectées), `GET /api/actions` et `POST /api/actions/:id`, `ActionPanel.vue`, `OpsCard.vue`, message `kind:'ops'`, `ScenarioAction` (simulated|index-check|reindex|changelog, effets en donnée), client DocShare étendu (indexCheck, startReindex, getReindex ; `X-Ops-Token` seulement sur `/ops/*`), `GRAFANA_DASHBOARD_URL` (README, `render.yaml`). 677 tests, 105 HTTP, typecheck, build OK. PASS CA1-6 ; CA7 (Chrome) non exécuté, à faire après redéploiement demandé.
+- Décisions : auteur = nom déclaré (pas d'authentification) ; anti-doublon 409 + bouton désactivé ; sondage reindex 5 s plafonné à 10 min ; le fil sert de journal d'incident. Écarts acceptés : `channelId` dans `GET /api/actions` ; panneau masqué à `finished` sans annulation des timers (tranche 3 : garder le scénario `running` jusqu'à la fin de séance) ; pas de tests de composant.
+- Dette et suite : aucun test de composant ; HTTP ne couvre pas un scénario avec actions ; tranche 3 (scénario et PNJ).

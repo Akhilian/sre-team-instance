@@ -59,3 +59,36 @@ describe('docshare-client', () => {
     expect(docshareClientFromEnv({ DOCSHARE_BASE_URL: 'http://x' }).enabled).toBe(true)
   })
 })
+
+describe('docshare-client : routes /ops (055 CA1)', () => {
+  it('indexCheck, startReindex et getReindex envoient la bonne route avec X-Ops-Token', async () => {
+    const fetchMock = vi.fn(async () => new Response('{"summary":"ok","state":"running","processed":2,"total":9}', { status: 200 }))
+    const c = client(fetchMock as unknown as typeof fetch)
+    expect((await c.indexCheck()).summary).toBe('ok')
+    expect(await c.startReindex()).toMatchObject({ state: 'running', processed: 2, total: 9 })
+    expect((await c.getReindex()).total).toBe(9)
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
+    expect(calls.map(([url, init]) => `${init.method} ${url}`)).toEqual([
+      'GET http://docshare.internal:8080/ops/index-check',
+      'POST http://docshare.internal:8080/ops/reindex',
+      'GET http://docshare.internal:8080/ops/reindex',
+    ])
+    for (const [, init] of calls) expect((init.headers as Record<string, string>)['x-ops-token']).toBe(TOKEN)
+  })
+
+  it('les erreurs ne contiennent ni jeton ni URL', async () => {
+    const never = vi.fn()
+    const disabled = client(never as unknown as typeof fetch, null)
+    const http500 = client((async () => new Response('boom', { status: 500 })) as typeof fetch)
+    const net = client((async () => { throw new Error(`ECONNREFUSED http://docshare.internal:8080 ${TOKEN}`) }) as typeof fetch)
+    for (const c of [disabled, http500, net]) {
+      for (const promise of [c.indexCheck(), c.startReindex(), c.getReindex()]) {
+        const message = await messageOf(promise)
+        expect(message).not.toContain(TOKEN)
+        expect(message).not.toContain('docshare.internal')
+        expect(message).not.toContain('http://')
+      }
+    }
+    expect(never).not.toHaveBeenCalled()
+  })
+})

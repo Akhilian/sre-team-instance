@@ -40,12 +40,23 @@ export interface Message {
   parentId?: string
   /** Réactions dans l'ordre de première réaction ; absent sans aucune réaction */
   reactions?: Reaction[]
-  /** 'announcement' (annonce de l'animateur), 'alert' (carte d'alerte) ou 'system' (avis court du serveur) ; absent pour un message ordinaire */
-  kind?: 'announcement' | 'alert' | 'system'
+  /** 'announcement' (annonce de l'animateur), 'alert' (carte d'alerte), 'system' (avis court du serveur) ou 'ops' (action d'équipe ChatOps) ; absent pour un message ordinaire */
+  kind?: 'announcement' | 'alert' | 'system' | 'ops'
   /** Détails de l'alerte, présent seulement quand kind === 'alert' ; text en est la description */
   alert?: Alert
+  /** Détails de l'action d'équipe, présent seulement quand kind === 'ops' ; text en est le message */
+  ops?: MessageOps
   /** Présent seulement sur la réponse d'un PNJ (posé par le serveur, jamais par le corps HTTP) */
   npc?: MessageNpc
+}
+
+/** Action d'équipe ChatOps à l'origine d'un message Ops */
+export interface MessageOps {
+  /** Libellé de l'action */
+  action: string
+  /** Participant qui l'a lancée (nom déclaré) */
+  by: string
+  phase: 'start' | 'progress' | 'done' | 'error'
 }
 
 /** Signature d'un message de PNJ : author porte son nom */

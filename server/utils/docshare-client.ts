@@ -6,10 +6,23 @@ import type { Env } from './env'
 export interface DocshareClientOptions {
   /** Absente ou vide : client désactivé, toute opération échoue */
   baseUrl?: string
-  /** Envoyé en X-Ops-Token sur /ops/* uniquement (aucune route /ops appelée pour l'instant) */
+  /** Envoyé en X-Ops-Token sur /ops/* uniquement */
   opsToken?: string
   fetch?: typeof fetch
   timeoutMs?: number
+}
+
+/** Résultat de GET /ops/index-check ; summary est le libellé prêt à afficher */
+export interface IndexCheckResult {
+  summary: string
+}
+
+/** État d'une réindexation (POST/GET /ops/reindex) */
+export interface ReindexStatus {
+  state: string
+  processed: number
+  total: number
+  summary?: string
 }
 
 export interface DocshareClient {
@@ -18,6 +31,12 @@ export interface DocshareClient {
   setFault: (name: string, value: number) => Promise<void>
   /** GET /admin/faults */
   getFaults: () => Promise<Record<string, number>>
+  /** GET /ops/index-check */
+  indexCheck: () => Promise<IndexCheckResult>
+  /** POST /ops/reindex */
+  startReindex: () => Promise<ReindexStatus>
+  /** GET /ops/reindex */
+  getReindex: () => Promise<ReindexStatus>
 }
 
 export const DOCSHARE_TIMEOUT_MS = 3000
@@ -40,7 +59,10 @@ export function createDocshareClient(options: DocshareClientOptions = {}): Docsh
     try {
       response = await doFetch(`${base}${path}`, {
         method,
-        headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+        headers: {
+          ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+          ...(path.startsWith('/ops/') && options.opsToken ? { 'x-ops-token': options.opsToken } : {}),
+        },
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMs),
       })
@@ -52,8 +74,38 @@ export function createDocshareClient(options: DocshareClientOptions = {}): Docsh
     return response
   }
 
+  async function json(response: Response): Promise<Record<string, unknown>> {
+    try {
+      const data = await response.json() as unknown
+      return data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {}
+    }
+    catch {
+      throw new DocshareError('Réponse DocShare illisible')
+    }
+  }
+
+  function toReindex(data: Record<string, unknown>): ReindexStatus {
+    const num = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : 0
+    return {
+      state: typeof data.state === 'string' ? data.state : '',
+      processed: num(data.processed),
+      total: num(data.total),
+      ...(typeof data.summary === 'string' ? { summary: data.summary } : {}),
+    }
+  }
+
   return {
     enabled: base !== '',
+    async indexCheck() {
+      const data = await json(await call('GET', '/ops/index-check'))
+      return { summary: typeof data.summary === 'string' ? data.summary : '' }
+    },
+    async startReindex() {
+      return toReindex(await json(await call('POST', '/ops/reindex')))
+    },
+    async getReindex() {
+      return toReindex(await json(await call('GET', '/ops/reindex')))
+    },
     async setFault(name, value) {
       await call('POST', '/admin/faults', { name, value })
     },

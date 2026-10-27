@@ -514,6 +514,7 @@ onBeforeUnmount(() => {
         <MessageList :messages="messages ?? []" :me="displayName" :npc-names="npcNames" :mention-candidates="mentionCandidates" :roles="roles" :reply="reply" :react="react" @typing="onTyping" />
         <p class="typing-indicator" data-testid="typing-indicator" aria-live="polite">{{ typingText }}</p>
         <p v-if="npcNotice" class="npc-notice" data-testid="npc-notice" role="status">{{ npcNotice }}</p>
+        <ActionPanel :channel-id="channelId" :author="displayName" />
         <Composer
           :disabled="!displayName || directUnavailable"
           :channel-name="channel?.name ?? ''"

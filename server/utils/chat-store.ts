@@ -207,6 +207,7 @@ function copyMessage(message: Message): Message {
   }
   if (message.alert) copy.alert = { severity: message.alert.severity, title: message.alert.title, service: message.alert.service }
   if (message.npc) copy.npc = { ...message.npc }
+  if (message.ops) copy.ops = { ...message.ops }
   return copy
 }
 
@@ -365,6 +366,31 @@ export function addSystemMessage(channelId: string, input: { text: string, paren
     kind: 'system',
   }
   if (parentId !== undefined) message.parentId = parentId
+  pushMessage(messages, message)
+  notifyChange()
+  return copyMessage(message)
+}
+
+export const OPS_AUTHOR = 'Ops'
+
+/** Message du compte Ops (actions d'équipe ChatOps) : racine du canal, kind 'ops', jamais posé par le corps HTTP. */
+export function addOpsMessage(
+  channelId: string,
+  input: { text: string, ops: { action: string, by: string, phase: 'start' | 'progress' | 'done' | 'error' } },
+): Message {
+  const messages = messagesByChannel.get(channelId)
+  if (!messages) throw new ChannelNotFoundError(channelId)
+  const text = requireText(truncateText(input.text.trim(), TEXT_MAX_LENGTH), 'text', TEXT_MAX_LENGTH)
+  const message: Message = {
+    id: crypto.randomUUID(),
+    channelId,
+    author: OPS_AUTHOR,
+    text,
+    createdAt: new Date().toISOString(),
+    rev: 0,
+    kind: 'ops',
+    ops: { action: input.ops.action, by: input.ops.by, phase: input.ops.phase },
+  }
   pushMessage(messages, message)
   notifyChange()
   return copyMessage(message)

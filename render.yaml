@@ -41,6 +41,9 @@ services:
         sync: false
       - key: DOCSHARE_OPS_TOKEN
         sync: false
+      # Lien « Voir la santé du service » du panneau d'actions d'équipe (optionnel, absent : pas de lien)
+      - key: GRAFANA_DASHBOARD_URL
+        sync: false
       # /metrics (Prometheus) coupé sur Render : l'URL est publique et rien ne le collecte (voir README)
       - key: METRICS_ENABLED
         value: "false"

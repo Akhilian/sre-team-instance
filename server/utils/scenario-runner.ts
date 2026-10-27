@@ -262,11 +262,27 @@ export function getScenarioRun(): ScenarioRun | null {
   return defaultRunner.getRun()
 }
 
+// Modules à remettre à zéro quand un scénario démarre ou s'arrête (ex. actions d'équipe en attente)
+const resetListeners = new Set<() => void>()
+
+/** Enregistre fn, appelée après chaque lancement réussi et chaque stopScenario (même sans scénario en cours) */
+export function onScenarioReset(fn: () => void): void {
+  resetListeners.add(fn)
+}
+
+function notifyReset(): void {
+  for (const fn of resetListeners) fn()
+}
+
 export function startScenario(scenarioId: string): ScenarioRun {
-  return defaultRunner.start(scenarioId)
+  const run = defaultRunner.start(scenarioId)
+  notifyReset()
+  return run
 }
 
 /** Arrête le scénario en cours ; renvoie null, sans erreur, si rien n'est en cours. */
 export function stopScenario(): ScenarioRun | null {
-  return defaultRunner.stop()
+  const run = defaultRunner.stop()
+  notifyReset()
+  return run
 }

@@ -49,6 +49,24 @@ export type ScenarioStep = ScenarioFaultStep | ScenarioAlertStep | ScenarioAnnou
 
 export type ScenarioStepKind = ScenarioStep['kind']
 
+export type ScenarioActionType = 'simulated' | 'index-check' | 'reindex' | 'changelog'
+
+/** Bouton du panneau d'actions d'équipe (ChatOps) ; seul le type est codé, le reste est de la donnée */
+export interface ScenarioAction {
+  id: string
+  label: string
+  /** Défaut : simulated */
+  type?: ScenarioActionType
+  /** simulated : délai avant l'application des pannes et du message de fin */
+  delaySeconds?: number
+  startText?: string
+  doneText?: string
+  /** simulated : pannes appliquées à l'échéance */
+  faults?: { name: string, value: number }[]
+  /** changelog : texte posté */
+  text?: string
+}
+
 export interface Scenario {
   id: string
   title: string
@@ -60,6 +78,8 @@ export interface Scenario {
   npcScenarioId?: string
   /** false : le lancement sélectionne les PNJ de npcScenarioId mais les laisse coupés (défaut : activés) */
   enableNpcs?: boolean
+  /** Actions d'équipe proposées pendant le scénario (panneau ChatOps) */
+  actions?: ScenarioAction[]
   /** Triées par at croissant */
   steps: ScenarioStep[]
 }
@@ -103,4 +123,20 @@ export interface ScenariosResponse {
   scenarios: ScenarioSummary[]
   /** Dernière exécution, même terminée ou arrêtée ; null si aucun lancement depuis le démarrage */
   run: ScenarioRun | null
+}
+
+/** Action telle que listée par GET /api/actions */
+export interface TeamActionSummary {
+  id: string
+  label: string
+  type: ScenarioActionType
+  running: boolean
+}
+
+export interface TeamActionsResponse {
+  actions: TeamActionSummary[]
+  /** Canal d'incident où s'affiche le panneau ; présent avec des actions */
+  channelId?: string
+  /** Présent seulement si GRAFANA_DASHBOARD_URL est défini */
+  healthUrl?: string
 }

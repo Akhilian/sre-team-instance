@@ -359,8 +359,19 @@ sur un DocShare via `POST /admin/faults`, et toute étape peut être conditionn�
 | --- | --- |
 | `DOCSHARE_BASE_URL` | URL de base de DocShare ; absente : pilotage désactivé, les étapes `fault` échouent |
 | `DOCSHARE_OPS_TOKEN` | jeton `X-Ops-Token` des routes `/ops/*` (secret, jamais renvoyé au navigateur) |
+| `GRAFANA_DASHBOARD_URL` | optionnelle : lien « Voir la santé du service » du panneau d'actions d'équipe (absente : pas de lien) |
 
-Les deux sont déclarées dans `render.yaml` avec `sync: false`.
+Les trois sont déclarées dans `render.yaml` avec `sync: false`.
+
+### Actions d'équipe (ChatOps)
+
+Un scénario peut déclarer `actions` (`{ id, label, type?, delaySeconds?, startText?, doneText?, faults?, text? }`,
+type `simulated` par défaut, `index-check`, `reindex` ou `changelog`). Pendant le scénario, le canal
+d'incident affiche un panneau de boutons ; chaque action publie des messages du compte « Ops »
+(`kind: 'ops'`) dans le fil. `GET /api/actions` liste les actions et leur état, `POST /api/actions/:id`
+(corps `{ author }`) en lance une (404 hors scénario, 409 si elle est déjà en cours). `index-check` et
+`reindex` appellent les routes `/ops/*` de DocShare avec `X-Ops-Token`. Arrêt ou reset du scénario :
+timers et sondages annulés.
 
 ## Persistance des conversations
 

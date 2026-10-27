@@ -47,7 +47,7 @@ function mentionsMe(message: Message): boolean {
 
 /** Badge de rôle d'un message de participant : jamais pour Alerting, l'Animateur ni les collègues joués par l'outil */
 function authorRoleBadge(message: Message): string {
-  if (message.kind === 'alert' || message.kind === 'announcement' || message.kind === 'system' || message.npc) return ''
+  if (message.kind === 'alert' || message.kind === 'announcement' || message.kind === 'system' || message.kind === 'ops' || message.npc) return ''
   return roleBadge(props.roles?.[message.author])
 }
 
@@ -130,6 +130,7 @@ watch(
                 :alert="thread.alert"
                 :text="thread.text"
               />
+              <OpsCard v-else-if="thread.kind === 'ops'" :message="thread" />
               <MessageText v-else :text="thread.text" :known-names="knownNames" :me="me" />
             </div>
             <MessageReactions :reactions="thread.reactions" :me="me" :react="emoji => react(thread.id, emoji)" />
